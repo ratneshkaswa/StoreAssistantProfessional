@@ -388,11 +388,14 @@
         _submitAttempted = true;
         _error = null;
 
-        if (!StoreNameValid) { _error = StoreNameErrorText; return; }
-
         try
         {
             Setup.Save(_storeName.Trim(), _adminPin, _masterPin);
+        }
+        catch (ArgumentException ex)
+        {
+            _error = ex.Message;
+            return;
         }
         catch (IOException ex)
         {

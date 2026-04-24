@@ -14,18 +14,17 @@ Single project. First-run setup + placeholder home. No persistence yet.
 src/StoreAssistantProfessional/
 ├── StoreAssistantProfessional.csproj
 ├── App.xaml / App.xaml.cs               # WPF bootstrap + DI
-├── MainWindow.xaml / MainWindow.xaml.cs # Hosts BlazorWebView rooted on Routes
+├── MainWindow.xaml / MainWindow.xaml.cs # Hosts BlazorWebView; disables WebView2 DevTools
 ├── Components/
 │   ├── _Imports.razor
 │   ├── Routes.razor                     # Router + Mud providers
-│   ├── PinNumpad.razor                  # Shared on-screen keypad
 │   ├── Layout/MainLayout.razor
 │   └── Pages/
-│       ├── Home.razor                   # @page "/"
+│       ├── Home.razor                   # @page "/" + admin-unlock dialog
 │       └── FirstRun.razor               # @page "/setup"
 ├── Services/
-│   ├── SetupService.cs                  # PBKDF2 PIN hashing + atomic setup.json
-│   ├── SessionService.cs                # Role = User | Admin
+│   ├── SetupService.cs                  # PBKDF2 PIN hashing (600k iter) + atomic setup.json
+│   ├── SessionService.cs                # Role = User | Admin (lock-guarded)
 │   └── PinRules.cs                      # Weak-PIN detection
 └── wwwroot/
     ├── index.html
@@ -36,7 +35,7 @@ src/StoreAssistantProfessional/
 
 - `net10.0-windows10.0.19041.0` (Windows 10 2004+ required for WebView2 composition path)
 - WPF + `Microsoft.AspNetCore.Components.WebView.Wpf` 10.0.1
-- MudBlazor 9.3.0
+- MudBlazor 9.4.0
 - WebView2 Runtime (ships with Windows 11; Evergreen Runtime required on Windows 10)
 - SQLite + EF Core — **not yet added**; add when the first page needs persistence.
 

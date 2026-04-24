@@ -22,16 +22,10 @@
     <PackageReference Include="MudBlazor" Version="9.4.0" />
   </ItemGroup>
 
-  <!-- BlazorWebView loads the host page from the build output directory.
-       Razor SDK only stages wwwroot on `dotnet publish`, so copy it on plain `dotnet build`. -->
-  <Target Name="CopyWwwrootToBuildOutput" AfterTargets="Build" Inputs="wwwroot\**\*.*" Outputs="$(OutDir)wwwroot\_copy.stamp">
-    <ItemGroup>
-      <_WwwrootBuildFiles Include="wwwroot\**\*.*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(_WwwrootBuildFiles)"
-          DestinationFiles="@(_WwwrootBuildFiles->'$(OutDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-    <Touch Files="$(OutDir)wwwroot\_copy.stamp" AlwaysCreate="true" />
-  </Target>
+  <!-- BlazorWebView loads the host page from the build output directory, but the Razor SDK
+       only stages wwwroot on `dotnet publish`. Mark it as Content so plain `dotnet build` copies it. -->
+  <ItemGroup>
+    <Content Update="wwwroot\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>

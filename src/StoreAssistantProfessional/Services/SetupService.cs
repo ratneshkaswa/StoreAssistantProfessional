@@ -23,14 +23,21 @@ public interface ISetupService
 
 public sealed class SetupService : ISetupService
 {
+    public const int AdminPinLength = 4;
+    public const int MasterPinLength = 6;
+    public const int MinStoreNameLength = 2;
+    public const int MaxStoreNameLength = 100;
+
     private const int SaltBytes = 16;
     private const int HashBytes = 32;
-    private const int Pbkdf2Iterations = 100_000;
+    private const int Pbkdf2Iterations = 600_000;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    private readonly object _lock = new();
     private readonly string _path;
     private SetupData? _cached;
+    private SetupStatus _status;
 
     public SetupService()
     {
@@ -39,22 +46,45 @@ public sealed class SetupService : ISetupService
             "StoreAssistantProfessional");
         Directory.CreateDirectory(appData);
         _path = Path.Combine(appData, "setup.json");
-        (_cached, Status) = Load();
+        (_cached, _status) = Load();
     }
 
-    public SetupStatus Status { get; private set; }
+    public SetupStatus Status
+    {
+        get { lock (_lock) return _status; }
+    }
 
-    public bool IsComplete => Status == SetupStatus.Valid;
+    public bool IsComplete
+    {
+        get { lock (_lock) return _status == SetupStatus.Valid; }
+    }
 
-    public SetupData? Current => _cached;
+    public SetupData? Current
+    {
+        get { lock (_lock) return _cached; }
+    }
 
     public void Save(string storeName, string adminPin, string masterPin)
     {
+        var name = (storeName ?? "").Trim();
+        if (name.Length is < MinStoreNameLength or > MaxStoreNameLength)
+            throw new ArgumentException(
+                $"Store name must be {MinStoreNameLength}–{MaxStoreNameLength} characters.",
+                nameof(storeName));
+
+        ValidatePin(adminPin, AdminPinLength, nameof(adminPin));
+        ValidatePin(masterPin, MasterPinLength, nameof(masterPin));
+
+        if (masterPin.StartsWith(adminPin, StringComparison.Ordinal))
+            throw new ArgumentException(
+                "Master PIN must not start with the admin PIN.",
+                nameof(masterPin));
+
         var adminSalt = RandomNumberGenerator.GetBytes(SaltBytes);
         var masterSalt = RandomNumberGenerator.GetBytes(SaltBytes);
 
         var data = new SetupData(
-            storeName,
+            name,
             Convert.ToBase64String(Pbkdf2(adminPin, adminSalt)),
             Convert.ToBase64String(adminSalt),
             Convert.ToBase64String(Pbkdf2(masterPin, masterSalt)),
@@ -63,35 +93,51 @@ public sealed class SetupService : ISetupService
 
         var json = JsonSerializer.Serialize(data, JsonOptions);
         var tmp = _path + ".tmp";
-        File.WriteAllText(tmp, json);
 
-        if (File.Exists(_path))
+        lock (_lock)
         {
-            File.Replace(tmp, _path, _path + ".bak");
-        }
-        else
-        {
-            File.Move(tmp, _path);
-        }
+            File.WriteAllText(tmp, json);
 
-        _cached = data;
-        Status = SetupStatus.Valid;
+            if (File.Exists(_path))
+            {
+                File.Replace(tmp, _path, _path + ".bak");
+            }
+            else
+            {
+                File.Move(tmp, _path);
+            }
+
+            _cached = data;
+            _status = SetupStatus.Valid;
+        }
     }
 
     public bool VerifyAdmin(string pin)
     {
-        if (_cached is null || pin.Length != 4 || !pin.All(char.IsDigit)) return false;
-        var salt = Convert.FromBase64String(_cached.AdminPinSalt);
-        var expected = Convert.FromBase64String(_cached.AdminPinHash);
+        SetupData? cached;
+        lock (_lock) cached = _cached;
+        if (cached is null || pin.Length != AdminPinLength || !pin.All(char.IsDigit)) return false;
+        var salt = Convert.FromBase64String(cached.AdminPinSalt);
+        var expected = Convert.FromBase64String(cached.AdminPinHash);
         return CryptographicOperations.FixedTimeEquals(Pbkdf2(pin, salt), expected);
     }
 
     public bool VerifyMaster(string pin)
     {
-        if (_cached is null || pin.Length != 6 || !pin.All(char.IsDigit)) return false;
-        var salt = Convert.FromBase64String(_cached.MasterPinSalt);
-        var expected = Convert.FromBase64String(_cached.MasterPinHash);
+        SetupData? cached;
+        lock (_lock) cached = _cached;
+        if (cached is null || pin.Length != MasterPinLength || !pin.All(char.IsDigit)) return false;
+        var salt = Convert.FromBase64String(cached.MasterPinSalt);
+        var expected = Convert.FromBase64String(cached.MasterPinHash);
         return CryptographicOperations.FixedTimeEquals(Pbkdf2(pin, salt), expected);
+    }
+
+    private static void ValidatePin(string pin, int length, string paramName)
+    {
+        if (pin is null || pin.Length != length || !pin.All(char.IsDigit))
+            throw new ArgumentException($"PIN must be {length} digits.", paramName);
+        if (PinRules.IsWeak(pin))
+            throw new ArgumentException("PIN is too predictable.", paramName);
     }
 
     private (SetupData? data, SetupStatus status) Load()
@@ -119,11 +165,20 @@ public sealed class SetupService : ISetupService
         if (!File.Exists(path)) return null;
         try
         {
-            return JsonSerializer.Deserialize<SetupData>(File.ReadAllText(path), JsonOptions);
+            var data = JsonSerializer.Deserialize<SetupData>(File.ReadAllText(path), JsonOptions);
+            return IsDataComplete(data) ? data : null;
         }
         catch (JsonException) { return null; }
         catch (IOException) { return null; }
     }
+
+    private static bool IsDataComplete(SetupData? data) =>
+        data is not null &&
+        !string.IsNullOrWhiteSpace(data.StoreName) &&
+        !string.IsNullOrEmpty(data.AdminPinHash) &&
+        !string.IsNullOrEmpty(data.AdminPinSalt) &&
+        !string.IsNullOrEmpty(data.MasterPinHash) &&
+        !string.IsNullOrEmpty(data.MasterPinSalt);
 
     private static byte[] Pbkdf2(string input, byte[] salt) =>
         Rfc2898DeriveBytes.Pbkdf2(input, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, HashBytes);

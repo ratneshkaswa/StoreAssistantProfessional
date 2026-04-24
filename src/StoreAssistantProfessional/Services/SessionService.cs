@@ -16,21 +16,33 @@ public interface ISessionService
 
 public sealed class SessionService : ISessionService
 {
-    public Role Current { get; private set; } = Role.User;
+    private readonly object _lock = new();
+    private Role _current = Role.User;
+
+    public Role Current
+    {
+        get { lock (_lock) return _current; }
+    }
 
     public event Action? Changed;
 
     public void EnterAdmin()
     {
-        if (Current == Role.Admin) return;
-        Current = Role.Admin;
+        lock (_lock)
+        {
+            if (_current == Role.Admin) return;
+            _current = Role.Admin;
+        }
         Changed?.Invoke();
     }
 
     public void ExitAdmin()
     {
-        if (Current == Role.User) return;
-        Current = Role.User;
+        lock (_lock)
+        {
+            if (_current == Role.User) return;
+            _current = Role.User;
+        }
         Changed?.Invoke();
     }
 }
