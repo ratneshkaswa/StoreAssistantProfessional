@@ -12,7 +12,7 @@
             <MudItem xs="12" md="5">
                 <MudPaper Elevation="0"
                           Square="true"
-                          Class="pa-12 d-flex flex-column justify-center align-center"
+                          Class="pa-12 d-flex flex-column align-center"
                           Style="@HeroStyle">
                     <MudIcon Icon="@Icons.Material.Rounded.ShoppingBag"
                              UserAttributes="@AriaHidden"
@@ -41,7 +41,7 @@
             </MudItem>
 
             <MudItem xs="12" md="7">
-                <MudContainer MaxWidth="MaxWidth.Small" Class="pa-8 d-flex flex-column justify-center" Style="min-height: 100vh;">
+                <MudContainer MaxWidth="MaxWidth.Small" Class="pa-8 d-flex flex-column" Style="min-height: 100vh; justify-content: safe center;">
                     @if (_completed)
                     {
                         <MudStack AlignItems="AlignItems.Center" Spacing="4">
@@ -239,6 +239,7 @@
 
     private static readonly string HeroStyle =
         $"min-height: 100vh; position: relative; overflow: hidden; " +
+        $"justify-content: safe center; " +
         $"background: linear-gradient(315deg, {BrandTheme.HeroGradientLight} 0%, {BrandTheme.HeroGradientDark} 100%); " +
         $"color: {BrandTheme.HeroTextColor};";
 
