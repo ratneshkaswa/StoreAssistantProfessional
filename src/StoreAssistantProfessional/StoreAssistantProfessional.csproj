@@ -13,13 +13,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-<<<<<<< HEAD
-    <PackageReference Include="Photino.Blazor" Version="4.0.13" />
-    <PackageReference Include="MudBlazor" Version="9.4.0" />
-=======
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.1" />
-    <PackageReference Include="MudBlazor" Version="9.3.0" />
->>>>>>> ffe77ceb4c04c9504857b1b1040ceb943180526a
+    <PackageReference Include="MudBlazor" Version="9.4.0" />
   </ItemGroup>
 
   <!-- BlazorWebView loads the host page from the build output directory.
