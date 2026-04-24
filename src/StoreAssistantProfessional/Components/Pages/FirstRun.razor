@@ -1,19 +1,143 @@
 @page "/"
+@inject ISetupService Setup
 
-<PageTitle>Welcome — Store Assistant Professional</PageTitle>
+<PageTitle>Setup — Store Assistant Professional</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
-    <MudStack Spacing="6" AlignItems="AlignItems.Center">
-        <MudIcon Icon="@Icons.Material.Rounded.Storefront" Color="Color.Primary" Size="Size.Large" />
-        <MudText Typo="Typo.h3" Align="Align.Center">Store Assistant Professional</MudText>
-        <MudText Typo="Typo.subtitle1" Align="Align.Center" Color="Color.Secondary">
-            Welcome. Let's get your store set up.
-        </MudText>
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   Size="Size.Large"
-                   EndIcon="@Icons.Material.Rounded.ArrowForward">
-            Get Started
-        </MudButton>
-    </MudStack>
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    @if (_done)
+    {
+        <MudPaper Class="pa-8" Elevation="2">
+            <MudStack Spacing="4" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                <MudText Typo="Typo.h5" Align="Align.Center">Setup complete</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                    @(Setup.Current?.StoreName) is ready. More features arrive in the next iteration.
+                </MudText>
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <MudStack Spacing="4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                <MudIcon Icon="@Icons.Material.Rounded.Storefront" Color="Color.Primary" Size="Size.Large" />
+                <MudText Typo="Typo.h4">First-run setup</MudText>
+            </MudStack>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Welcome. Set a store name and two PINs to get started.
+            </MudText>
+
+            <MudPaper Class="pa-6" Elevation="2">
+                <MudStack Spacing="4">
+                    <MudTextField @bind-Value="_storeName"
+                                  Label="Store name"
+                                  Variant="Variant.Outlined"
+                                  MaxLength="100"
+                                  Immediate="true" />
+
+                    <MudDivider />
+
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.subtitle2">Admin PIN</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            4 digits. Used for routine privileged actions.
+                        </MudText>
+                    </MudStack>
+                    <MudStack Row="true" Spacing="2">
+                        <MudTextField @bind-Value="_adminPin"
+                                      Label="PIN"
+                                      InputType="InputType.Password"
+                                      InputMode="InputMode.numeric"
+                                      MaxLength="4"
+                                      Variant="Variant.Outlined"
+                                      Immediate="true" />
+                        <MudTextField @bind-Value="_adminPinConfirm"
+                                      Label="Confirm"
+                                      InputType="InputType.Password"
+                                      InputMode="InputMode.numeric"
+                                      MaxLength="4"
+                                      Variant="Variant.Outlined"
+                                      Immediate="true" />
+                    </MudStack>
+
+                    <MudDivider />
+
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.subtitle2">Master PIN</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            6 digits. Used for destructive or admin-only operations.
+                        </MudText>
+                    </MudStack>
+                    <MudStack Row="true" Spacing="2">
+                        <MudTextField @bind-Value="_masterPin"
+                                      Label="PIN"
+                                      InputType="InputType.Password"
+                                      InputMode="InputMode.numeric"
+                                      MaxLength="6"
+                                      Variant="Variant.Outlined"
+                                      Immediate="true" />
+                        <MudTextField @bind-Value="_masterPinConfirm"
+                                      Label="Confirm"
+                                      InputType="InputType.Password"
+                                      InputMode="InputMode.numeric"
+                                      MaxLength="6"
+                                      Variant="Variant.Outlined"
+                                      Immediate="true" />
+                    </MudStack>
+
+                    @if (_error is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+                    }
+
+                    <MudButton OnClick="Submit"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Size="Size.Large"
+                               EndIcon="@Icons.Material.Rounded.ArrowForward"
+                               Disabled="@(!CanSubmit)">
+                        Complete setup
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudStack>
+    }
 </MudContainer>
+
+@code {
+    private string _storeName = "";
+    private string _adminPin = "";
+    private string _adminPinConfirm = "";
+    private string _masterPin = "";
+    private string _masterPinConfirm = "";
+    private string? _error;
+    private bool _done;
+
+    protected override void OnInitialized()
+    {
+        _done = Setup.IsComplete;
+    }
+
+    private bool CanSubmit =>
+        !string.IsNullOrWhiteSpace(_storeName) &&
+        _adminPin.Length == 4 &&
+        _adminPinConfirm.Length == 4 &&
+        _masterPin.Length == 6 &&
+        _masterPinConfirm.Length == 6;
+
+    private void Submit()
+    {
+        _error = null;
+
+        var name = _storeName.Trim();
+        if (string.IsNullOrEmpty(name)) { _error = "Store name is required."; return; }
+        if (_adminPin.Length != 4 || !_adminPin.All(char.IsDigit)) { _error = "Admin PIN must be exactly 4 digits."; return; }
+        if (_masterPin.Length != 6 || !_masterPin.All(char.IsDigit)) { _error = "Master PIN must be exactly 6 digits."; return; }
+        if (_adminPin != _adminPinConfirm) { _error = "Admin PIN confirmation does not match."; return; }
+        if (_masterPin != _masterPinConfirm) { _error = "Master PIN confirmation does not match."; return; }
+        if (_adminPin == _masterPin) { _error = "Admin and Master PIN must be different."; return; }
+
+        Setup.Save(name, _adminPin, _masterPin);
+        _done = true;
+    }
+}

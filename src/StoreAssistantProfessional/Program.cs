@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
 using Photino.Blazor;
 using StoreAssistantProfessional.Components;
+using StoreAssistantProfessional.Services;
 
 namespace StoreAssistantProfessional;
 
@@ -17,6 +18,7 @@ public static class Program
 
         var builder = PhotinoBlazorAppBuilder.CreateDefault(args);
         builder.Services.AddMudServices();
+        builder.Services.AddSingleton<ISetupService, SetupService>();
         builder.RootComponents.Add<Routes>("#app");
 
         var app = builder.Build();
