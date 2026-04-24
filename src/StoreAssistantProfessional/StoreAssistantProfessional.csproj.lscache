@@ -57,13 +57,14 @@ TemporaryDependencyNodeTargetIdentifier=net10.0-windows
 /warnaserror+:NU1605,SYSLIB0011
 
 [sourceFiles]
+App.xaml.cs
+MainWindow.xaml.cs
 obj/Debug/net10.0-windows/win-x64/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
  EmbeddedAttribute.cs
  StoreAssistantProfessional.AssemblyInfo.cs
  StoreAssistantProfessional.GlobalUsings.g.cs
  ValidatableTypeAttribute.cs
-Program.cs
 Services/
  PinRules.cs
  SessionService.cs

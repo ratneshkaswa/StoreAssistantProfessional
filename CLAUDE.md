@@ -8,17 +8,25 @@ Guidance for Claude Code when working in this repo.
 
 ## Current state
 
-Day 1. A single project. A welcome page. Nothing else.
+Single project. First-run setup + placeholder home. No persistence yet.
 
 ```
 src/StoreAssistantProfessional/
-├── Program.cs                           # Photino entry
 ├── StoreAssistantProfessional.csproj
+├── App.xaml / App.xaml.cs               # WPF bootstrap + DI
+├── MainWindow.xaml / MainWindow.xaml.cs # Hosts BlazorWebView rooted on Routes
 ├── Components/
 │   ├── _Imports.razor
-│   ├── Routes.razor
+│   ├── Routes.razor                     # Router + Mud providers
+│   ├── PinNumpad.razor                  # Shared on-screen keypad
 │   ├── Layout/MainLayout.razor
-│   └── Pages/FirstRun.razor             # @page "/" — welcome
+│   └── Pages/
+│       ├── Home.razor                   # @page "/"
+│       └── FirstRun.razor               # @page "/setup"
+├── Services/
+│   ├── SetupService.cs                  # PBKDF2 PIN hashing + atomic setup.json
+│   ├── SessionService.cs                # Role = User | Admin
+│   └── PinRules.cs                      # Weak-PIN detection
 └── wwwroot/
     ├── index.html
     └── css/app.css
@@ -26,9 +34,10 @@ src/StoreAssistantProfessional/
 
 ## Stack
 
-- `net10.0-windows`
-- Photino.Blazor 4.0.13
+- `net10.0-windows10.0.19041.0` (Windows 10 2004+ required for WebView2 composition path)
+- WPF + `Microsoft.AspNetCore.Components.WebView.Wpf` 10.0.1
 - MudBlazor 9.3.0
+- WebView2 Runtime (ships with Windows 11; Evergreen Runtime required on Windows 10)
 - SQLite + EF Core — **not yet added**; add when the first page needs persistence.
 
 ## Commands
@@ -45,7 +54,7 @@ dotnet run     --project src/StoreAssistantProfessional -c Release
 - **No premature abstractions.** `TabScopedComponent`, `ObservableState`, `MigrationHelper`, chained-hash audit ledger, etc. from the old repo stay in the old repo. Port concepts only when the feature being ported actually needs them.
 - **No copy-paste.** Reference the old code for ideas, but rewrite — don't drag tech debt forward.
 - **100% stock MudBlazor.** No custom CSS beyond `app.css` basics. No custom theme. No utility classes.
-- **Locale = `en-IN`** (set in `Program.cs`). Currency symbol `₹`.
+- **Locale = `en-IN`** (set in `App.xaml.cs`). Currency symbol `₹`. English-only — no i18n planned.
 
 ## Reference
 
