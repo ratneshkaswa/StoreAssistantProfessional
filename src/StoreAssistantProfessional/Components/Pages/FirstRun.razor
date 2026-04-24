@@ -1,8 +1,10 @@
 @page "/setup"
 @using System.Security.Cryptography
+@using Microsoft.JSInterop
 @using StoreAssistantProfessional.Theme
 @inject ISetupService Setup
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Setup — Store Assistant Professional</PageTitle>
 
@@ -201,12 +203,13 @@
                                         Save the Master PIN somewhere safe — it's your recovery key and the only way to delete major records.
                                     </MudAlert>
 
-                                    <MudCheckBox @ref="_acknowledgeCheckbox"
-                                                 T="bool"
-                                                 @bind-Value="_acknowledgedMaster"
-                                                 Color="Color.Primary">
-                                        I have saved the Master PIN somewhere safe.
-                                    </MudCheckBox>
+                                    <div id="sap-ack-master">
+                                        <MudCheckBox T="bool"
+                                                     @bind-Value="_acknowledgedMaster"
+                                                     Color="Color.Primary">
+                                            I have saved the Master PIN somewhere safe.
+                                        </MudCheckBox>
+                                    </div>
 
                                     @if (_error is not null)
                                     {
@@ -256,7 +259,6 @@
     private MudTextField<string>? _adminPinConfirmField;
     private MudTextField<string>? _masterPinField;
     private MudTextField<string>? _masterPinConfirmField;
-    private MudCheckBox<bool>? _acknowledgeCheckbox;
 
     private static readonly Dictionary<string, object?> AriaHidden = new() { ["aria-hidden"] = "true" };
 
@@ -340,8 +342,17 @@
     private async Task SetMasterPinConfirm(string v)
     {
         _masterPinConfirm = DigitsOnly(v, 6);
-        if (MasterConfirmValid && !_acknowledgedMaster && _acknowledgeCheckbox is not null)
-            await _acknowledgeCheckbox.FocusAsync();
+        if (MasterConfirmValid && !_acknowledgedMaster)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync(
+                    "eval",
+                    "document.querySelector('#sap-ack-master input[type=checkbox]')?.focus()");
+            }
+            catch (JSException) { }
+            catch (InvalidOperationException) { }
+        }
     }
 
     private static string DigitsOnly(string s, int max)
