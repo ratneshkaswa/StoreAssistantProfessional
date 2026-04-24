@@ -9,7 +9,7 @@
 {
     <main>
         <MudGrid Spacing="0" Style="min-height: 100vh;">
-            <MudItem xs="12" md="5">
+            <MudItem xs="12" md="6">
                 <MudPaper Elevation="0"
                           Square="true"
                           Class="pa-10 d-flex flex-column align-center"
@@ -37,7 +37,7 @@
 
                         <MudText Typo="Typo.h4"
                                  Align="Align.Center"
-                                 Style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                 Style="max-width: 480px; word-break: break-word;">
                             @HeroHeading
                         </MudText>
                         <MudText Typo="Typo.h6" Align="Align.Center" Style="opacity: 0.85;">
@@ -65,7 +65,7 @@
                 </MudPaper>
             </MudItem>
 
-            <MudItem xs="12" md="7">
+            <MudItem xs="12" md="6">
                 <MudContainer MaxWidth="MaxWidth.Small" Class="pa-8 d-flex flex-column" Style="min-height: 100vh; justify-content: safe center;">
                     @if (_completed)
                     {
@@ -90,19 +90,22 @@
                             }
 
                             <MudPaper Elevation="0" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-primary);">
-                                <MudTextField @bind-Value="_storeName"
-                                              Label="Store name"
-                                              Variant="Variant.Outlined"
-                                              MaxLength="100"
-                                              Immediate="true"
-                                              AutoFocus="true"
-                                              HelperText="@(StoreNameValid ? "" : "Shown on receipts and across the app.")"
-                                              Error="@(_submitAttempted && !StoreNameValid)"
-                                              ErrorText="@StoreNameErrorText"
-                                              Adornment="@(StoreNameValid ? Adornment.End : Adornment.None)"
-                                              AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
-                                              AdornmentColor="Color.Success"
-                                              OnKeyDown="OnKeyDown" />
+                                <MudStack Spacing="3">
+                                    <MudText Typo="Typo.h6">Name your store</MudText>
+                                    <MudTextField @bind-Value="_storeName"
+                                                  Label="Store name"
+                                                  Variant="Variant.Outlined"
+                                                  MaxLength="100"
+                                                  Immediate="true"
+                                                  AutoFocus="true"
+                                                  HelperText="Shown on receipts and across the app."
+                                                  Error="@(_submitAttempted && !StoreNameValid)"
+                                                  ErrorText="@StoreNameErrorText"
+                                                  Adornment="@(StoreNameValid ? Adornment.End : Adornment.None)"
+                                                  AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
+                                                  AdornmentColor="Color.Success"
+                                                  OnKeyDown="OnKeyDown" />
+                                </MudStack>
                             </MudPaper>
 
                             <MudPaper Elevation="0" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-secondary);">
@@ -128,7 +131,7 @@
                                                           MaxLength="4"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
-                                                          HelperText="@(AdminPinValid ? "" : "4 digits")"
+                                                          HelperText="4 digits"
                                                           Error="@AdminPinWeak"
                                                           ErrorText="Too predictable."
                                                           Adornment="Adornment.End"
@@ -145,7 +148,7 @@
                                                           MaxLength="4"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
-                                                          HelperText="@(AdminConfirmValid ? "" : "Re-enter")"
+                                                          HelperText="Re-enter"
                                                           Error="@AdminConfirmMismatch"
                                                           ErrorText="Doesn't match the PIN above."
                                                           Adornment="@(AdminConfirmValid ? Adornment.End : Adornment.None)"
@@ -169,7 +172,7 @@
                                                           MaxLength="6"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
-                                                          HelperText="@(MasterPinValid ? "" : "6 digits")"
+                                                          HelperText="6 digits"
                                                           Error="@(MasterPinWeak || MasterStartsWithAdmin)"
                                                           ErrorText="@MasterPinErrorText"
                                                           Adornment="Adornment.End"
@@ -186,7 +189,7 @@
                                                           MaxLength="6"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
-                                                          HelperText="@(MasterConfirmValid ? "" : "Re-enter")"
+                                                          HelperText="Re-enter"
                                                           Error="@MasterConfirmMismatch"
                                                           ErrorText="Doesn't match the PIN above."
                                                           Adornment="@(MasterConfirmValid ? Adornment.End : Adornment.None)"
