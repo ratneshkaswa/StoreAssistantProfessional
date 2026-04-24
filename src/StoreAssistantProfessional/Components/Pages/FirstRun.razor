@@ -1,4 +1,5 @@
 @page "/setup"
+@using System.Security.Cryptography
 @using StoreAssistantProfessional.Theme
 @inject ISetupService Setup
 @inject NavigationManager Nav
@@ -50,7 +51,7 @@
 
                         <MudText Typo="Typo.caption" Align="Align.Center"
                                  Style="font-family: Georgia, 'Times New Roman', serif; font-style: italic; opacity: 0.75; letter-spacing: 1px;">
-                            @(_completed ? "Opening your store…" : "Crafted for Indian retail · Est. 2026")
+                            Crafted for Indian retail · Est. 2026
                         </MudText>
                     </MudStack>
                 </MudPaper>
@@ -58,25 +59,11 @@
 
             <MudItem xs="12" md="6">
                 <MudContainer MaxWidth="MaxWidth.Small" Class="pa-8 d-flex flex-column" Style="min-height: 100vh; justify-content: safe center;">
-                    @if (_completed)
-                    {
-                        <MudStack AlignItems="AlignItems.Center" Spacing="4">
-                            <MudIcon Icon="@Icons.Material.Rounded.CheckCircle"
-                                     Color="Color.Success"
-                                     Style="font-size: 120px;" />
-                            <MudText Typo="Typo.h4" Align="Align.Center">You're all set!</MudText>
-                            <MudText Typo="Typo.body1" Color="Color.Secondary" Align="Align.Center">
-                                Opening your store…
-                            </MudText>
-                        </MudStack>
-                    }
-                    else
-                    {
-                        <MudStack Spacing="3">
+                    <MudStack Spacing="3">
                             @if (Setup.Status == SetupStatus.Corrupt)
                             {
                                 <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Rounded.Warning">
-                                    An existing setup file was found but could not be read. Completing setup will replace it.
+                                    An existing setup file was found but could not be read. Completing setup will replace it; the unreadable copy will be kept as <code>setup.json.bak</code> alongside it.
                                 </MudAlert>
                             }
 
@@ -95,12 +82,13 @@
                                                           Immediate="true"
                                                           AutoFocus="true"
                                                           HelperText="Shown on receipts and across the app."
-                                                          Error="@(_submitAttempted && !StoreNameValid)"
+                                                          Error="@(_storeNameTouched && !StoreNameValid)"
                                                           ErrorText="@StoreNameErrorText"
                                                           Adornment="@(StoreNameValid ? Adornment.End : Adornment.None)"
                                                           AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
                                                           AdornmentColor="Color.Success"
-                                                          OnKeyDown="OnKeyDown" />
+                                                          OnBlur="OnStoreNameBlur"
+                                                          OnKeyDown="OnStoreNameKeyDown" />
                                         </div>
                                     </MudStack>
                                 </MudStack>
@@ -111,7 +99,9 @@
                                     <MudStack Spacing="1">
                                         <MudText Typo="Typo.h6">Choose two PINs</MudText>
                                         <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                            Admin for day-to-day protected actions. Master for destructive deletions and recovery.
+                                            @(StoreNameValid
+                                                ? "Admin for day-to-day protected actions. Master for destructive deletions and recovery."
+                                                : "Name your store above to unlock PIN setup.")
                                         </MudText>
                                     </MudStack>
 
@@ -229,12 +219,19 @@
                                                Size="Size.Large"
                                                FullWidth="true"
                                                Disabled="@(!CanSubmit)">
-                                        Complete setup
+                                        @if (_submitting)
+                                        {
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                            <span>Securing your PINs…</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Complete setup</span>
+                                        }
                                     </MudButton>
                                 </MudStack>
                             </MudPaper>
-                        </MudStack>
-                    }
+                    </MudStack>
                 </MudContainer>
             </MudItem>
         </MudGrid>
@@ -250,14 +247,10 @@
     private bool _showAdminPin;
     private bool _showMasterPin;
     private bool _acknowledgedMaster;
-    private bool _submitAttempted;
-    private bool _completed;
+    private bool _storeNameTouched;
+    private bool _submitting;
     private string? _error;
     private bool _redirecting;
-
-    private bool _advancedFromAdminPin;
-    private bool _advancedFromAdminConfirm;
-    private bool _advancedFromMasterPin;
 
     private MudTextField<string>? _adminPinField;
     private MudTextField<string>? _adminPinConfirmField;
@@ -269,7 +262,7 @@
     private static readonly string HeroStyle =
         $"min-height: 100vh; position: relative; overflow: hidden; " +
         $"justify-content: safe center; " +
-        $"background: linear-gradient(315deg, #F5D4B5 0%, #E8B584 45%, #D9A5A5 100%); " +
+        $"background: linear-gradient(315deg, {BrandTheme.HeroGradientStart} 0%, {BrandTheme.HeroGradientMiddle} 45%, {BrandTheme.HeroGradientEnd} 100%); " +
         $"color: {BrandTheme.HeroTextColor};";
 
     protected override void OnInitialized()
@@ -281,11 +274,9 @@
         }
     }
 
-    private string HeroHeading => _completed
-        ? $"You're all set, {_storeName.Trim()}"
-        : StoreNameValid
-            ? $"Namaste, {_storeName.Trim()}"
-            : "Namaste";
+    private string HeroHeading => StoreNameValid
+        ? $"Namaste, {_storeName.Trim()}"
+        : "Namaste";
 
     private bool AdminPinWeak => _adminPin.Length == 4 && PinRules.IsWeak(_adminPin);
     private bool MasterPinWeak => _masterPin.Length == 6 && PinRules.IsWeak(_masterPin);
@@ -309,9 +300,10 @@
 
     private string MasterPinErrorText => MasterStartsWithAdmin
         ? "Must not start with the Admin PIN."
-        : "Too predictable.";
+        : "Avoid repeats, sequences, and palindromes.";
 
     private bool CanSubmit =>
+        !_submitting &&
         StoreNameValid &&
         _adminPin.Length == 4 && !PinRules.IsWeak(_adminPin) &&
         _adminPinConfirm == _adminPin &&
@@ -323,31 +315,22 @@
     private async Task SetAdminPin(string v)
     {
         _adminPin = DigitsOnly(v, 4);
-        if (!_advancedFromAdminPin && AdminPinValid && _adminPinConfirm.Length == 0 && _adminPinConfirmField is not null)
-        {
-            _advancedFromAdminPin = true;
+        if (AdminPinValid && _adminPinConfirm.Length == 0 && _adminPinConfirmField is not null)
             await _adminPinConfirmField.FocusAsync();
-        }
     }
 
     private async Task SetAdminPinConfirm(string v)
     {
         _adminPinConfirm = DigitsOnly(v, 4);
-        if (!_advancedFromAdminConfirm && AdminConfirmValid && _masterPin.Length == 0 && _masterPinField is not null)
-        {
-            _advancedFromAdminConfirm = true;
+        if (AdminConfirmValid && _masterPin.Length == 0 && _masterPinField is not null)
             await _masterPinField.FocusAsync();
-        }
     }
 
     private async Task SetMasterPin(string v)
     {
         _masterPin = DigitsOnly(v, 6);
-        if (!_advancedFromMasterPin && MasterPinValid && _masterPinConfirm.Length == 0 && _masterPinConfirmField is not null)
-        {
-            _advancedFromMasterPin = true;
+        if (MasterPinValid && _masterPinConfirm.Length == 0 && _masterPinConfirmField is not null)
             await _masterPinConfirmField.FocusAsync();
-        }
     }
 
     private void SetMasterPinConfirm(string v) => _masterPinConfirm = DigitsOnly(v, 6);
@@ -362,6 +345,16 @@
     private void ToggleShowAdmin() => _showAdminPin = !_showAdminPin;
     private void ToggleShowMaster() => _showMasterPin = !_showMasterPin;
 
+    private void OnStoreNameBlur() => _storeNameTouched = true;
+
+    private async Task OnStoreNameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        _storeNameTouched = true;
+        if (StoreNameValid && _adminPinField is not null)
+            await _adminPinField.FocusAsync();
+    }
+
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && CanSubmit) await Submit();
@@ -369,31 +362,40 @@
 
     private async Task Submit()
     {
-        _submitAttempted = true;
+        if (_submitting) return;
+        _submitting = true;
         _error = null;
 
         try
         {
-            Setup.Save(_storeName.Trim(), _adminPin, _masterPin);
+            await Task.Run(() => Setup.Save(_storeName.Trim(), _adminPin, _masterPin));
         }
         catch (ArgumentException ex)
         {
             _error = ex.Message;
+            _submitting = false;
             return;
         }
         catch (IOException ex)
         {
             _error = $"Could not save setup: {ex.Message}";
+            _submitting = false;
             return;
         }
         catch (UnauthorizedAccessException ex)
         {
             _error = $"Could not save setup: {ex.Message}";
+            _submitting = false;
+            return;
+        }
+        catch (CryptographicException ex)
+        {
+            _error = $"Could not secure your PINs: {ex.Message}";
+            _submitting = false;
             return;
         }
 
-        _completed = true;
-        await Task.Delay(700);
+        _adminPin = _adminPinConfirm = _masterPin = _masterPinConfirm = "";
 
         _redirecting = true;
         Nav.NavigateTo("/", replace: true);

@@ -5,10 +5,10 @@ namespace StoreAssistantProfessional.Theme;
 
 public static class BrandTheme
 {
-    public const string HeroGradientLight = "#EDBE91";
-    public const string HeroGradientDark  = "#DFA878";
-    public const string HeroTextColor     = "#4A2F1A";
-    public const string HeroDividerColor  = "rgba(74, 47, 26, 0.25)";
+    public const string HeroGradientStart  = "#F5D4B5";
+    public const string HeroGradientMiddle = "#E8B584";
+    public const string HeroGradientEnd    = "#D9A5A5";
+    public const string HeroTextColor      = "#4A2F1A";
 
     public static readonly MudTheme Instance = new()
     {
