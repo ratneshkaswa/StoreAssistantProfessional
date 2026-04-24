@@ -35,9 +35,19 @@
                                         stroke-dashoffset="@ProgressDashOffset.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                                         stroke-linecap="round" />
                             </svg>
-                            <MudIcon Icon="@Icons.Material.Rounded.Storefront"
-                                     UserAttributes="@AriaHidden"
-                                     Style="font-size: 56px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);" />
+                            @if (StoreNameValid)
+                            {
+                                <MudText Align="Align.Center"
+                                         Style="font-family: Georgia, 'Times New Roman', serif; font-weight: 600; font-size: 44px; letter-spacing: 2px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                                    @StoreInitials
+                                </MudText>
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Rounded.Storefront"
+                                         UserAttributes="@AriaHidden"
+                                         Style="font-size: 56px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);" />
+                            }
                         </div>
 
                         <MudText Typo="Typo.h4"
@@ -46,21 +56,36 @@
                             @HeroHeading
                         </MudText>
                         <MudText Typo="Typo.h6" Align="Align.Center" Style="opacity: 0.85; font-style: italic;">
-                            @(_completed ? "Opening your store…" : "A quieter POS for clothing retail.")
+                            @(_completed ? "Opening your store…" : "A quieter POS for menswear and garment retail.")
                         </MudText>
 
-                        <MudStack Row="true" Spacing="5" AlignItems="AlignItems.Center" Class="mt-3">
+                        <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Center" Class="mt-3">
                             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@Icons.Material.Rounded.CloudOff" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
-                                <MudText Typo="Typo.caption">Offline-first</MudText>
+                                <MudIcon Icon="@(StoreNameValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.Storefront)"
+                                         Color="@(StoreNameValid ? Color.Success : Color.Inherit)"
+                                         UserAttributes="@AriaHidden"
+                                         Style="font-size: 20px;" />
+                                <MudText Typo="Typo.caption">1. Name</MudText>
                             </MudStack>
+                            <MudIcon Icon="@Icons.Material.Rounded.ChevronRight"
+                                     UserAttributes="@AriaHidden"
+                                     Style="font-size: 16px; opacity: 0.35;" />
                             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@Icons.Material.Rounded.MoneyOff" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
-                                <MudText Typo="Typo.caption">No subscription</MudText>
+                                <MudIcon Icon="@(AllPinsSet ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.Key)"
+                                         Color="@(AllPinsSet ? Color.Success : Color.Tertiary)"
+                                         UserAttributes="@AriaHidden"
+                                         Style="font-size: 20px;" />
+                                <MudText Typo="Typo.caption">2. PINs</MudText>
                             </MudStack>
+                            <MudIcon Icon="@Icons.Material.Rounded.ChevronRight"
+                                     UserAttributes="@AriaHidden"
+                                     Style="font-size: 16px; opacity: 0.35;" />
                             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@Icons.Material.Rounded.Shield" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
-                                <MudText Typo="Typo.caption">Private</MudText>
+                                <MudIcon Icon="@(_acknowledgedMaster ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.BookmarkBorder)"
+                                         Color="@(_acknowledgedMaster ? Color.Success : Color.Inherit)"
+                                         UserAttributes="@AriaHidden"
+                                         Style="font-size: 20px;" />
+                                <MudText Typo="Typo.caption">3. Save</MudText>
                             </MudStack>
                         </MudStack>
                     </MudStack>
@@ -91,26 +116,33 @@
                                 </MudAlert>
                             }
 
-                            <MudPaper Elevation="0" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-primary);">
+                            <MudPaper Elevation="1" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-primary);">
                                 <MudStack Spacing="3">
                                     <MudText Typo="Typo.h6">Name your store</MudText>
-                                    <MudTextField @bind-Value="_storeName"
-                                                  Label="Store name"
-                                                  Variant="Variant.Outlined"
-                                                  MaxLength="100"
-                                                  Immediate="true"
-                                                  AutoFocus="true"
-                                                  HelperText="Shown on receipts and across the app."
-                                                  Error="@(_submitAttempted && !StoreNameValid)"
-                                                  ErrorText="@StoreNameErrorText"
-                                                  Adornment="@(StoreNameValid ? Adornment.End : Adornment.None)"
-                                                  AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
-                                                  AdornmentColor="Color.Success"
-                                                  OnKeyDown="OnKeyDown" />
+                                    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
+                                        <MudAvatar Color="Color.Info" Variant="Variant.Filled" Size="Size.Medium" Style="flex: 0 0 40px; margin-top: 16px;">
+                                            <MudIcon Icon="@Icons.Material.Rounded.Storefront" UserAttributes="@AriaHidden" Style="font-size: 22px;" />
+                                        </MudAvatar>
+                                        <div style="flex: 1;">
+                                            <MudTextField @bind-Value="_storeName"
+                                                          Label="Store name"
+                                                          Variant="Variant.Outlined"
+                                                          MaxLength="100"
+                                                          Immediate="true"
+                                                          AutoFocus="true"
+                                                          HelperText="Shown on receipts and across the app."
+                                                          Error="@(_submitAttempted && !StoreNameValid)"
+                                                          ErrorText="@StoreNameErrorText"
+                                                          Adornment="@(StoreNameValid ? Adornment.End : Adornment.None)"
+                                                          AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
+                                                          AdornmentColor="Color.Success"
+                                                          OnKeyDown="OnKeyDown" />
+                                        </div>
+                                    </MudStack>
                                 </MudStack>
                             </MudPaper>
 
-                            <MudPaper Elevation="0" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-secondary);">
+                            <MudPaper Elevation="1" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-secondary);">
                                 <MudStack Spacing="3">
                                     <MudStack Spacing="1">
                                         <MudText Typo="Typo.h6">Choose two PINs</MudText>
@@ -133,6 +165,7 @@
                                                           MaxLength="4"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
+                                                          Disabled="@(!StoreNameValid)"
                                                           HelperText="4 digits"
                                                           Error="@AdminPinWeak"
                                                           ErrorText="Too predictable."
@@ -150,6 +183,7 @@
                                                           MaxLength="4"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
+                                                          Disabled="@(!StoreNameValid)"
                                                           HelperText="Re-enter"
                                                           Error="@AdminConfirmMismatch"
                                                           ErrorText="Doesn't match the PIN above."
@@ -174,6 +208,7 @@
                                                           MaxLength="6"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
+                                                          Disabled="@(!StoreNameValid)"
                                                           HelperText="6 digits"
                                                           Error="@(MasterPinWeak || MasterStartsWithAdmin)"
                                                           ErrorText="@MasterPinErrorText"
@@ -191,6 +226,7 @@
                                                           MaxLength="6"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
+                                                          Disabled="@(!StoreNameValid)"
                                                           HelperText="Re-enter"
                                                           Error="@MasterConfirmMismatch"
                                                           ErrorText="Doesn't match the PIN above."
@@ -203,29 +239,36 @@
                                 </MudStack>
                             </MudPaper>
 
-                            <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Rounded.Key">
-                                Save the Master PIN somewhere safe — it's your recovery key and the only way to delete major records.
-                            </MudAlert>
+                            <MudPaper Elevation="1" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-tertiary);">
+                                <MudStack Spacing="3">
+                                    <MudText Typo="Typo.h6">Confirm &amp; continue</MudText>
 
-                            <MudCheckBox T="bool"
-                                         @bind-Value="_acknowledgedMaster"
-                                         Color="Color.Primary">
-                                I have saved the Master PIN somewhere safe.
-                            </MudCheckBox>
+                                    <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Rounded.Key">
+                                        Save the Master PIN somewhere safe — it's your recovery key and the only way to delete major records.
+                                    </MudAlert>
 
-                            @if (_error is not null)
-                            {
-                                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
-                            }
+                                    <MudCheckBox T="bool"
+                                                 @bind-Value="_acknowledgedMaster"
+                                                 Color="Color.Primary"
+                                                 Disabled="@(!AllPinsSet)">
+                                        I have saved the Master PIN somewhere safe.
+                                    </MudCheckBox>
 
-                            <MudButton OnClick="Submit"
-                                       Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       Size="Size.Large"
-                                       FullWidth="true"
-                                       Disabled="@(!CanSubmit)">
-                                Complete setup
-                            </MudButton>
+                                    @if (_error is not null)
+                                    {
+                                        <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+                                    }
+
+                                    <MudButton OnClick="Submit"
+                                               Variant="Variant.Filled"
+                                               Color="Color.Primary"
+                                               Size="Size.Large"
+                                               FullWidth="true"
+                                               Disabled="@(!CanSubmit)">
+                                        Complete setup
+                                    </MudButton>
+                                </MudStack>
+                            </MudPaper>
                         </MudStack>
                     }
                 </MudContainer>
@@ -282,6 +325,22 @@
             ? $"Namaste, {_storeName.Trim()}"
             : "Namaste";
 
+    private string StoreInitials
+    {
+        get
+        {
+            var trimmed = _storeName.Trim();
+            if (trimmed.Length == 0) return "";
+            var words = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length == 0) return "";
+            if (words.Length == 1)
+                return words[0].Length >= 2
+                    ? words[0][..2].ToUpperInvariant()
+                    : words[0][..1].ToUpperInvariant();
+            return $"{char.ToUpperInvariant(words[0][0])}{char.ToUpperInvariant(words[1][0])}";
+        }
+    }
+
     private bool AdminPinWeak => _adminPin.Length == 4 && PinRules.IsWeak(_adminPin);
     private bool MasterPinWeak => _masterPin.Length == 6 && PinRules.IsWeak(_masterPin);
     private bool AdminConfirmMismatch => _adminPinConfirm.Length == 4 && _adminPinConfirm != _adminPin;
@@ -295,6 +354,7 @@
     private bool AdminConfirmValid => _adminPinConfirm.Length == 4 && _adminPinConfirm == _adminPin;
     private bool MasterPinValid => _masterPin.Length == 6 && !PinRules.IsWeak(_masterPin) && !MasterStartsWithAdmin;
     private bool MasterConfirmValid => _masterPinConfirm.Length == 6 && _masterPinConfirm == _masterPin;
+    private bool AllPinsSet => AdminPinValid && AdminConfirmValid && MasterPinValid && MasterConfirmValid;
 
     private int ProgressSteps =>
         (StoreNameValid ? 1 : 0) +
