@@ -53,7 +53,7 @@ dotnet run     --project src/StoreAssistantProfessional -c Release
 - **No premature structure.** One project until pain demands a split. No `Core/Services/UI/Desktop` split until it earns its keep.
 - **No premature abstractions.** `TabScopedComponent`, `ObservableState`, `MigrationHelper`, chained-hash audit ledger, etc. from the old repo stay in the old repo. Port concepts only when the feature being ported actually needs them.
 - **No copy-paste.** Reference the old code for ideas, but rewrite — don't drag tech debt forward.
-- **100% stock MudBlazor.** No custom CSS beyond `app.css` basics. No custom theme. No utility classes.
+- **MudBlazor first.** Stock components only; no custom CSS beyond `app.css` basics; no utility classes. A custom `MudTheme` with brand colors is OK (warm palette for retail feel) — changes to the theme happen in `Theme/BrandTheme.cs`, not inline on components.
 - **Locale = `en-IN`** (set in `App.xaml.cs`). Currency symbol `₹`. English-only — no i18n planned.
 
 ## Reference
