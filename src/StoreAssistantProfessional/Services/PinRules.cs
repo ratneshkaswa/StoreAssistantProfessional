@@ -22,13 +22,14 @@ public static class PinRules
 
         if (IsPalindrome(pin)) return true;
 
-        bool asc = true, desc = true;
-        for (var i = 1; i < pin.Length; i++)
+        var firstStep = pin[1] - pin[0];
+        if (firstStep is >= -5 and <= 5 && firstStep != 0)
         {
-            if (pin[i] - pin[i - 1] != 1) asc = false;
-            if (pin[i - 1] - pin[i] != 1) desc = false;
+            var uniform = true;
+            for (var i = 2; i < pin.Length; i++)
+                if (pin[i] - pin[i - 1] != firstStep) { uniform = false; break; }
+            if (uniform) return true;
         }
-        if (asc || desc) return true;
 
         if (pin.Length % 2 == 0)
         {

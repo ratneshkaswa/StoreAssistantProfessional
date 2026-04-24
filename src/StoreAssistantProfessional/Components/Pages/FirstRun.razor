@@ -1,10 +1,9 @@
 @page "/setup"
 @using System.Security.Cryptography
-@using Microsoft.JSInterop
 @using StoreAssistantProfessional.Theme
 @inject ISetupService Setup
 @inject NavigationManager Nav
-@inject IJSRuntime JS
+@inject ISnackbar Snackbar
 
 <PageTitle>Setup — Store Assistant Professional</PageTitle>
 
@@ -32,7 +31,7 @@
 
                         <MudText Typo="Typo.h3"
                                  Align="Align.Center"
-                                 Style="font-family: Georgia, 'Times New Roman', serif; font-weight: 400; line-height: 1.15; max-width: 520px; word-break: break-word;">
+                                 Style="font-family: Georgia, 'Times New Roman', serif; font-weight: 400; line-height: 1.15; max-width: 520px; overflow-wrap: break-word; hyphens: auto;">
                             @HeroHeading
                         </MudText>
 
@@ -52,8 +51,8 @@
                         </MudStack>
 
                         <MudText Typo="Typo.caption" Align="Align.Center"
-                                 Style="font-family: Georgia, 'Times New Roman', serif; font-style: italic; opacity: 0.75; letter-spacing: 1px;">
-                            Crafted for Indian retail · Est. 2026
+                                 Style="font-family: Georgia, 'Times New Roman', serif; font-style: italic; opacity: 0.85; letter-spacing: 1px;">
+                            Crafted for Indian retail · Est. @DateTime.UtcNow.Year
                         </MudText>
                     </MudStack>
                 </MudPaper>
@@ -61,7 +60,8 @@
 
             <MudItem xs="12" md="6">
                 <MudContainer MaxWidth="MaxWidth.Small" Class="pa-8 d-flex flex-column" Style="min-height: 100vh; justify-content: safe center;">
-                    <MudStack Spacing="3">
+                    <form onsubmit="return false" aria-label="First-run setup" style="display: contents">
+                    <MudStack Spacing="4">
                         @if (Setup.Status == SetupStatus.Corrupt)
                         {
                             <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Rounded.Warning">
@@ -69,11 +69,36 @@
                             </MudAlert>
                         }
 
-                        <MudPaper Elevation="1" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-primary);">
+                        <div id="setup-blocker" role="status" aria-live="polite" style="min-height: 24px;">
+                            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height: 24px;">
+                                @if (BlockingReason is not null)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Rounded.Info"
+                                             UserAttributes="@AriaHidden"
+                                             Color="Color.Secondary"
+                                             Style="font-size: 16px;" />
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @BlockingReason
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Rounded.CheckCircle"
+                                             UserAttributes="@AriaHidden"
+                                             Color="Color.Success"
+                                             Style="font-size: 16px;" />
+                                    <MudText Typo="Typo.caption" Color="Color.Success">
+                                        Ready to save.
+                                    </MudText>
+                                }
+                            </MudStack>
+                        </div>
+
+                        <MudPaper Elevation="1" Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
                             <MudStack Spacing="3">
                                 <MudText Typo="Typo.h6">Name your store</MudText>
                                 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
-                                    <MudAvatar Color="Color.Info" Variant="Variant.Filled" Size="Size.Medium" Style="flex: 0 0 40px; margin-top: 16px;">
+                                    <MudAvatar Color="Color.Info" Variant="Variant.Filled" Size="Size.Small" Style="flex: 0 0 32px; width: 32px; height: 32px; min-width: 32px; margin-top: 20px;">
                                         <MudIcon Icon="@Icons.Material.Rounded.Storefront" UserAttributes="@AriaHidden" Style="font-size: 22px;" />
                                     </MudAvatar>
                                     <div style="flex: 1;">
@@ -86,9 +111,10 @@
                                                       HelperText="Shown on receipts and across the app."
                                                       Error="@(_storeNameTouched && !StoreNameValid)"
                                                       ErrorText="@StoreNameErrorText"
-                                                      Adornment="@(StoreNameValid ? Adornment.End : Adornment.None)"
-                                                      AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
-                                                      AdornmentColor="Color.Success"
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(StoreNameValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                                                      AdornmentColor="@(StoreNameValid ? Color.Success : Color.Default)"
+                                                      UserAttributes="@StoreNameAttrs"
                                                       OnBlur="OnStoreNameBlur"
                                                       OnKeyDown="OnStoreNameKeyDown" />
                                     </div>
@@ -96,19 +122,17 @@
                             </MudStack>
                         </MudPaper>
 
-                        <MudPaper Elevation="1" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-secondary);">
+                        <MudPaper Elevation="1" Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
                             <MudStack Spacing="3">
                                 <MudStack Spacing="1">
                                     <MudText Typo="Typo.h6">Choose two PINs</MudText>
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                        @(StoreNameValid
-                                            ? "Admin for day-to-day protected actions. Master for destructive deletions and recovery."
-                                            : "Name your store above to unlock PIN setup.")
+                                        Admin for day-to-day protected actions. Master for destructive deletions and recovery.
                                     </MudText>
                                 </MudStack>
 
                                 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
-                                    <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium" Style="flex: 0 0 40px; margin-top: 16px;">
+                                    <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small" Style="flex: 0 0 32px; width: 32px; height: 32px; min-width: 32px; margin-top: 20px;">
                                         <MudIcon Icon="@Icons.Material.Rounded.Lock" UserAttributes="@AriaHidden" Style="font-size: 22px;" />
                                     </MudAvatar>
                                     <MudStack Row="true" Spacing="2" Style="flex: 1;">
@@ -121,13 +145,13 @@
                                                       MaxLength="4"
                                                       Variant="Variant.Outlined"
                                                       Immediate="true"
-                                                      Disabled="@(!StoreNameValid)"
                                                       HelperText="@AdminPinHelper"
                                                       Error="@AdminPinWeak"
                                                       ErrorText="Too predictable."
                                                       Adornment="Adornment.End"
                                                       AdornmentIcon="@(_showAdminPin ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
                                                       AdornmentColor="@(AdminPinValid ? Color.Success : Color.Default)"
+                                                      UserAttributes="@PinAttrs"
                                                       OnAdornmentClick="ToggleShowAdmin"
                                                       OnKeyDown="OnKeyDown" />
                                         <MudTextField @ref="_adminPinConfirmField"
@@ -139,19 +163,19 @@
                                                       MaxLength="4"
                                                       Variant="Variant.Outlined"
                                                       Immediate="true"
-                                                      Disabled="@(!StoreNameValid)"
                                                       HelperText="Re-enter"
                                                       Error="@AdminConfirmMismatch"
                                                       ErrorText="Doesn't match the PIN above."
-                                                      Adornment="@(AdminConfirmValid ? Adornment.End : Adornment.None)"
-                                                      AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
-                                                      AdornmentColor="Color.Success"
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(AdminConfirmValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                                                      AdornmentColor="@(AdminConfirmValid ? Color.Success : Color.Default)"
+                                                      UserAttributes="@PinAttrs"
                                                       OnKeyDown="OnKeyDown" />
                                     </MudStack>
                                 </MudStack>
 
                                 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
-                                    <MudAvatar Color="Color.Tertiary" Variant="Variant.Filled" Size="Size.Medium" Style="flex: 0 0 40px; margin-top: 16px;">
+                                    <MudAvatar Color="Color.Tertiary" Variant="Variant.Filled" Size="Size.Small" Style="flex: 0 0 32px; width: 32px; height: 32px; min-width: 32px; margin-top: 20px;">
                                         <MudIcon Icon="@Icons.Material.Rounded.Key" UserAttributes="@AriaHidden" Style="font-size: 22px;" />
                                     </MudAvatar>
                                     <MudStack Row="true" Spacing="2" Style="flex: 1;">
@@ -164,13 +188,13 @@
                                                       MaxLength="6"
                                                       Variant="Variant.Outlined"
                                                       Immediate="true"
-                                                      Disabled="@(!StoreNameValid)"
                                                       HelperText="@MasterPinHelper"
                                                       Error="@(MasterPinWeak || MasterStartsWithAdmin)"
                                                       ErrorText="@MasterPinErrorText"
                                                       Adornment="Adornment.End"
                                                       AdornmentIcon="@(_showMasterPin ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
                                                       AdornmentColor="@(MasterPinValid ? Color.Success : Color.Default)"
+                                                      UserAttributes="@PinAttrs"
                                                       OnAdornmentClick="ToggleShowMaster"
                                                       OnKeyDown="OnKeyDown" />
                                         <MudTextField @ref="_masterPinConfirmField"
@@ -182,59 +206,38 @@
                                                       MaxLength="6"
                                                       Variant="Variant.Outlined"
                                                       Immediate="true"
-                                                      Disabled="@(!StoreNameValid)"
                                                       HelperText="Re-enter"
                                                       Error="@MasterConfirmMismatch"
                                                       ErrorText="Doesn't match the PIN above."
-                                                      Adornment="@(MasterConfirmValid ? Adornment.End : Adornment.None)"
-                                                      AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
-                                                      AdornmentColor="Color.Success"
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(MasterConfirmValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                                                      AdornmentColor="@(MasterConfirmValid ? Color.Success : Color.Default)"
+                                                      UserAttributes="@PinAttrs"
                                                       OnKeyDown="OnKeyDown" />
                                     </MudStack>
                                 </MudStack>
                             </MudStack>
                         </MudPaper>
 
-                        <MudPaper Elevation="1" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-tertiary);">
-                            <MudStack Spacing="3">
-                                <MudText Typo="Typo.h6">Confirm &amp; continue</MudText>
-
-                                <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Rounded.Key">
-                                    Save the Master PIN somewhere safe — it's your recovery key and the only way to delete major records.
-                                </MudAlert>
-
-                                <div id="sap-ack-master">
-                                    <MudCheckBox T="bool"
-                                                 @bind-Value="_acknowledgedMaster"
-                                                 Color="Color.Primary">
-                                        I have saved the Master PIN somewhere safe.
-                                    </MudCheckBox>
-                                </div>
-
-                                @if (_error is not null)
-                                {
-                                    <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
-                                }
-
-                                <MudButton OnClick="Submit"
-                                           Variant="Variant.Filled"
-                                           Color="Color.Primary"
-                                           Size="Size.Large"
-                                           FullWidth="true"
-                                           Disabled="@(!CanSubmit)">
-                                    @if (_submitting)
-                                    {
-                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                                        <span>Securing your PINs…</span>
-                                    }
-                                    else
-                                    {
-                                        <span>Complete setup</span>
-                                    }
-                                </MudButton>
-                            </MudStack>
-                        </MudPaper>
+                        <MudButton OnClick="Submit"
+                                   Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Large"
+                                   FullWidth="true"
+                                   Disabled="@(!CanSubmit)"
+                                   UserAttributes="@BlockerAriaAttrs">
+                            @if (_submitting)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                <span>Securing your PINs…</span>
+                            }
+                            else
+                            {
+                                <span>Complete setup</span>
+                            }
+                        </MudButton>
                     </MudStack>
+                    </form>
                 </MudContainer>
             </MudItem>
         </MudGrid>
@@ -249,10 +252,8 @@
     private string _masterPinConfirm = "";
     private bool _showAdminPin;
     private bool _showMasterPin;
-    private bool _acknowledgedMaster;
     private bool _storeNameTouched;
     private bool _submitting;
-    private string? _error;
     private bool _redirecting;
 
     private MudTextField<string>? _adminPinField;
@@ -261,6 +262,9 @@
     private MudTextField<string>? _masterPinConfirmField;
 
     private static readonly Dictionary<string, object?> AriaHidden = new() { ["aria-hidden"] = "true" };
+    private static readonly Dictionary<string, object?> StoreNameAttrs = new() { ["spellcheck"] = "false", ["autocomplete"] = "off" };
+    private static readonly Dictionary<string, object?> PinAttrs = new() { ["autocomplete"] = "off", ["inputmode"] = "numeric" };
+    private static readonly Dictionary<string, object?> BlockerAriaAttrs = new() { ["aria-describedby"] = "setup-blocker" };
 
     private static readonly string HeroStyle =
         $"min-height: 100vh; position: relative; overflow: hidden; " +
@@ -294,7 +298,6 @@
     private bool AdminConfirmValid => _adminPinConfirm.Length == 4 && _adminPinConfirm == _adminPin;
     private bool MasterPinValid => _masterPin.Length == 6 && !PinRules.IsWeak(_masterPin) && !MasterStartsWithAdmin;
     private bool MasterConfirmValid => _masterPinConfirm.Length == 6 && _masterPinConfirm == _masterPin;
-    private bool AllPinsSet => AdminPinValid && AdminConfirmValid && MasterPinValid && MasterConfirmValid;
 
     private string StoreNameErrorText =>
         string.IsNullOrWhiteSpace(_storeName)
@@ -315,8 +318,28 @@
         _adminPinConfirm == _adminPin &&
         _masterPin.Length == 6 && !PinRules.IsWeak(_masterPin) &&
         !MasterStartsWithAdmin &&
-        _masterPinConfirm == _masterPin &&
-        _acknowledgedMaster;
+        _masterPinConfirm == _masterPin;
+
+    private string? BlockingReason
+    {
+        get
+        {
+            if (!StoreNameValid)
+                return _storeName.Length == 0
+                    ? "Start by naming your store."
+                    : "Store name must be at least 2 characters.";
+            if (_adminPin.Length < 4) return "Set a 4-digit Admin PIN.";
+            if (PinRules.IsWeak(_adminPin)) return "Admin PIN is too predictable — try something less obvious.";
+            if (_adminPinConfirm.Length < 4) return "Re-enter the Admin PIN to confirm it.";
+            if (_adminPinConfirm != _adminPin) return "Admin PIN confirmation doesn't match.";
+            if (_masterPin.Length < 6) return "Set a 6-digit Master PIN.";
+            if (MasterStartsWithAdmin) return "Master PIN must not start with the Admin PIN.";
+            if (PinRules.IsWeak(_masterPin)) return "Master PIN is too predictable — try something less obvious.";
+            if (_masterPinConfirm.Length < 6) return "Re-enter the Master PIN to confirm it.";
+            if (_masterPinConfirm != _masterPin) return "Master PIN confirmation doesn't match.";
+            return null;
+        }
+    }
 
     private async Task SetAdminPin(string v)
     {
@@ -339,20 +362,9 @@
             await _masterPinConfirmField.FocusAsync();
     }
 
-    private async Task SetMasterPinConfirm(string v)
+    private void SetMasterPinConfirm(string v)
     {
         _masterPinConfirm = DigitsOnly(v, 6);
-        if (MasterConfirmValid && !_acknowledgedMaster)
-        {
-            try
-            {
-                await JS.InvokeVoidAsync(
-                    "eval",
-                    "document.querySelector('#sap-ack-master input[type=checkbox]')?.focus()");
-            }
-            catch (JSException) { }
-            catch (InvalidOperationException) { }
-        }
     }
 
     private static string DigitsOnly(string s, int max)
@@ -371,7 +383,11 @@
     private void ToggleShowAdmin() => _showAdminPin = !_showAdminPin;
     private void ToggleShowMaster() => _showMasterPin = !_showMasterPin;
 
-    private void OnStoreNameBlur() => _storeNameTouched = true;
+    private void OnStoreNameBlur()
+    {
+        _storeNameTouched = true;
+        _storeName = _storeName.Trim();
+    }
 
     private async Task OnStoreNameKeyDown(KeyboardEventArgs e)
     {
@@ -390,7 +406,6 @@
     {
         if (_submitting) return;
         _submitting = true;
-        _error = null;
 
         try
         {
@@ -398,25 +413,25 @@
         }
         catch (ArgumentException ex)
         {
-            _error = StripParamSuffix(ex.Message);
+            ShowError(StripParamSuffix(ex.Message));
             _submitting = false;
             return;
         }
         catch (IOException ex)
         {
-            _error = $"Could not save setup: {ex.Message}";
+            ShowError($"Could not save setup: {ex.Message}");
             _submitting = false;
             return;
         }
         catch (UnauthorizedAccessException ex)
         {
-            _error = $"Could not save setup: {ex.Message}";
+            ShowError($"Could not save setup: {ex.Message}");
             _submitting = false;
             return;
         }
         catch (CryptographicException ex)
         {
-            _error = $"Could not secure your PINs: {ex.Message}";
+            ShowError($"Could not secure your PINs: {ex.Message}");
             _submitting = false;
             return;
         }
@@ -426,4 +441,11 @@
         _redirecting = true;
         Nav.NavigateTo("/", replace: true);
     }
+
+    private void ShowError(string message) =>
+        Snackbar.Add(message, Severity.Error, config =>
+        {
+            config.ShowCloseIcon = true;
+            config.VisibleStateDuration = 10000;
+        });
 }

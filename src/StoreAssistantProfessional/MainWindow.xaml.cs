@@ -12,10 +12,19 @@ public partial class MainWindow : Window
         Blazor.BlazorWebViewInitialized += OnBlazorWebViewInitialized;
     }
 
-    private static void OnBlazorWebViewInitialized(object? sender, BlazorWebViewInitializedEventArgs e)
+    private void OnBlazorWebViewInitialized(object? sender, BlazorWebViewInitializedEventArgs e)
     {
+#if !DEBUG
         var settings = e.WebView.CoreWebView2.Settings;
         settings.AreDevToolsEnabled = false;
         settings.AreDefaultContextMenusEnabled = false;
+#endif
+
+        e.WebView.CoreWebView2.DocumentTitleChanged += (_, _) =>
+        {
+            var docTitle = e.WebView.CoreWebView2.DocumentTitle;
+            if (!string.IsNullOrWhiteSpace(docTitle))
+                Dispatcher.Invoke(() => Title = docTitle);
+        };
     }
 }

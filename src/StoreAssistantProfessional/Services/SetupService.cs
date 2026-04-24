@@ -102,7 +102,7 @@ public sealed class SetupService : ISetupService
 
             if (File.Exists(_path))
             {
-                File.Replace(tmp, _path, _path + ".bak");
+                File.Replace(tmp, _path, _path + ".bak", ignoreMetadataErrors: true);
             }
             else
             {

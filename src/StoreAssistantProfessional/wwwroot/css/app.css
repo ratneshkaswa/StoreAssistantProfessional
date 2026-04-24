@@ -5,6 +5,26 @@ html, body {
     font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
+/* Kill all animations, transitions, and ripples app-wide */
+*, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+}
+
+.mud-ripple,
+.mud-ripple-lens {
+    display: none !important;
+}
+
+/* Exception: keep the indeterminate progress spinner rotating */
+.mud-progress-circular-svg {
+    animation: mud-progress-circular-rotate 1.4s linear infinite !important;
+}
+
+.mud-progress-circular-circle-indeterminate {
+    animation: mud-progress-circular-dash 1.4s ease-in-out infinite !important;
+}
+
 .boot {
     padding: 40px;
     color: #666;
@@ -27,4 +47,33 @@ html, body {
     position: absolute;
     right: 10px;
     top: 8px;
+}
+
+.mud-alert code {
+    background: rgba(0, 0, 0, 0.08);
+    padding: 0 5px;
+    border-radius: 3px;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.mud-checkbox .mud-icon-button,
+.mud-checkbox .mud-icon-button:hover,
+.mud-checkbox .mud-icon-button:focus,
+.mud-checkbox .mud-icon-button:focus-visible,
+.mud-checkbox .mud-icon-button:active {
+    background-color: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.mud-checkbox .mud-ripple {
+    display: none !important;
+}
+
+/* Lock helper/error text slot — prevents layout shift when swapping between HelperText and ErrorText */
+.mud-input-helper-text {
+    min-height: 1.66em;
+    line-height: 1.66;
+    margin-top: 3px;
 }
