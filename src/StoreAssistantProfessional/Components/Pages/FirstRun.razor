@@ -18,9 +18,14 @@
                              UserAttributes="@AriaHidden"
                              Style="position: absolute; bottom: -60px; right: -60px; font-size: 320px; opacity: 0.1; pointer-events: none;" />
                     <MudStack AlignItems="AlignItems.Center" Spacing="3" Style="position: relative; z-index: 1;">
-                        <MudText Typo="Typo.overline" Align="Align.Center" Style="letter-spacing: 4px; opacity: 0.85;">
-                            STORE ASSISTANT PROFESSIONAL
-                        </MudText>
+                        <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.overline" Align="Align.Center" Style="letter-spacing: 2px; opacity: 0.9;">
+                                STORE ASSISTANT PROFESSIONAL
+                            </MudText>
+                            <MudText Typo="Typo.caption" Align="Align.Center" Style="letter-spacing: 2px; opacity: 0.65;">
+                                MADE IN INDIA · EST. 2026
+                            </MudText>
+                        </MudStack>
 
                         <div style="position: relative; width: 120px; height: 120px;">
                             <svg width="120" height="120" style="position: absolute; inset: 0; transform: rotate(-90deg);">
@@ -37,28 +42,25 @@
 
                         <MudText Typo="Typo.h4"
                                  Align="Align.Center"
-                                 Style="max-width: 480px; word-break: break-word;">
+                                 Style="font-family: Georgia, 'Times New Roman', serif; line-height: 1.15; max-width: 480px; word-break: break-word;">
                             @HeroHeading
                         </MudText>
-                        <MudText Typo="Typo.h6" Align="Align.Center" Style="opacity: 0.85;">
-                            @(_completed ? "Opening your store…" : "Let's set up your store.")
-                        </MudText>
-                        <MudText Typo="Typo.body1" Align="Align.Center" Style="opacity: 0.85; max-width: 320px;">
-                            A quick one-time setup: give your store a name and pick two PINs. Takes under a minute.
+                        <MudText Typo="Typo.h6" Align="Align.Center" Style="opacity: 0.85; font-style: italic;">
+                            @(_completed ? "Opening your store…" : "A quieter POS for clothing retail.")
                         </MudText>
 
                         <MudStack Row="true" Spacing="5" AlignItems="AlignItems.Center" Class="mt-3">
                             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@Icons.Material.Rounded.Speed" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
-                                <MudText Typo="Typo.caption">Fast billing</MudText>
+                                <MudIcon Icon="@Icons.Material.Rounded.CloudOff" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
+                                <MudText Typo="Typo.caption">Offline-first</MudText>
                             </MudStack>
                             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@Icons.Material.Rounded.Inventory2" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
-                                <MudText Typo="Typo.caption">Live inventory</MudText>
+                                <MudIcon Icon="@Icons.Material.Rounded.MoneyOff" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
+                                <MudText Typo="Typo.caption">No subscription</MudText>
                             </MudStack>
                             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@Icons.Material.Rounded.Analytics" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
-                                <MudText Typo="Typo.caption">Clean reports</MudText>
+                                <MudIcon Icon="@Icons.Material.Rounded.Shield" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
+                                <MudText Typo="Typo.caption">Private</MudText>
                             </MudStack>
                         </MudStack>
                     </MudStack>
@@ -277,8 +279,8 @@
     private string HeroHeading => _completed
         ? $"You're all set, {_storeName.Trim()}"
         : StoreNameValid
-            ? $"Welcome, {_storeName.Trim()}"
-            : "Welcome";
+            ? $"Namaste, {_storeName.Trim()}"
+            : "Namaste";
 
     private bool AdminPinWeak => _adminPin.Length == 4 && PinRules.IsWeak(_adminPin);
     private bool MasterPinWeak => _masterPin.Length == 6 && PinRules.IsWeak(_masterPin);
