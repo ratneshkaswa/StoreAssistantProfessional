@@ -66,7 +66,7 @@
             </MudItem>
 
             <MudItem xs="12" md="7">
-                <MudContainer MaxWidth="MaxWidth.Small" Class="pa-8 d-flex flex-column" Style="min-height: 100vh; max-height: 100vh; overflow-y: auto; justify-content: safe center;">
+                <MudContainer MaxWidth="MaxWidth.Small" Class="pa-8 d-flex flex-column" Style="min-height: 100vh; justify-content: safe center;">
                     @if (_completed)
                     {
                         <MudStack AlignItems="AlignItems.Center" Spacing="4">
@@ -81,7 +81,7 @@
                     }
                     else
                     {
-                        <MudStack Spacing="4">
+                        <MudStack Spacing="3">
                             @if (Setup.Status == SetupStatus.Corrupt)
                             {
                                 <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Rounded.Warning">
@@ -89,29 +89,26 @@
                                 </MudAlert>
                             }
 
-                            <MudPaper Elevation="0" Class="pa-5" Style="border-left: 4px solid var(--mud-palette-primary);">
-                                <MudStack Spacing="3">
-                                    <MudText Typo="Typo.h4">Tell us about your store</MudText>
-                                    <MudTextField @bind-Value="_storeName"
-                                                  Label="Store name"
-                                                  Variant="Variant.Outlined"
-                                                  MaxLength="100"
-                                                  Immediate="true"
-                                                  AutoFocus="true"
-                                                  HelperText="@(StoreNameValid ? "" : "Shown on receipts and across the app.")"
-                                                  Error="@(_submitAttempted && !StoreNameValid)"
-                                                  ErrorText="@StoreNameErrorText"
-                                                  Adornment="@(StoreNameValid ? Adornment.End : Adornment.None)"
-                                                  AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
-                                                  AdornmentColor="Color.Success"
-                                                  OnKeyDown="OnKeyDown" />
-                                </MudStack>
+                            <MudPaper Elevation="0" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-primary);">
+                                <MudTextField @bind-Value="_storeName"
+                                              Label="Store name"
+                                              Variant="Variant.Outlined"
+                                              MaxLength="100"
+                                              Immediate="true"
+                                              AutoFocus="true"
+                                              HelperText="@(StoreNameValid ? "" : "Shown on receipts and across the app.")"
+                                              Error="@(_submitAttempted && !StoreNameValid)"
+                                              ErrorText="@StoreNameErrorText"
+                                              Adornment="@(StoreNameValid ? Adornment.End : Adornment.None)"
+                                              AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
+                                              AdornmentColor="Color.Success"
+                                              OnKeyDown="OnKeyDown" />
                             </MudPaper>
 
-                            <MudPaper Elevation="0" Class="pa-5" Style="border-left: 4px solid var(--mud-palette-secondary);">
+                            <MudPaper Elevation="0" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-secondary);">
                                 <MudStack Spacing="3">
                                     <MudStack Spacing="1">
-                                        <MudText Typo="Typo.h4">Choose two PINs</MudText>
+                                        <MudText Typo="Typo.h6">Choose two PINs</MudText>
                                         <MudText Typo="Typo.caption" Color="Color.Secondary">
                                             Admin for day-to-day protected actions. Master for destructive deletions and recovery.
                                         </MudText>
@@ -211,12 +208,6 @@
                                          Dense="true">
                                 I have saved the Master PIN somewhere safe.
                             </MudCheckBox>
-
-                            <MudStack Spacing="2" Class="pl-1">
-                                @ChecklistRow("Store name", StoreNameValid)
-                                @ChecklistRow("Admin PIN set", AdminPinValid && AdminConfirmValid)
-                                @ChecklistRow("Master PIN set", MasterPinValid && MasterConfirmValid)
-                            </MudStack>
 
                             @if (_error is not null)
                             {
@@ -327,14 +318,6 @@
         !MasterStartsWithAdmin &&
         _masterPinConfirm == _masterPin &&
         _acknowledgedMaster;
-
-    private RenderFragment ChecklistRow(string text, bool done) =>
-        @<MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-            <MudIcon Icon="@(done ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.CheckBoxOutlineBlank)"
-                     Color="@(done ? Color.Success : Color.Default)"
-                     Size="Size.Small" />
-            <MudText Typo="Typo.body2" Color="@(done ? Color.Secondary : Color.Default)">@text</MudText>
-        </MudStack>;
 
     private async Task SetAdminPin(string v)
     {
