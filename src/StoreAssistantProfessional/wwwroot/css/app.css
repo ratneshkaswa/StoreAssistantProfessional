@@ -1,0 +1,30 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.boot {
+    padding: 40px;
+    color: #666;
+}
+
+#blazor-error-ui {
+    background: #b32121;
+    color: #fff;
+    padding: 10px 14px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    display: none;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 10px;
+    top: 8px;
+}

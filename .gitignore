@@ -1,0 +1,47 @@
+# .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+publish/
+PublishProfiles/
+
+# User-specific
+*.user
+*.userprefs
+*.suo
+*.userosscache
+*.sln.docstates
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+*.swp
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+# Test results
+TestResults/
+*.coverage
+*.coveragexml
+coverage.cobertura.xml
+
+# Build artifacts
+*.pdb
+*.dll
+*.exe
+
+# OS
+Thumbs.db
+.DS_Store
+
+# App-specific
+startup-error.txt
+storeassistantpro.db*
+*.log

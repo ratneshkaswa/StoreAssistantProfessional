@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>StoreAssistantProfessional</RootNamespace>
+    <AssemblyName>StoreAssistantProfessional</AssemblyName>
+    <StartupObject>StoreAssistantProfessional.Program</StartupObject>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition=" '$(RuntimeIdentifier)' == '' ">win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Photino.Blazor" Version="4.0.13" />
+    <PackageReference Include="MudBlazor" Version="9.3.0" />
+  </ItemGroup>
+
+  <!-- Copy wwwroot to output so Photino's PhysicalFileProvider finds it during
+       plain `dotnet build`. Razor SDK only stages wwwroot on `dotnet publish`. -->
+  <Target Name="CopyWwwrootToBuildOutput" AfterTargets="Build" Inputs="wwwroot\**\*.*" Outputs="$(OutDir)wwwroot\_copy.stamp">
+    <ItemGroup>
+      <_WwwrootBuildFiles Include="wwwroot\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_WwwrootBuildFiles)"
+          DestinationFiles="@(_WwwrootBuildFiles->'$(OutDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Touch Files="$(OutDir)wwwroot\_copy.stamp" AlwaysCreate="true" />
+  </Target>
+
+</Project>
