@@ -2,6 +2,18 @@ namespace StoreAssistantProfessional.Services;
 
 public static class PinRules
 {
+    public static bool IsStrong(string pin)
+    {
+        if (pin.Length < 4 || !pin.All(char.IsDigit) || IsWeak(pin)) return false;
+        var unique = pin.Distinct().Count();
+        return pin.Length switch
+        {
+            4 => unique >= 3,
+            6 => unique >= 4,
+            _ => unique >= pin.Length - 1,
+        };
+    }
+
     public static bool IsWeak(string pin)
     {
         if (pin.Length < 2 || !pin.All(char.IsDigit)) return false;

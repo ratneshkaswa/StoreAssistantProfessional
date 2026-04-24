@@ -44,9 +44,18 @@
         </TitleContent>
         <DialogContent>
             <MudStack Spacing="3">
-                <MudText Typo="Typo.body2" Color="Color.Secondary">
-                    Enter the admin PIN to enable protected actions.
-                </MudText>
+                @if (LockoutSecondsRemaining is int seconds)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Rounded.Timer">
+                        Too many attempts. Try again in @seconds second@(seconds == 1 ? "" : "s").
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Enter the admin PIN to enable protected actions.
+                    </MudText>
+                }
                 <MudTextField @ref="_pinField"
                               Value="_pinEntry"
                               ValueChanged="OnPinChanged"
@@ -57,6 +66,7 @@
                               Variant="Variant.Outlined"
                               Immediate="true"
                               AutoFocus="true"
+                              Disabled="@(LockoutSecondsRemaining is not null)"
                               Error="@_pinError"
                               ErrorText="Incorrect PIN"
                               OnKeyDown="OnPinKeyDown" />
@@ -67,7 +77,7 @@
             <MudButton Color="Color.Primary"
                        Variant="Variant.Filled"
                        OnClick="TryUnlock"
-                       Disabled="@(_pinEntry.Length != 4)">
+                       Disabled="@(_pinEntry.Length != 4 || LockoutSecondsRemaining is not null)">
                 Unlock
             </MudButton>
         </DialogActions>
@@ -80,6 +90,7 @@
     private string _pinEntry = "";
     private bool _pinError;
     private MudTextField<string>? _pinField;
+    private CancellationTokenSource? _lockoutTickerCts;
 
     private static readonly DialogOptions _dialogOptions = new()
     {
@@ -87,6 +98,16 @@
         MaxWidth = MaxWidth.ExtraSmall,
         FullWidth = true
     };
+
+    private int? LockoutSecondsRemaining
+    {
+        get
+        {
+            var remaining = Session.UnlockLockoutRemaining;
+            if (remaining is null) return null;
+            return Math.Max(1, (int)Math.Ceiling(remaining.Value.TotalSeconds));
+        }
+    }
 
     protected override void OnInitialized()
     {
@@ -112,6 +133,7 @@
         _pinEntry = "";
         _pinError = false;
         _pinDialogOpen = true;
+        if (LockoutSecondsRemaining is not null) StartLockoutTicker();
     }
 
     private void OnPinChanged(string v)
@@ -127,17 +149,22 @@
 
     private async Task TryUnlock()
     {
+        if (LockoutSecondsRemaining is not null) return;
+
         if (Setup.VerifyAdmin(_pinEntry))
         {
             _pinDialogOpen = false;
             _pinEntry = "";
             _pinError = false;
+            StopLockoutTicker();
             Session.EnterAdmin();
             return;
         }
 
+        Session.RecordFailedUnlock();
         _pinError = true;
         _pinEntry = "";
+        if (LockoutSecondsRemaining is not null) StartLockoutTicker();
         if (_pinField is not null) await _pinField.FocusAsync();
     }
 
@@ -146,6 +173,35 @@
         _pinDialogOpen = false;
         _pinEntry = "";
         _pinError = false;
+        StopLockoutTicker();
+    }
+
+    private void StartLockoutTicker()
+    {
+        StopLockoutTicker();
+        _lockoutTickerCts = new CancellationTokenSource();
+        _ = TickLockoutAsync(_lockoutTickerCts.Token);
+    }
+
+    private void StopLockoutTicker()
+    {
+        _lockoutTickerCts?.Cancel();
+        _lockoutTickerCts?.Dispose();
+        _lockoutTickerCts = null;
+    }
+
+    private async Task TickLockoutAsync(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested && LockoutSecondsRemaining is not null)
+            {
+                await Task.Delay(500, token);
+                await InvokeAsync(StateHasChanged);
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException) { }
     }
 
     private static string DigitsOnly(string s, int max)
@@ -158,5 +214,6 @@
     public void Dispose()
     {
         Session.Changed -= OnSessionChanged;
+        StopLockoutTicker();
     }
 }

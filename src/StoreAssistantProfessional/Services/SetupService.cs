@@ -27,6 +27,7 @@ public sealed class SetupService : ISetupService
     public const int MasterPinLength = 6;
     public const int MinStoreNameLength = 2;
     public const int MaxStoreNameLength = 100;
+    public const int CurrentSchemaVersion = 1;
 
     private const int SaltBytes = 16;
     private const int HashBytes = 32;
@@ -89,7 +90,8 @@ public sealed class SetupService : ISetupService
             Convert.ToBase64String(adminSalt),
             Convert.ToBase64String(Pbkdf2(masterPin, masterSalt)),
             Convert.ToBase64String(masterSalt),
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            CurrentSchemaVersion);
 
         var json = JsonSerializer.Serialize(data, JsonOptions);
         var tmp = _path + ".tmp";
@@ -174,11 +176,19 @@ public sealed class SetupService : ISetupService
 
     private static bool IsDataComplete(SetupData? data) =>
         data is not null &&
+        data.SchemaVersion == CurrentSchemaVersion &&
         !string.IsNullOrWhiteSpace(data.StoreName) &&
-        !string.IsNullOrEmpty(data.AdminPinHash) &&
-        !string.IsNullOrEmpty(data.AdminPinSalt) &&
-        !string.IsNullOrEmpty(data.MasterPinHash) &&
-        !string.IsNullOrEmpty(data.MasterPinSalt);
+        IsValidBase64(data.AdminPinHash) &&
+        IsValidBase64(data.AdminPinSalt) &&
+        IsValidBase64(data.MasterPinHash) &&
+        IsValidBase64(data.MasterPinSalt);
+
+    private static bool IsValidBase64(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return false;
+        var buffer = new byte[((s.Length + 3) / 4) * 3];
+        return Convert.TryFromBase64String(s, buffer, out _);
+    }
 
     private static byte[] Pbkdf2(string input, byte[] salt) =>
         Rfc2898DeriveBytes.Pbkdf2(input, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, HashBytes);
@@ -190,4 +200,5 @@ public sealed record SetupData(
     string AdminPinSalt,
     string MasterPinHash,
     string MasterPinSalt,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    int SchemaVersion = 1);

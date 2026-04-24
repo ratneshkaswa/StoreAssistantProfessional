@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:www.nuget.org)",
-      "WebFetch(domain:api.nuget.org)"
+      "WebFetch(domain:api.nuget.org)",
+      "Bash(xargs grep *)",
+      "Bash(dotnet-ildasm /c/Users/raman/.nuget/packages/mudblazor/9.4.0/lib/net9.0/MudBlazor.dll)",
+      "Bash('1\\).GetMethods\\(\\) | Where-Object {\\\\$_.Name -like *Focus*} | ForEach-Object { \\\\$_.ToString\\(\\) }\" 2>&1 | head -2')",
+      "Bash(powershell.exe -NoProfile -Command '[System.Reflection.Assembly]::LoadFile\\('\\\\''C:\\\\Users\\\\raman\\\\.nuget\\\\packages\\\\mudblazor\\\\9.4.0\\\\lib\\\\net9.0\\\\MudBlazor.dll'\\\\''\\).GetType\\('\\\\''MudBlazor.MudCheckBox__CMDSUB_OUTPUT__')"
     ]
   }
 }

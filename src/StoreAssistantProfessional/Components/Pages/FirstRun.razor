@@ -120,7 +120,7 @@
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
                                                           Disabled="@(!StoreNameValid)"
-                                                          HelperText="4 digits"
+                                                          HelperText="@AdminPinHelper"
                                                           Error="@AdminPinWeak"
                                                           ErrorText="Too predictable."
                                                           Adornment="Adornment.End"
@@ -163,7 +163,7 @@
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
                                                           Disabled="@(!StoreNameValid)"
-                                                          HelperText="6 digits"
+                                                          HelperText="@MasterPinHelper"
                                                           Error="@(MasterPinWeak || MasterStartsWithAdmin)"
                                                           ErrorText="@MasterPinErrorText"
                                                           Adornment="Adornment.End"
@@ -201,10 +201,10 @@
                                         Save the Master PIN somewhere safe — it's your recovery key and the only way to delete major records.
                                     </MudAlert>
 
-                                    <MudCheckBox T="bool"
+                                    <MudCheckBox @ref="_acknowledgeCheckbox"
+                                                 T="bool"
                                                  @bind-Value="_acknowledgedMaster"
-                                                 Color="Color.Primary"
-                                                 Disabled="@(!AllPinsSet)">
+                                                 Color="Color.Primary">
                                         I have saved the Master PIN somewhere safe.
                                     </MudCheckBox>
 
@@ -256,6 +256,7 @@
     private MudTextField<string>? _adminPinConfirmField;
     private MudTextField<string>? _masterPinField;
     private MudTextField<string>? _masterPinConfirmField;
+    private MudCheckBox<bool>? _acknowledgeCheckbox;
 
     private static readonly Dictionary<string, object?> AriaHidden = new() { ["aria-hidden"] = "true" };
 
@@ -302,6 +303,9 @@
         ? "Must not start with the Admin PIN."
         : "Avoid repeats, sequences, and palindromes.";
 
+    private string AdminPinHelper => PinRules.IsStrong(_adminPin) ? "4 digits · Strong" : "4 digits";
+    private string MasterPinHelper => PinRules.IsStrong(_masterPin) ? "6 digits · Strong" : "6 digits";
+
     private bool CanSubmit =>
         !_submitting &&
         StoreNameValid &&
@@ -333,13 +337,24 @@
             await _masterPinConfirmField.FocusAsync();
     }
 
-    private void SetMasterPinConfirm(string v) => _masterPinConfirm = DigitsOnly(v, 6);
+    private async Task SetMasterPinConfirm(string v)
+    {
+        _masterPinConfirm = DigitsOnly(v, 6);
+        if (MasterConfirmValid && !_acknowledgedMaster && _acknowledgeCheckbox is not null)
+            await _acknowledgeCheckbox.FocusAsync();
+    }
 
     private static string DigitsOnly(string s, int max)
     {
         if (string.IsNullOrEmpty(s)) return "";
         var filtered = new string(s.Where(char.IsDigit).ToArray());
         return filtered.Length > max ? filtered[..max] : filtered;
+    }
+
+    private static string StripParamSuffix(string message)
+    {
+        var i = message.IndexOf(" (Parameter ", StringComparison.Ordinal);
+        return i >= 0 ? message[..i] : message;
     }
 
     private void ToggleShowAdmin() => _showAdminPin = !_showAdminPin;
@@ -372,7 +387,7 @@
         }
         catch (ArgumentException ex)
         {
-            _error = ex.Message;
+            _error = StripParamSuffix(ex.Message);
             _submitting = false;
             return;
         }
