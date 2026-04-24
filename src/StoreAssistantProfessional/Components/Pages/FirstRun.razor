@@ -15,7 +15,7 @@
                           Class="pa-12 d-flex flex-column justify-center align-center"
                           Style="@HeroStyle">
                     <MudIcon Icon="@Icons.Material.Rounded.ShoppingBag"
-                             UserAttributes="@(new Dictionary<string, object?> { ["aria-hidden"] = "true" })"
+                             UserAttributes="@AriaHidden"
                              Style="position: absolute; bottom: -80px; right: -80px; font-size: 440px; opacity: 0.12; pointer-events: none;" />
                     <MudStack AlignItems="AlignItems.Center" Spacing="4" Style="position: relative; z-index: 1;">
                         <MudText Typo="Typo.overline" Align="Align.Center" Style="letter-spacing: 4px; opacity: 0.85;">
@@ -23,10 +23,11 @@
                         </MudText>
                         <MudIcon Icon="@Icons.Material.Rounded.Storefront"
                                  Size="Size.Large"
+                                 UserAttributes="@AriaHidden"
                                  Style="font-size: 80px;" />
                         <MudText Typo="Typo.h4"
                                  Align="Align.Center"
-                                 Style="max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                 Style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             @HeroHeading
                         </MudText>
                         <MudText Typo="Typo.h6" Align="Align.Center" Style="opacity: 0.85;">
@@ -91,6 +92,7 @@
                                 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
                                     <MudIcon Icon="@Icons.Material.Rounded.Lock"
                                              Color="Color.Primary"
+                                             UserAttributes="@AriaHidden"
                                              Style="font-size: 32px; flex: 0 0 32px; margin-top: 22px;" />
                                     <MudStack Row="true" Spacing="2" Style="flex: 1;">
                                         <MudTextField @ref="_adminPinField"
@@ -132,6 +134,7 @@
                                 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
                                     <MudIcon Icon="@Icons.Material.Rounded.Key"
                                              Color="Color.Primary"
+                                             UserAttributes="@AriaHidden"
                                              Style="font-size: 32px; flex: 0 0 32px; margin-top: 22px;" />
                                     <MudStack Row="true" Spacing="2" Style="flex: 1;">
                                         <MudTextField @ref="_masterPinField"
@@ -171,7 +174,7 @@
                                 </MudStack>
                             </MudStack>
 
-                            <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Rounded.Key" Variant="Variant.Outlined">
+                            <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Rounded.Key">
                                 Save the Master PIN somewhere safe — it's your recovery key and the only way to delete major records.
                             </MudAlert>
 
@@ -193,18 +196,14 @@
                                 <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
                             }
 
-                            <MudTooltip Text="Complete the steps above to continue"
-                                        Placement="Placement.Top"
-                                        Disabled="@CanSubmit">
-                                <MudButton OnClick="Submit"
-                                           Variant="Variant.Filled"
-                                           Color="Color.Primary"
-                                           Size="Size.Large"
-                                           FullWidth="true"
-                                           Disabled="@(!CanSubmit)">
-                                    Complete setup
-                                </MudButton>
-                            </MudTooltip>
+                            <MudButton OnClick="Submit"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Size="Size.Large"
+                                       FullWidth="true"
+                                       Disabled="@(!CanSubmit)">
+                                Complete setup
+                            </MudButton>
                         </MudStack>
                     }
                 </MudContainer>
@@ -235,6 +234,8 @@
     private MudTextField<string>? _adminPinConfirmField;
     private MudTextField<string>? _masterPinField;
     private MudTextField<string>? _masterPinConfirmField;
+
+    private static readonly Dictionary<string, object?> AriaHidden = new() { ["aria-hidden"] = "true" };
 
     private static readonly string HeroStyle =
         $"min-height: 100vh; position: relative; overflow: hidden; " +

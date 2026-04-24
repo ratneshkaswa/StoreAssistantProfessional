@@ -13,7 +13,6 @@ public static class BrandTheme
     public static readonly MudTheme Instance = new()
     {
         PaletteLight = CreatePalette(),
-        PaletteDark = CreatePalette(),
         Typography = new Typography
         {
             Default = new DefaultTypography
@@ -22,12 +21,12 @@ public static class BrandTheme
             },
             H3 = new H3Typography
             {
-                FontWeight = "500",
+                FontWeight = "600",
                 LineHeight = "1.25",
             },
             H4 = new H4Typography
             {
-                FontWeight = "500",
+                FontWeight = "600",
                 LineHeight = "1.3",
             },
         },
