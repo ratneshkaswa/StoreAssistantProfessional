@@ -4,9 +4,9 @@
     "net10.0-windows10.0.19041": {
       "Microsoft.AspNetCore.Components.WebView.Wpf": {
         "type": "Direct",
-        "requested": "[10.0.1, )",
-        "resolved": "10.0.1",
-        "contentHash": "xo+ckmAv08dZa8BL7nIF0EFGz3N0Hj8VdSiObMthGj0q3LmNGuR36IbQdGYDHtJpbSrcfJuX1W+6suv4dn5lHg==",
+        "requested": "[10.0.51, )",
+        "resolved": "10.0.51",
+        "contentHash": "HiGa973TvlQq865vILSRwlvZXXTMyYcKT4zDEp9D9aWnN8uN5HF2D3u0/AwXvw/V0ZYZmSf1bYlacBol02Jzow==",
         "dependencies": {
           "Microsoft.AspNetCore.Components.WebView": "10.0.0",
           "Microsoft.Web.WebView2": "1.0.3179.45"
