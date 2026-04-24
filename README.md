@@ -2,7 +2,7 @@
 
 Windows desktop POS for Indian retail clothing stores.
 
-Stack: Photino.Blazor + MudBlazor + (SQLite + EF Core coming when we need storage).
+Stack: WPF + BlazorWebView + MudBlazor + (SQLite + EF Core coming when we need storage).
 
 ## Run
 
