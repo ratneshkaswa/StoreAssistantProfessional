@@ -118,12 +118,9 @@
 
                             <MudPaper Elevation="1" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-primary);">
                                 <MudStack Spacing="3">
-                                    <MudStack Spacing="0">
-                                        <MudText Typo="Typo.overline" Style="letter-spacing: 2px; opacity: 0.6;">STEP 1</MudText>
-                                        <MudText Typo="Typo.h6">Name your store</MudText>
-                                    </MudStack>
+                                    <MudText Typo="Typo.h6">Name your store</MudText>
                                     <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
-                                        <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium" Style="flex: 0 0 40px; margin-top: 16px;">
+                                        <MudAvatar Color="Color.Info" Variant="Variant.Filled" Size="Size.Medium" Style="flex: 0 0 40px; margin-top: 16px;">
                                             <MudIcon Icon="@Icons.Material.Rounded.Storefront" UserAttributes="@AriaHidden" Style="font-size: 22px;" />
                                         </MudAvatar>
                                         <div style="flex: 1;">
@@ -147,8 +144,7 @@
 
                             <MudPaper Elevation="1" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-secondary);">
                                 <MudStack Spacing="3">
-                                    <MudStack Spacing="0">
-                                        <MudText Typo="Typo.overline" Style="letter-spacing: 2px; opacity: 0.6;">STEP 2</MudText>
+                                    <MudStack Spacing="1">
                                         <MudText Typo="Typo.h6">Choose two PINs</MudText>
                                         <MudText Typo="Typo.caption" Color="Color.Secondary">
                                             Admin for day-to-day protected actions. Master for destructive deletions and recovery.
@@ -169,6 +165,7 @@
                                                           MaxLength="4"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
+                                                          Disabled="@(!StoreNameValid)"
                                                           HelperText="4 digits"
                                                           Error="@AdminPinWeak"
                                                           ErrorText="Too predictable."
@@ -186,6 +183,7 @@
                                                           MaxLength="4"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
+                                                          Disabled="@(!StoreNameValid)"
                                                           HelperText="Re-enter"
                                                           Error="@AdminConfirmMismatch"
                                                           ErrorText="Doesn't match the PIN above."
@@ -210,6 +208,7 @@
                                                           MaxLength="6"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
+                                                          Disabled="@(!StoreNameValid)"
                                                           HelperText="6 digits"
                                                           Error="@(MasterPinWeak || MasterStartsWithAdmin)"
                                                           ErrorText="@MasterPinErrorText"
@@ -227,6 +226,7 @@
                                                           MaxLength="6"
                                                           Variant="Variant.Outlined"
                                                           Immediate="true"
+                                                          Disabled="@(!StoreNameValid)"
                                                           HelperText="Re-enter"
                                                           Error="@MasterConfirmMismatch"
                                                           ErrorText="Doesn't match the PIN above."
@@ -241,10 +241,7 @@
 
                             <MudPaper Elevation="1" Class="pa-4" Style="border-left: 4px solid var(--mud-palette-tertiary);">
                                 <MudStack Spacing="3">
-                                    <MudStack Spacing="0">
-                                        <MudText Typo="Typo.overline" Style="letter-spacing: 2px; opacity: 0.6;">STEP 3</MudText>
-                                        <MudText Typo="Typo.h6">Confirm &amp; continue</MudText>
-                                    </MudStack>
+                                    <MudText Typo="Typo.h6">Confirm &amp; continue</MudText>
 
                                     <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Rounded.Key">
                                         Save the Master PIN somewhere safe — it's your recovery key and the only way to delete major records.
@@ -252,7 +249,8 @@
 
                                     <MudCheckBox T="bool"
                                                  @bind-Value="_acknowledgedMaster"
-                                                 Color="Color.Primary">
+                                                 Color="Color.Primary"
+                                                 Disabled="@(!AllPinsSet)">
                                         I have saved the Master PIN somewhere safe.
                                     </MudCheckBox>
 
