@@ -3,7 +3,6 @@ html, body {
     padding: 0;
     height: 100%;
     font-family: 'Segoe UI', system-ui, sans-serif;
-    scroll-behavior: auto;
 }
 
 .boot {
@@ -28,20 +27,4 @@ html, body {
     position: absolute;
     right: 10px;
     top: 8px;
-}
-
-/* No animations, no transitions, no ripples — app-wide. */
-*, *::before, *::after {
-    animation-duration: 0ms !important;
-    animation-delay: 0ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0ms !important;
-    transition-delay: 0ms !important;
-}
-
-.mud-ripple,
-.mud-ripple-checkbox,
-.mud-ripple-switch,
-.mud-ripple-radio {
-    display: none !important;
 }
