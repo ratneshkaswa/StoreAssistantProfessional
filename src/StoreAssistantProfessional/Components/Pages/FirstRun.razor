@@ -17,77 +17,41 @@
                     <MudIcon Icon="@Icons.Material.Rounded.ShoppingBag"
                              UserAttributes="@AriaHidden"
                              Style="position: absolute; bottom: -60px; right: -60px; font-size: 320px; opacity: 0.1; pointer-events: none;" />
-                    <MudStack AlignItems="AlignItems.Center" Spacing="3" Style="position: relative; z-index: 1;">
-                        <MudStack Spacing="0" AlignItems="AlignItems.Center">
-                            <MudText Typo="Typo.overline" Align="Align.Center" Style="letter-spacing: 2px; opacity: 0.9;">
-                                STORE ASSISTANT PROFESSIONAL
-                            </MudText>
-                            <MudText Typo="Typo.caption" Align="Align.Center" Style="letter-spacing: 2px; opacity: 0.65;">
-                                MADE IN INDIA · EST. 2026
-                            </MudText>
-                        </MudStack>
+                    <MudStack AlignItems="AlignItems.Center" Spacing="5" Style="position: relative; z-index: 1;">
+                        <MudText Typo="Typo.overline" Align="Align.Center" Style="letter-spacing: 3px; opacity: 0.85;">
+                            STORE ASSISTANT PROFESSIONAL
+                        </MudText>
 
-                        <div style="position: relative; width: 120px; height: 120px;">
-                            <svg width="120" height="120" style="position: absolute; inset: 0; transform: rotate(-90deg);">
-                                <circle cx="60" cy="60" r="52" stroke="rgba(74,47,26,0.18)" stroke-width="4" fill="none" />
-                                <circle cx="60" cy="60" r="52" stroke="@BrandTheme.HeroTextColor" stroke-width="4" fill="none"
-                                        stroke-dasharray="@RingCircumference.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                                        stroke-dashoffset="@ProgressDashOffset.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                                        stroke-linecap="round" />
-                            </svg>
-                            @if (StoreNameValid)
-                            {
-                                <MudText Align="Align.Center"
-                                         Style="font-family: Georgia, 'Times New Roman', serif; font-weight: 600; font-size: 44px; letter-spacing: 2px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-                                    @StoreInitials
-                                </MudText>
-                            }
-                            else
-                            {
-                                <MudIcon Icon="@Icons.Material.Rounded.Storefront"
-                                         UserAttributes="@AriaHidden"
-                                         Style="font-size: 56px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);" />
-                            }
-                        </div>
+                        <MudIcon Icon="@Icons.Material.Rounded.Checkroom"
+                                 UserAttributes="@AriaHidden"
+                                 Style="font-size: 88px; opacity: 0.9;" />
 
-                        <MudText Typo="Typo.h4"
+
+                        <MudText Typo="Typo.h3"
                                  Align="Align.Center"
-                                 Style="font-family: Georgia, 'Times New Roman', serif; line-height: 1.15; max-width: 480px; word-break: break-word;">
+                                 Style="font-family: Georgia, 'Times New Roman', serif; font-weight: 400; line-height: 1.15; max-width: 520px; word-break: break-word;">
                             @HeroHeading
                         </MudText>
-                        <MudText Typo="Typo.h6" Align="Align.Center" Style="opacity: 0.85; font-style: italic;">
-                            @(_completed ? "Opening your store…" : "A quieter POS for menswear and garment retail.")
-                        </MudText>
 
-                        <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Center" Class="mt-3">
+                        <MudStack Row="true" Spacing="5" AlignItems="AlignItems.Center" Style="opacity: 0.8;">
                             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@(StoreNameValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.Storefront)"
-                                         Color="@(StoreNameValid ? Color.Success : Color.Inherit)"
-                                         UserAttributes="@AriaHidden"
-                                         Style="font-size: 20px;" />
-                                <MudText Typo="Typo.caption">1. Name</MudText>
+                                <MudIcon Icon="@Icons.Material.Rounded.TouchApp" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
+                                <MudText Typo="Typo.caption">Fewer clicks</MudText>
                             </MudStack>
-                            <MudIcon Icon="@Icons.Material.Rounded.ChevronRight"
-                                     UserAttributes="@AriaHidden"
-                                     Style="font-size: 16px; opacity: 0.35;" />
                             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@(AllPinsSet ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.Key)"
-                                         Color="@(AllPinsSet ? Color.Success : Color.Tertiary)"
-                                         UserAttributes="@AriaHidden"
-                                         Style="font-size: 20px;" />
-                                <MudText Typo="Typo.caption">2. PINs</MudText>
+                                <MudIcon Icon="@Icons.Material.Rounded.Bolt" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
+                                <MudText Typo="Typo.caption">Faster bills</MudText>
                             </MudStack>
-                            <MudIcon Icon="@Icons.Material.Rounded.ChevronRight"
-                                     UserAttributes="@AriaHidden"
-                                     Style="font-size: 16px; opacity: 0.35;" />
                             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@(_acknowledgedMaster ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.BookmarkBorder)"
-                                         Color="@(_acknowledgedMaster ? Color.Success : Color.Inherit)"
-                                         UserAttributes="@AriaHidden"
-                                         Style="font-size: 20px;" />
-                                <MudText Typo="Typo.caption">3. Save</MudText>
+                                <MudIcon Icon="@Icons.Material.Rounded.Analytics" UserAttributes="@AriaHidden" Style="font-size: 18px;" />
+                                <MudText Typo="Typo.caption">Cleaner reports</MudText>
                             </MudStack>
                         </MudStack>
+
+                        <MudText Typo="Typo.caption" Align="Align.Center"
+                                 Style="font-family: Georgia, 'Times New Roman', serif; font-style: italic; opacity: 0.75; letter-spacing: 1px;">
+                            @(_completed ? "Opening your store…" : "Crafted for Indian retail · Est. 2026")
+                        </MudText>
                     </MudStack>
                 </MudPaper>
             </MudItem>
@@ -278,8 +242,6 @@
 }
 
 @code {
-    private const double RingCircumference = 326.73;
-
     private string _storeName = "";
     private string _adminPin = "";
     private string _adminPinConfirm = "";
@@ -325,22 +287,6 @@
             ? $"Namaste, {_storeName.Trim()}"
             : "Namaste";
 
-    private string StoreInitials
-    {
-        get
-        {
-            var trimmed = _storeName.Trim();
-            if (trimmed.Length == 0) return "";
-            var words = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (words.Length == 0) return "";
-            if (words.Length == 1)
-                return words[0].Length >= 2
-                    ? words[0][..2].ToUpperInvariant()
-                    : words[0][..1].ToUpperInvariant();
-            return $"{char.ToUpperInvariant(words[0][0])}{char.ToUpperInvariant(words[1][0])}";
-        }
-    }
-
     private bool AdminPinWeak => _adminPin.Length == 4 && PinRules.IsWeak(_adminPin);
     private bool MasterPinWeak => _masterPin.Length == 6 && PinRules.IsWeak(_masterPin);
     private bool AdminConfirmMismatch => _adminPinConfirm.Length == 4 && _adminPinConfirm != _adminPin;
@@ -355,15 +301,6 @@
     private bool MasterPinValid => _masterPin.Length == 6 && !PinRules.IsWeak(_masterPin) && !MasterStartsWithAdmin;
     private bool MasterConfirmValid => _masterPinConfirm.Length == 6 && _masterPinConfirm == _masterPin;
     private bool AllPinsSet => AdminPinValid && AdminConfirmValid && MasterPinValid && MasterConfirmValid;
-
-    private int ProgressSteps =>
-        (StoreNameValid ? 1 : 0) +
-        ((AdminPinValid && AdminConfirmValid) ? 1 : 0) +
-        ((MasterPinValid && MasterConfirmValid) ? 1 : 0) +
-        (_acknowledgedMaster ? 1 : 0);
-
-    private double ProgressDashOffset =>
-        RingCircumference * (1.0 - ProgressSteps / 4.0);
 
     private string StoreNameErrorText =>
         string.IsNullOrWhiteSpace(_storeName)
