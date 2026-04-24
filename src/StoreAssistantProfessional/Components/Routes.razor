@@ -4,7 +4,25 @@
     </Found>
     <NotFound>
         <LayoutView Layout="@typeof(MainLayout)">
-            <MudText Typo="Typo.h5" Class="pa-8">Page not found.</MudText>
+            <MudContainer MaxWidth="MaxWidth.Small"
+                          Class="pa-8 d-flex flex-column justify-center align-center"
+                          Style="min-height: 100vh;">
+                <MudStack AlignItems="AlignItems.Center" Spacing="3">
+                    <MudIcon Icon="@Icons.Material.Rounded.ErrorOutline"
+                             Color="Color.Secondary"
+                             Style="font-size: 80px;" />
+                    <MudText Typo="Typo.h4">Page not found</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                        The page you tried to open doesn't exist.
+                    </MudText>
+                    <MudButton Href="/"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Rounded.Home">
+                        Go home
+                    </MudButton>
+                </MudStack>
+            </MudContainer>
         </LayoutView>
     </NotFound>
 </Router>

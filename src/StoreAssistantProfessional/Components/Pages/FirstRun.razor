@@ -1,4 +1,5 @@
 @page "/setup"
+@using StoreAssistantProfessional.Theme
 @inject ISetupService Setup
 @inject NavigationManager Nav
 
@@ -6,234 +7,210 @@
 
 @if (!_redirecting)
 {
-    <MudGrid Spacing="0" Style="min-height: 100vh;">
-        <MudItem xs="12" md="5">
-            <MudPaper Elevation="0"
-                      Square="true"
-                      Class="pa-12 d-flex flex-column justify-center align-center"
-                      Style="min-height: 100vh; position: relative; overflow: hidden; background: linear-gradient(135deg, #EDBE91 0%, #DFA878 100%); color: #4A2F1A;">
-                <MudIcon Icon="@Icons.Material.Rounded.Storefront"
-                         Style="position: absolute; bottom: -80px; right: -80px; font-size: 440px; opacity: 0.08; pointer-events: none;" />
-                <MudStack AlignItems="AlignItems.Center" Spacing="4" Class="mt-8" Style="position: relative; z-index: 1;">
-                    <MudText Typo="Typo.overline" Align="Align.Center" Style="letter-spacing: 4px; opacity: 0.75;">
-                        STORE ASSISTANT PROFESSIONAL
-                    </MudText>
-                    <MudIcon Icon="@Icons.Material.Rounded.Storefront"
-                             Size="Size.Large"
-                             Style="font-size: 80px;" />
-                    <MudText Typo="Typo.h3" Align="Align.Center">
-                        @HeroHeading
-                    </MudText>
-                    <MudText Typo="Typo.h6" Align="Align.Center" Style="opacity: 0.85;">
-                        @(_completed ? "Opening your store…" : "Let's set up your store.")
-                    </MudText>
-                    <MudDivider Style="width: 60px; border-color: rgba(74, 47, 26, 0.25); border-width: 2px;" />
-                    <MudText Typo="Typo.body1" Align="Align.Center" Style="opacity: 0.85; max-width: 320px;">
-                        A quick one-time setup: give your store a name and pick two PINs. Takes under a minute.
-                    </MudText>
-                </MudStack>
-            </MudPaper>
-        </MudItem>
-
-        <MudItem xs="12" md="7">
-            <MudContainer MaxWidth="MaxWidth.Small" Class="pa-8 d-flex flex-column justify-center" Style="min-height: 100vh;">
-                @if (_completed)
-                {
-                    <MudStack AlignItems="AlignItems.Center" Spacing="4">
-                        <MudIcon Icon="@Icons.Material.Rounded.CheckCircle"
-                                 Color="Color.Success"
-                                 Style="font-size: 120px;" />
-                        <MudText Typo="Typo.h4" Align="Align.Center">You're all set!</MudText>
-                        <MudText Typo="Typo.body1" Color="Color.Secondary" Align="Align.Center">
-                            Taking you to your store…
+    <main>
+        <MudGrid Spacing="0" Style="min-height: 100vh;">
+            <MudItem xs="12" md="5">
+                <MudPaper Elevation="0"
+                          Square="true"
+                          Class="pa-12 d-flex flex-column justify-center align-center"
+                          Style="@HeroStyle">
+                    <MudIcon Icon="@Icons.Material.Rounded.ShoppingBag"
+                             UserAttributes="@(new Dictionary<string, object?> { ["aria-hidden"] = "true" })"
+                             Style="position: absolute; bottom: -80px; right: -80px; font-size: 440px; opacity: 0.12; pointer-events: none;" />
+                    <MudStack AlignItems="AlignItems.Center" Spacing="4" Style="position: relative; z-index: 1;">
+                        <MudText Typo="Typo.overline" Align="Align.Center" Style="letter-spacing: 4px; opacity: 0.85;">
+                            STORE ASSISTANT PROFESSIONAL
+                        </MudText>
+                        <MudIcon Icon="@Icons.Material.Rounded.Storefront"
+                                 Size="Size.Large"
+                                 Style="font-size: 80px;" />
+                        <MudText Typo="Typo.h4"
+                                 Align="Align.Center"
+                                 Style="max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            @HeroHeading
+                        </MudText>
+                        <MudText Typo="Typo.h6" Align="Align.Center" Style="opacity: 0.85;">
+                            @(_completed ? "Opening your store…" : "Let's set up your store.")
+                        </MudText>
+                        <MudText Typo="Typo.body1" Align="Align.Center" Style="opacity: 0.85; max-width: 320px;">
+                            A quick one-time setup: give your store a name and pick two PINs. Takes under a minute.
                         </MudText>
                     </MudStack>
-                }
-                else
-                {
-                    <MudStack Spacing="5">
-                        @if (Setup.Status == SetupStatus.Corrupt)
-                        {
-                            <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Rounded.Warning">
-                                An existing setup file was found but could not be read. Completing setup will replace it.
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="7">
+                <MudContainer MaxWidth="MaxWidth.Small" Class="pa-8 d-flex flex-column justify-center" Style="min-height: 100vh;">
+                    @if (_completed)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="4">
+                            <MudIcon Icon="@Icons.Material.Rounded.CheckCircle"
+                                     Color="Color.Success"
+                                     Style="font-size: 120px;" />
+                            <MudText Typo="Typo.h4" Align="Align.Center">You're all set!</MudText>
+                            <MudText Typo="Typo.body1" Color="Color.Secondary" Align="Align.Center">
+                                Opening your store…
+                            </MudText>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudStack Spacing="5">
+                            @if (Setup.Status == SetupStatus.Corrupt)
+                            {
+                                <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Rounded.Warning">
+                                    An existing setup file was found but could not be read. Completing setup will replace it.
+                                </MudAlert>
+                            }
+
+                            <MudStack Spacing="3">
+                                <MudText Typo="Typo.h4">Tell us about your store</MudText>
+                                <MudTextField @bind-Value="_storeName"
+                                              Label="Store name"
+                                              Variant="Variant.Outlined"
+                                              MaxLength="100"
+                                              Immediate="true"
+                                              AutoFocus="true"
+                                              HelperText="@(StoreNameValid ? "" : "Shown on receipts and across the app.")"
+                                              Error="@(_submitAttempted && !StoreNameValid)"
+                                              ErrorText="@StoreNameErrorText"
+                                              Adornment="@(StoreNameValid ? Adornment.End : Adornment.None)"
+                                              AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
+                                              AdornmentColor="Color.Success"
+                                              OnKeyDown="OnKeyDown" />
+                            </MudStack>
+
+                            <MudStack Spacing="3">
+                                <MudStack Spacing="1">
+                                    <MudText Typo="Typo.h4">Choose two PINs</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        Admin for day-to-day protected actions. Master for destructive deletions and recovery.
+                                    </MudText>
+                                </MudStack>
+
+                                <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
+                                    <MudIcon Icon="@Icons.Material.Rounded.Lock"
+                                             Color="Color.Primary"
+                                             Style="font-size: 32px; flex: 0 0 32px; margin-top: 22px;" />
+                                    <MudStack Row="true" Spacing="2" Style="flex: 1;">
+                                        <MudTextField @ref="_adminPinField"
+                                                      Value="_adminPin"
+                                                      ValueChanged="SetAdminPin"
+                                                      T="string"
+                                                      Label="Admin PIN"
+                                                      InputType="@(_showAdminPin ? InputType.Text : InputType.Password)"
+                                                      MaxLength="4"
+                                                      Variant="Variant.Outlined"
+                                                      Immediate="true"
+                                                      HelperText="@(AdminPinValid ? "" : "4 digits")"
+                                                      Error="@AdminPinWeak"
+                                                      ErrorText="Too predictable."
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(_showAdminPin ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
+                                                      AdornmentColor="@(AdminPinValid ? Color.Success : Color.Default)"
+                                                      OnAdornmentClick="ToggleShowAdmin"
+                                                      OnKeyDown="OnKeyDown" />
+                                        <MudTextField @ref="_adminPinConfirmField"
+                                                      Value="_adminPinConfirm"
+                                                      ValueChanged="SetAdminPinConfirm"
+                                                      T="string"
+                                                      Label="Confirm"
+                                                      InputType="@(_showAdminPin ? InputType.Text : InputType.Password)"
+                                                      MaxLength="4"
+                                                      Variant="Variant.Outlined"
+                                                      Immediate="true"
+                                                      HelperText="@(AdminConfirmValid ? "" : "Re-enter")"
+                                                      Error="@AdminConfirmMismatch"
+                                                      ErrorText="Doesn't match the PIN above."
+                                                      Adornment="@(AdminConfirmValid ? Adornment.End : Adornment.None)"
+                                                      AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
+                                                      AdornmentColor="Color.Success"
+                                                      OnKeyDown="OnKeyDown" />
+                                    </MudStack>
+                                </MudStack>
+
+                                <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
+                                    <MudIcon Icon="@Icons.Material.Rounded.Key"
+                                             Color="Color.Primary"
+                                             Style="font-size: 32px; flex: 0 0 32px; margin-top: 22px;" />
+                                    <MudStack Row="true" Spacing="2" Style="flex: 1;">
+                                        <MudTextField @ref="_masterPinField"
+                                                      Value="_masterPin"
+                                                      ValueChanged="SetMasterPin"
+                                                      T="string"
+                                                      Label="Master PIN"
+                                                      InputType="@(_showMasterPin ? InputType.Text : InputType.Password)"
+                                                      MaxLength="6"
+                                                      Variant="Variant.Outlined"
+                                                      Immediate="true"
+                                                      HelperText="@(MasterPinValid ? "" : "6 digits")"
+                                                      Error="@(MasterPinWeak || MasterStartsWithAdmin)"
+                                                      ErrorText="@MasterPinErrorText"
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(_showMasterPin ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
+                                                      AdornmentColor="@(MasterPinValid ? Color.Success : Color.Default)"
+                                                      OnAdornmentClick="ToggleShowMaster"
+                                                      OnKeyDown="OnKeyDown" />
+                                        <MudTextField @ref="_masterPinConfirmField"
+                                                      Value="_masterPinConfirm"
+                                                      ValueChanged="SetMasterPinConfirm"
+                                                      T="string"
+                                                      Label="Confirm"
+                                                      InputType="@(_showMasterPin ? InputType.Text : InputType.Password)"
+                                                      MaxLength="6"
+                                                      Variant="Variant.Outlined"
+                                                      Immediate="true"
+                                                      HelperText="@(MasterConfirmValid ? "" : "Re-enter")"
+                                                      Error="@MasterConfirmMismatch"
+                                                      ErrorText="Doesn't match the PIN above."
+                                                      Adornment="@(MasterConfirmValid ? Adornment.End : Adornment.None)"
+                                                      AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
+                                                      AdornmentColor="Color.Success"
+                                                      OnKeyDown="OnKeyDown" />
+                                    </MudStack>
+                                </MudStack>
+                            </MudStack>
+
+                            <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Rounded.Key" Variant="Variant.Outlined">
+                                Save the Master PIN somewhere safe — it's your recovery key and the only way to delete major records.
                             </MudAlert>
-                        }
 
-                        <MudStack Spacing="3">
-                            <MudText Typo="Typo.h4">Tell us about your store</MudText>
-                            <MudTextField @bind-Value="_storeName"
-                                          Label="Store name"
-                                          Variant="Variant.Outlined"
-                                          MaxLength="100"
-                                          Immediate="true"
-                                          AutoFocus="true"
-                                          HelperText="Shown on receipts and across the app."
-                                          Error="@(_submitAttempted && string.IsNullOrWhiteSpace(_storeName))"
-                                          ErrorText="Store name is required."
-                                          Adornment="@(StoreNameValid ? Adornment.End : Adornment.None)"
-                                          AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
-                                          AdornmentColor="Color.Success"
-                                          OnKeyDown="OnKeyDown" />
+                            <MudCheckBox T="bool"
+                                         @bind-Value="_acknowledgedMaster"
+                                         Color="Color.Primary"
+                                         Dense="true">
+                                I have saved the Master PIN somewhere safe.
+                            </MudCheckBox>
+
+                            <MudStack Spacing="2" Class="pl-1">
+                                @ChecklistRow("Store name", StoreNameValid)
+                                @ChecklistRow("Admin PIN set", AdminPinValid && AdminConfirmValid)
+                                @ChecklistRow("Master PIN set", MasterPinValid && MasterConfirmValid)
+                            </MudStack>
+
+                            @if (_error is not null)
+                            {
+                                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+                            }
+
+                            <MudTooltip Text="Complete the steps above to continue"
+                                        Placement="Placement.Top"
+                                        Disabled="@CanSubmit">
+                                <MudButton OnClick="Submit"
+                                           Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Size="Size.Large"
+                                           FullWidth="true"
+                                           Disabled="@(!CanSubmit)">
+                                    Complete setup
+                                </MudButton>
+                            </MudTooltip>
                         </MudStack>
-
-                        <MudDivider />
-
-                        <MudStack Spacing="3">
-                            <MudStack Spacing="1">
-                                <MudText Typo="Typo.h4">Choose two PINs</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                    Admin for day-to-day protected actions. Master for destructive deletions and recovery.
-                                </MudText>
-                            </MudStack>
-
-                            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@Icons.Material.Rounded.Lock"
-                                         Color="Color.Tertiary"
-                                         Style="font-size: 32px; flex: 0 0 32px;" />
-                                <MudStack Row="true" Spacing="2" Style="flex: 1;">
-                                    <MudTextField @ref="_adminPinField"
-                                                  Value="_adminPin"
-                                                  ValueChanged="SetAdminPin"
-                                                  T="string"
-                                                  Label="Admin PIN"
-                                                  InputType="@(_showAdminPin ? InputType.Text : InputType.Password)"
-                                                  MaxLength="4"
-                                                  Variant="Variant.Outlined"
-                                                  Immediate="true"
-                                                  HelperText="4 digits"
-                                                  Error="@AdminPinWeak"
-                                                  ErrorText="Too predictable."
-                                                  Adornment="Adornment.End"
-                                                  AdornmentIcon="@(_showAdminPin ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
-                                                  AdornmentColor="@(AdminPinValid ? Color.Success : Color.Default)"
-                                                  OnAdornmentClick="ToggleShowAdmin"
-                                                  OnKeyDown="OnKeyDown" />
-                                    <MudTextField @ref="_adminPinConfirmField"
-                                                  Value="_adminPinConfirm"
-                                                  ValueChanged="SetAdminPinConfirm"
-                                                  T="string"
-                                                  Label="Confirm"
-                                                  InputType="@(_showAdminPin ? InputType.Text : InputType.Password)"
-                                                  MaxLength="4"
-                                                  Variant="Variant.Outlined"
-                                                  Immediate="true"
-                                                  HelperText="Re-enter"
-                                                  Error="@AdminConfirmMismatch"
-                                                  ErrorText="Doesn't match the PIN above."
-                                                  Adornment="@(AdminConfirmValid ? Adornment.End : Adornment.None)"
-                                                  AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
-                                                  AdornmentColor="Color.Success"
-                                                  OnKeyDown="OnKeyDown" />
-                                </MudStack>
-                            </MudStack>
-
-                            <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@Icons.Material.Rounded.Key"
-                                         Color="Color.Tertiary"
-                                         Style="font-size: 32px; flex: 0 0 32px;" />
-                                <MudStack Row="true" Spacing="2" Style="flex: 1;">
-                                    <MudTextField @ref="_masterPinField"
-                                                  Value="_masterPin"
-                                                  ValueChanged="SetMasterPin"
-                                                  T="string"
-                                                  Label="Master PIN"
-                                                  InputType="@(_showMasterPin ? InputType.Text : InputType.Password)"
-                                                  MaxLength="6"
-                                                  Variant="Variant.Outlined"
-                                                  Immediate="true"
-                                                  HelperText="6 digits"
-                                                  Error="@(MasterPinWeak || MasterStartsWithAdmin)"
-                                                  ErrorText="@MasterPinErrorText"
-                                                  Adornment="Adornment.End"
-                                                  AdornmentIcon="@(_showMasterPin ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
-                                                  AdornmentColor="@(MasterPinValid ? Color.Success : Color.Default)"
-                                                  OnAdornmentClick="ToggleShowMaster"
-                                                  OnKeyDown="OnKeyDown" />
-                                    <MudTextField @ref="_masterPinConfirmField"
-                                                  Value="_masterPinConfirm"
-                                                  ValueChanged="SetMasterPinConfirm"
-                                                  T="string"
-                                                  Label="Confirm"
-                                                  InputType="@(_showMasterPin ? InputType.Text : InputType.Password)"
-                                                  MaxLength="6"
-                                                  Variant="Variant.Outlined"
-                                                  Immediate="true"
-                                                  HelperText="Re-enter"
-                                                  Error="@MasterConfirmMismatch"
-                                                  ErrorText="Doesn't match the PIN above."
-                                                  Adornment="@(MasterConfirmValid ? Adornment.End : Adornment.None)"
-                                                  AdornmentIcon="@Icons.Material.Rounded.CheckCircle"
-                                                  AdornmentColor="Color.Success"
-                                                  OnKeyDown="OnKeyDown" />
-                                </MudStack>
-                            </MudStack>
-                        </MudStack>
-
-                        <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Rounded.Key" Variant="Variant.Outlined">
-                            Save the Master PIN somewhere safe — it's your recovery key and the only way to delete major records.
-                        </MudAlert>
-
-                        <MudCheckBox T="bool"
-                                     @bind-Value="_acknowledgedMaster"
-                                     Color="Color.Tertiary"
-                                     Dense="true">
-                            I have saved the Master PIN somewhere safe.
-                        </MudCheckBox>
-
-                        <MudStack Spacing="1" Class="pl-1">
-                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@(StoreNameValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
-                                         Color="@(StoreNameValid ? Color.Success : Color.Default)"
-                                         Size="Size.Small" />
-                                <MudText Typo="Typo.body2" Color="@(StoreNameValid ? Color.Default : Color.Secondary)">
-                                    Store name
-                                </MudText>
-                            </MudStack>
-                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@((AdminPinValid && AdminConfirmValid) ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
-                                         Color="@((AdminPinValid && AdminConfirmValid) ? Color.Success : Color.Default)"
-                                         Size="Size.Small" />
-                                <MudText Typo="Typo.body2" Color="@((AdminPinValid && AdminConfirmValid) ? Color.Default : Color.Secondary)">
-                                    Admin PIN set
-                                </MudText>
-                            </MudStack>
-                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@((MasterPinValid && MasterConfirmValid) ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
-                                         Color="@((MasterPinValid && MasterConfirmValid) ? Color.Success : Color.Default)"
-                                         Size="Size.Small" />
-                                <MudText Typo="Typo.body2" Color="@((MasterPinValid && MasterConfirmValid) ? Color.Default : Color.Secondary)">
-                                    Master PIN set
-                                </MudText>
-                            </MudStack>
-                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@(_acknowledgedMaster ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
-                                         Color="@(_acknowledgedMaster ? Color.Success : Color.Default)"
-                                         Size="Size.Small" />
-                                <MudText Typo="Typo.body2" Color="@(_acknowledgedMaster ? Color.Default : Color.Secondary)">
-                                    Master PIN saved somewhere safe
-                                </MudText>
-                            </MudStack>
-                        </MudStack>
-
-                        @if (_error is not null)
-                        {
-                            <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
-                        }
-
-                        <MudButton OnClick="Submit"
-                                   Variant="Variant.Filled"
-                                   Color="Color.Primary"
-                                   Size="Size.Large"
-                                   FullWidth="true"
-                                   EndIcon="@Icons.Material.Rounded.ArrowForward"
-                                   Disabled="@(!CanSubmit)">
-                            Complete setup
-                        </MudButton>
-                    </MudStack>
-                }
-            </MudContainer>
-        </MudItem>
-    </MudGrid>
+                    }
+                </MudContainer>
+            </MudItem>
+        </MudGrid>
+    </main>
 }
 
 @code {
@@ -250,10 +227,19 @@
     private string? _error;
     private bool _redirecting;
 
+    private bool _advancedFromAdminPin;
+    private bool _advancedFromAdminConfirm;
+    private bool _advancedFromMasterPin;
+
     private MudTextField<string>? _adminPinField;
     private MudTextField<string>? _adminPinConfirmField;
     private MudTextField<string>? _masterPinField;
     private MudTextField<string>? _masterPinConfirmField;
+
+    private static readonly string HeroStyle =
+        $"min-height: 100vh; position: relative; overflow: hidden; " +
+        $"background: linear-gradient(315deg, {BrandTheme.HeroGradientLight} 0%, {BrandTheme.HeroGradientDark} 100%); " +
+        $"color: {BrandTheme.HeroTextColor};";
 
     protected override void OnInitialized()
     {
@@ -278,18 +264,23 @@
         _masterPin.Length == 6 && _adminPin.Length == 4 &&
         _masterPin.StartsWith(_adminPin, StringComparison.Ordinal);
 
-    private bool StoreNameValid => !string.IsNullOrWhiteSpace(_storeName);
+    private bool StoreNameValid => _storeName.Trim().Length >= 2;
     private bool AdminPinValid => _adminPin.Length == 4 && !PinRules.IsWeak(_adminPin);
     private bool AdminConfirmValid => _adminPinConfirm.Length == 4 && _adminPinConfirm == _adminPin;
     private bool MasterPinValid => _masterPin.Length == 6 && !PinRules.IsWeak(_masterPin) && !MasterStartsWithAdmin;
     private bool MasterConfirmValid => _masterPinConfirm.Length == 6 && _masterPinConfirm == _masterPin;
+
+    private string StoreNameErrorText =>
+        string.IsNullOrWhiteSpace(_storeName)
+            ? "Store name is required."
+            : "Store name must be at least 2 characters.";
 
     private string MasterPinErrorText => MasterStartsWithAdmin
         ? "Must not start with the Admin PIN."
         : "Too predictable.";
 
     private bool CanSubmit =>
-        !string.IsNullOrWhiteSpace(_storeName) &&
+        StoreNameValid &&
         _adminPin.Length == 4 && !PinRules.IsWeak(_adminPin) &&
         _adminPinConfirm == _adminPin &&
         _masterPin.Length == 6 && !PinRules.IsWeak(_masterPin) &&
@@ -297,25 +288,42 @@
         _masterPinConfirm == _masterPin &&
         _acknowledgedMaster;
 
+    private RenderFragment ChecklistRow(string text, bool done) =>
+        @<MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@(done ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.CheckBoxOutlineBlank)"
+                     Color="@(done ? Color.Success : Color.Default)"
+                     Size="Size.Small" />
+            <MudText Typo="Typo.body2" Color="@(done ? Color.Secondary : Color.Default)">@text</MudText>
+        </MudStack>;
+
     private async Task SetAdminPin(string v)
     {
         _adminPin = DigitsOnly(v, 4);
-        if (AdminPinValid && _adminPinConfirm.Length == 0 && _adminPinConfirmField is not null)
+        if (!_advancedFromAdminPin && AdminPinValid && _adminPinConfirm.Length == 0 && _adminPinConfirmField is not null)
+        {
+            _advancedFromAdminPin = true;
             await _adminPinConfirmField.FocusAsync();
+        }
     }
 
     private async Task SetAdminPinConfirm(string v)
     {
         _adminPinConfirm = DigitsOnly(v, 4);
-        if (AdminConfirmValid && _masterPin.Length == 0 && _masterPinField is not null)
+        if (!_advancedFromAdminConfirm && AdminConfirmValid && _masterPin.Length == 0 && _masterPinField is not null)
+        {
+            _advancedFromAdminConfirm = true;
             await _masterPinField.FocusAsync();
+        }
     }
 
     private async Task SetMasterPin(string v)
     {
         _masterPin = DigitsOnly(v, 6);
-        if (MasterPinValid && _masterPinConfirm.Length == 0 && _masterPinConfirmField is not null)
+        if (!_advancedFromMasterPin && MasterPinValid && _masterPinConfirm.Length == 0 && _masterPinConfirmField is not null)
+        {
+            _advancedFromMasterPin = true;
             await _masterPinConfirmField.FocusAsync();
+        }
     }
 
     private void SetMasterPinConfirm(string v) => _masterPinConfirm = DigitsOnly(v, 6);
@@ -340,12 +348,11 @@
         _submitAttempted = true;
         _error = null;
 
-        var name = _storeName.Trim();
-        if (string.IsNullOrEmpty(name)) { _error = "Store name is required."; return; }
+        if (!StoreNameValid) { _error = StoreNameErrorText; return; }
 
         try
         {
-            Setup.Save(name, _adminPin, _masterPin);
+            Setup.Save(_storeName.Trim(), _adminPin, _masterPin);
         }
         catch (IOException ex)
         {
@@ -359,7 +366,6 @@
         }
 
         _completed = true;
-        StateHasChanged();
         await Task.Delay(700);
 
         _redirecting = true;

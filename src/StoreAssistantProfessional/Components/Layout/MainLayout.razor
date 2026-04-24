@@ -1,5 +1,7 @@
 @inherits LayoutComponentBase
 
+@* pa-0 lets full-bleed pages (setup hero) reach viewport edges; each page supplies its own padding.
+   If a MudAppBar lands here later, pages using `min-height: 100vh` must subtract its height. *@
 <MudLayout>
     <MudMainContent Class="pa-0">
         @Body
