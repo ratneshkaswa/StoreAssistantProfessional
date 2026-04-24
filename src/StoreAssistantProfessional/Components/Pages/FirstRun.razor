@@ -56,7 +56,6 @@
                                           T="string"
                                           Label="PIN"
                                           InputType="@(_showAdminPin ? InputType.Text : InputType.Password)"
-                                          InputMode="InputMode.numeric"
                                           MaxLength="4"
                                           Variant="Variant.Outlined"
                                           Immediate="true"
@@ -66,26 +65,20 @@
                                           Adornment="Adornment.End"
                                           AdornmentIcon="@(_showAdminPin ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
                                           OnAdornmentClick="ToggleShowAdmin"
-                                          @onfocusin="OnAdminPinFocus"
                                           OnKeyDown="OnKeyDown" />
                             <MudTextField Value="_adminPinConfirm"
                                           ValueChanged="SetAdminPinConfirm"
                                           T="string"
                                           Label="Confirm"
                                           InputType="@(_showAdminPin ? InputType.Text : InputType.Password)"
-                                          InputMode="InputMode.numeric"
                                           MaxLength="4"
                                           Variant="Variant.Outlined"
                                           Immediate="true"
                                           HelperText="Re-enter to confirm."
                                           Error="@AdminConfirmMismatch"
                                           ErrorText="Doesn't match."
-                                          @onfocusin="OnAdminConfirmFocus"
                                           OnKeyDown="OnKeyDown" />
                         </MudStack>
-                        <PinNumpad OnAppend="AdminAppend"
-                                   OnBackspace="AdminBackspace"
-                                   OnClear="AdminClear" />
                     </MudStack>
 
                     <MudDivider />
@@ -98,36 +91,29 @@
                                           T="string"
                                           Label="PIN"
                                           InputType="@(_showMasterPin ? InputType.Text : InputType.Password)"
-                                          InputMode="InputMode.numeric"
                                           MaxLength="6"
                                           Variant="Variant.Outlined"
                                           Immediate="true"
                                           HelperText="6 digits. Required to delete major records (vendors, bills) and to recover access if the Admin PIN is lost."
-                                          Error="@MasterPinWeak"
-                                          ErrorText="Avoid repeating patterns like 123456, 111111, or 121212."
+                                          Error="@(MasterPinWeak || MasterStartsWithAdmin)"
+                                          ErrorText="@MasterPinErrorText"
                                           Adornment="Adornment.End"
                                           AdornmentIcon="@(_showMasterPin ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
                                           OnAdornmentClick="ToggleShowMaster"
-                                          @onfocusin="OnMasterPinFocus"
                                           OnKeyDown="OnKeyDown" />
                             <MudTextField Value="_masterPinConfirm"
                                           ValueChanged="SetMasterPinConfirm"
                                           T="string"
                                           Label="Confirm"
                                           InputType="@(_showMasterPin ? InputType.Text : InputType.Password)"
-                                          InputMode="InputMode.numeric"
                                           MaxLength="6"
                                           Variant="Variant.Outlined"
                                           Immediate="true"
                                           HelperText="Re-enter to confirm."
                                           Error="@MasterConfirmMismatch"
                                           ErrorText="Doesn't match."
-                                          @onfocusin="OnMasterConfirmFocus"
                                           OnKeyDown="OnKeyDown" />
                         </MudStack>
-                        <PinNumpad OnAppend="MasterAppend"
-                                   OnBackspace="MasterBackspace"
-                                   OnClear="MasterClear" />
                     </MudStack>
 
                     <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Rounded.Key">
@@ -160,8 +146,6 @@
 </MudContainer>
 
 @code {
-    private enum PinPairField { Pin, Confirm }
-
     private string _storeName = "";
     private string _adminPin = "";
     private string _adminPinConfirm = "";
@@ -173,9 +157,6 @@
     private bool _submitAttempted;
     private string? _error;
     private bool _redirecting;
-
-    private PinPairField _adminActiveField = PinPairField.Pin;
-    private PinPairField _masterActiveField = PinPairField.Pin;
 
     protected override void OnInitialized()
     {
@@ -190,12 +171,20 @@
     private bool MasterPinWeak => _masterPin.Length == 6 && PinRules.IsWeak(_masterPin);
     private bool AdminConfirmMismatch => _adminPinConfirm.Length == 4 && _adminPinConfirm != _adminPin;
     private bool MasterConfirmMismatch => _masterPinConfirm.Length == 6 && _masterPinConfirm != _masterPin;
+    private bool MasterStartsWithAdmin =>
+        _masterPin.Length == 6 && _adminPin.Length == 4 &&
+        _masterPin.StartsWith(_adminPin, StringComparison.Ordinal);
+
+    private string MasterPinErrorText => MasterStartsWithAdmin
+        ? "Must not start with the Admin PIN."
+        : "Avoid repeating patterns like 123456, 111111, or 121212.";
 
     private bool CanSubmit =>
         !string.IsNullOrWhiteSpace(_storeName) &&
         _adminPin.Length == 4 && !PinRules.IsWeak(_adminPin) &&
         _adminPinConfirm == _adminPin &&
         _masterPin.Length == 6 && !PinRules.IsWeak(_masterPin) &&
+        !MasterStartsWithAdmin &&
         _masterPinConfirm == _masterPin &&
         _acknowledgedMaster;
 
@@ -214,55 +203,6 @@
     private void ToggleShowAdmin() => _showAdminPin = !_showAdminPin;
     private void ToggleShowMaster() => _showMasterPin = !_showMasterPin;
 
-    private void OnAdminPinFocus() => _adminActiveField = PinPairField.Pin;
-    private void OnAdminConfirmFocus() => _adminActiveField = PinPairField.Confirm;
-    private void OnMasterPinFocus() => _masterActiveField = PinPairField.Pin;
-    private void OnMasterConfirmFocus() => _masterActiveField = PinPairField.Confirm;
-
-    private void AdminAppend(string d)
-    {
-        if (_adminActiveField == PinPairField.Pin)
-            _adminPin = DigitsOnly(_adminPin + d, 4);
-        else
-            _adminPinConfirm = DigitsOnly(_adminPinConfirm + d, 4);
-    }
-
-    private void AdminBackspace()
-    {
-        if (_adminActiveField == PinPairField.Pin && _adminPin.Length > 0)
-            _adminPin = _adminPin[..^1];
-        else if (_adminActiveField == PinPairField.Confirm && _adminPinConfirm.Length > 0)
-            _adminPinConfirm = _adminPinConfirm[..^1];
-    }
-
-    private void AdminClear()
-    {
-        if (_adminActiveField == PinPairField.Pin) _adminPin = "";
-        else _adminPinConfirm = "";
-    }
-
-    private void MasterAppend(string d)
-    {
-        if (_masterActiveField == PinPairField.Pin)
-            _masterPin = DigitsOnly(_masterPin + d, 6);
-        else
-            _masterPinConfirm = DigitsOnly(_masterPinConfirm + d, 6);
-    }
-
-    private void MasterBackspace()
-    {
-        if (_masterActiveField == PinPairField.Pin && _masterPin.Length > 0)
-            _masterPin = _masterPin[..^1];
-        else if (_masterActiveField == PinPairField.Confirm && _masterPinConfirm.Length > 0)
-            _masterPinConfirm = _masterPinConfirm[..^1];
-    }
-
-    private void MasterClear()
-    {
-        if (_masterActiveField == PinPairField.Pin) _masterPin = "";
-        else _masterPinConfirm = "";
-    }
-
     private void OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && CanSubmit) Submit();
@@ -275,11 +215,6 @@
 
         var name = _storeName.Trim();
         if (string.IsNullOrEmpty(name)) { _error = "Store name is required."; return; }
-        if (_masterPin.StartsWith(_adminPin, StringComparison.Ordinal))
-        {
-            _error = "Master PIN must not start with the Admin PIN.";
-            return;
-        }
 
         try
         {
