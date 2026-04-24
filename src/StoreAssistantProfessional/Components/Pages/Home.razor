@@ -1,0 +1,61 @@
+@page "/"
+@inject ISetupService Setup
+@inject ISessionService Session
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>@(Setup.Current?.StoreName ?? "Store Assistant Professional")</PageTitle>
+
+@if (_ready)
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-8">
+        <MudStack Spacing="4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                <MudIcon Icon="@Icons.Material.Rounded.Storefront" Color="Color.Primary" Size="Size.Large" />
+                <MudText Typo="Typo.h4">@Setup.Current?.StoreName</MudText>
+            </MudStack>
+
+            <MudPaper Class="pa-6" Elevation="2">
+                <MudStack Spacing="3">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudChip T="string"
+                                 Color="@(Session.Current == Role.Admin ? Color.Error : Color.Primary)"
+                                 Icon="@Icons.Material.Rounded.VerifiedUser"
+                                 Size="Size.Small">
+                            @Session.Current
+                        </MudChip>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            @(Session.Current == Role.Admin ? "elevated" : "default")
+                        </MudText>
+                    </MudStack>
+
+                    <MudText Typo="Typo.body2">
+                        Main page placeholder. Catalogue, billing, reports will live here.
+                    </MudText>
+                </MudStack>
+            </MudPaper>
+        </MudStack>
+    </MudContainer>
+}
+
+@code {
+    private bool _ready;
+
+    protected override void OnInitialized()
+    {
+        if (!Setup.IsComplete)
+        {
+            Nav.NavigateTo("/setup", replace: true);
+            return;
+        }
+        Session.Changed += OnSessionChanged;
+        _ready = true;
+    }
+
+    private void OnSessionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Session.Changed -= OnSessionChanged;
+    }
+}

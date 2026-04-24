@@ -19,6 +19,7 @@ public static class Program
         var builder = PhotinoBlazorAppBuilder.CreateDefault(args);
         builder.Services.AddMudServices();
         builder.Services.AddSingleton<ISetupService, SetupService>();
+        builder.Services.AddSingleton<ISessionService, SessionService>();
         builder.RootComponents.Add<Routes>("#app");
 
         var app = builder.Build();

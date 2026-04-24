@@ -3,11 +3,21 @@ using System.Text.Json;
 
 namespace StoreAssistantProfessional.Services;
 
+public enum SetupStatus
+{
+    NotSetup,
+    Valid,
+    Corrupt
+}
+
 public interface ISetupService
 {
+    SetupStatus Status { get; }
     bool IsComplete { get; }
     SetupData? Current { get; }
     void Save(string storeName, string adminPin, string masterPin);
+    bool VerifyAdmin(string pin);
+    bool VerifyMaster(string pin);
 }
 
 public sealed class SetupService : ISetupService
@@ -28,10 +38,12 @@ public sealed class SetupService : ISetupService
             "StoreAssistantProfessional");
         Directory.CreateDirectory(appData);
         _path = Path.Combine(appData, "setup.json");
-        _cached = Load();
+        (_cached, Status) = Load();
     }
 
-    public bool IsComplete => _cached is not null;
+    public SetupStatus Status { get; private set; }
+
+    public bool IsComplete => Status == SetupStatus.Valid;
 
     public SetupData? Current => _cached;
 
@@ -48,25 +60,68 @@ public sealed class SetupService : ISetupService
             Convert.ToBase64String(masterSalt),
             DateTime.UtcNow);
 
-        File.WriteAllText(_path, JsonSerializer.Serialize(data, JsonOptions));
+        var json = JsonSerializer.Serialize(data, JsonOptions);
+        var tmp = _path + ".tmp";
+        File.WriteAllText(tmp, json);
+
+        if (File.Exists(_path))
+        {
+            File.Replace(tmp, _path, _path + ".bak");
+        }
+        else
+        {
+            File.Move(tmp, _path);
+        }
+
         _cached = data;
+        Status = SetupStatus.Valid;
     }
 
-    private SetupData? Load()
+    public bool VerifyAdmin(string pin)
     {
-        if (!File.Exists(_path)) return null;
+        if (_cached is null || pin.Length != 4 || !pin.All(char.IsDigit)) return false;
+        var salt = Convert.FromBase64String(_cached.AdminPinSalt);
+        var expected = Convert.FromBase64String(_cached.AdminPinHash);
+        return CryptographicOperations.FixedTimeEquals(Pbkdf2(pin, salt), expected);
+    }
+
+    public bool VerifyMaster(string pin)
+    {
+        if (_cached is null || pin.Length != 6 || !pin.All(char.IsDigit)) return false;
+        var salt = Convert.FromBase64String(_cached.MasterPinSalt);
+        var expected = Convert.FromBase64String(_cached.MasterPinHash);
+        return CryptographicOperations.FixedTimeEquals(Pbkdf2(pin, salt), expected);
+    }
+
+    private (SetupData? data, SetupStatus status) Load()
+    {
+        var primary = TryLoadFile(_path);
+        if (primary is not null) return (primary, SetupStatus.Valid);
+
+        var bakPath = _path + ".bak";
+        var backup = TryLoadFile(bakPath);
+        if (backup is not null)
+        {
+            try { File.Copy(bakPath, _path, overwrite: true); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            return (backup, SetupStatus.Valid);
+        }
+
+        return File.Exists(_path) || File.Exists(bakPath)
+            ? (null, SetupStatus.Corrupt)
+            : (null, SetupStatus.NotSetup);
+    }
+
+    private static SetupData? TryLoadFile(string path)
+    {
+        if (!File.Exists(path)) return null;
         try
         {
-            return JsonSerializer.Deserialize<SetupData>(File.ReadAllText(_path), JsonOptions);
+            return JsonSerializer.Deserialize<SetupData>(File.ReadAllText(path), JsonOptions);
         }
-        catch (JsonException)
-        {
-            return null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
+        catch (JsonException) { return null; }
+        catch (IOException) { return null; }
     }
 
     private static byte[] Pbkdf2(string input, byte[] salt) =>

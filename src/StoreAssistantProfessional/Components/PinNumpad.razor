@@ -1,0 +1,46 @@
+<MudGrid Spacing="2">
+    @for (var i = 1; i <= 9; i++)
+    {
+        var d = i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        <MudItem xs="4">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Outlined"
+                       Size="Size.Large"
+                       OnClick="@(() => OnAppend.InvokeAsync(d))">
+                @d
+            </MudButton>
+        </MudItem>
+    }
+    <MudItem xs="4">
+        <MudButton FullWidth="true"
+                   Variant="Variant.Outlined"
+                   Size="Size.Large"
+                   OnClick="OnClear">
+            C
+        </MudButton>
+    </MudItem>
+    <MudItem xs="4">
+        <MudButton FullWidth="true"
+                   Variant="Variant.Outlined"
+                   Size="Size.Large"
+                   OnClick="AppendZero">
+            0
+        </MudButton>
+    </MudItem>
+    <MudItem xs="4">
+        <MudButton FullWidth="true"
+                   Variant="Variant.Outlined"
+                   Size="Size.Large"
+                   OnClick="OnBackspace">
+            ⌫
+        </MudButton>
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter] public EventCallback<string> OnAppend { get; set; }
+    [Parameter] public EventCallback OnBackspace { get; set; }
+    [Parameter] public EventCallback OnClear { get; set; }
+
+    private Task AppendZero() => OnAppend.InvokeAsync("0");
+}
