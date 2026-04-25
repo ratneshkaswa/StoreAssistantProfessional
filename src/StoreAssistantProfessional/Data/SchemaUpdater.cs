@@ -70,6 +70,13 @@ public static class SchemaUpdater
 
         // -- StockAdjustment: operator role
         await EnsureColumnAsync(conn, "StockAdjustments", "OperatorRole", "TEXT NULL");
+
+        // -- TaxRate.Name unique index needs to ignore soft-deleted rows so a user
+        //    who removed "GST 18%" can recreate it. EnsureCreated installed the
+        //    unfiltered version on older DBs; replace it with the filtered one.
+        await ReplaceIndexAsync(conn,
+            "IX_TaxRates_Name",
+            "CREATE UNIQUE INDEX \"IX_TaxRates_Name\" ON \"TaxRates\" (\"Name\") WHERE \"IsActive\" = 1");
     }
 
     private static async Task<bool> ColumnExistsAsync(SqliteConnection conn, string table, string column)
@@ -92,6 +99,40 @@ public static class SchemaUpdater
         cmd.Parameters.AddWithValue("$n", table);
         var result = await cmd.ExecuteScalarAsync();
         return result is not null;
+    }
+
+    private static async Task<string?> IndexCreateSqlAsync(SqliteConnection conn, string indexName)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT sql FROM sqlite_master WHERE type='index' AND name=$n";
+        cmd.Parameters.AddWithValue("$n", indexName);
+        var result = await cmd.ExecuteScalarAsync();
+        return result is null or DBNull ? null : (string)result;
+    }
+
+    private static async Task ReplaceIndexAsync(SqliteConnection conn, string indexName, string createSql)
+    {
+        try
+        {
+            var existing = await IndexCreateSqlAsync(conn, indexName);
+            if (existing is not null && string.Equals(existing.Trim(), createSql.Trim(), StringComparison.OrdinalIgnoreCase))
+                return;
+
+            await using (var drop = conn.CreateCommand())
+            {
+                drop.CommandText = $"DROP INDEX IF EXISTS \"{indexName}\"";
+                await drop.ExecuteNonQueryAsync();
+            }
+            await using (var create = conn.CreateCommand())
+            {
+                create.CommandText = createSql;
+                await create.ExecuteNonQueryAsync();
+            }
+        }
+        catch
+        {
+            // Defensive: never block boot.
+        }
     }
 
     private static async Task EnsureColumnAsync(SqliteConnection conn, string table, string column, string spec)

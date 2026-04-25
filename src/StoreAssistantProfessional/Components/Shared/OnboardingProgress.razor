@@ -1,21 +1,35 @@
 @using StoreAssistantProfessional.Services
+@inject NavigationManager Nav
 
-<MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Justify="Justify.Center" Class="my-2">
-    @for (var i = 0; i < _labels.Length; i++)
+<MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Justify="Justify.Center" Class="my-2"
+          role="list" aria-label="Setup progress">
+    @for (var i = 0; i < _steps.Length; i++)
     {
         var idx = i;
+        var step = _steps[idx];
         var done = (int)Current > idx;
         var active = (int)Current == idx;
         var color = done ? Color.Success : active ? Color.Primary : Color.Default;
-        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-            <MudIcon Icon="@(done ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
-                     Color="@color"
-                     Style="font-size: 18px;" />
-            <MudText Typo="Typo.caption" Color="@color">@_labels[idx]</MudText>
-        </MudStack>
-        @if (idx < _labels.Length - 1)
+        var ariaCurrent = active ? "step" : null;
+        var canJump = done && OnboardingService.RouteForStep(step) is not null;
+
+        var labelClass = canJump ? "sap-onboarding-step sap-onboarding-step-clickable" : "sap-onboarding-step";
+
+        <div role="listitem" class="@labelClass"
+             @attributes="@AriaAttrs(ariaCurrent)"
+             @onclick="@(() => OnStepClick(step, canJump))"
+             tabindex="@(canJump ? "0" : null)"
+             @onkeydown="@((KeyboardEventArgs e) => OnStepKey(e, step, canJump))">
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@(done ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                         Color="@color"
+                         Style="font-size: 18px;" />
+                <MudText Typo="Typo.caption" Color="@color">@_labels[idx]</MudText>
+            </MudStack>
+        </div>
+        @if (idx < _steps.Length - 1)
         {
-            <MudText Typo="Typo.caption" Color="Color.Default">·</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Default" UserAttributes="@_ariaHidden">·</MudText>
         }
     }
 </MudStack>
@@ -23,5 +37,32 @@
 @code {
     [Parameter] public OnboardingStep Current { get; set; } = OnboardingStep.Firm;
 
+    private static readonly OnboardingStep[] _steps =
+        [OnboardingStep.Firm, OnboardingStep.Tax, OnboardingStep.Products, OnboardingStep.Vendor];
+
     private static readonly string[] _labels = ["Firm", "Taxes", "Products", "Vendors"];
+
+    private static readonly Dictionary<string, object> _ariaHidden = new() { ["aria-hidden"] = "true" };
+
+    private static Dictionary<string, object> AriaAttrs(string? ariaCurrent) =>
+        ariaCurrent is null
+            ? new Dictionary<string, object>()
+            : new Dictionary<string, object> { ["aria-current"] = ariaCurrent };
+
+    private void OnStepClick(OnboardingStep step, bool canJump)
+    {
+        if (!canJump) return;
+        var route = OnboardingService.RouteForStep(step);
+        if (route is not null) Nav.NavigateTo(route);
+    }
+
+    private void OnStepKey(KeyboardEventArgs e, OnboardingStep step, bool canJump)
+    {
+        if (!canJump) return;
+        if (e.Key is "Enter" or " ")
+        {
+            var route = OnboardingService.RouteForStep(step);
+            if (route is not null) Nav.NavigateTo(route);
+        }
+    }
 }

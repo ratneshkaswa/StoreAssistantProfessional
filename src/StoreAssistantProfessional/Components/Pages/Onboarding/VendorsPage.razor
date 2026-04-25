@@ -1,9 +1,11 @@
 @page "/onboarding/vendor"
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISetupService Setup
 @inject IOnboardingService Onboarding
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>Vendors — Setup</PageTitle>
 
@@ -24,8 +26,10 @@
                             <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Rounded.Add" OnClick="StartNew">Add</MudButton>
                         </MudStack>
 
-                        <MudTextField @bind-Value="_search"
-                                      Placeholder="Search by name or phone…"
+                        <MudTextField Value="_search"
+                                      ValueChanged="OnSearchChanged"
+                                      T="string"
+                                      Placeholder="Search by name, phone, GSTIN, city, email…"
                                       Variant="Variant.Outlined"
                                       Adornment="Adornment.Start"
                                       AdornmentIcon="@Icons.Material.Rounded.Search"
@@ -35,7 +39,13 @@
 
                         <MudDivider />
 
-                        @if (Filtered.Count == 0)
+                        @if (_loading)
+                        {
+                            <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                            </MudStack>
+                        }
+                        else if (_filtered.Count == 0)
                         {
                             <MudStack AlignItems="AlignItems.Center" Class="pa-4">
                                 <MudIcon Icon="@Icons.Material.Rounded.Handshake" Color="Color.Secondary" Style="font-size: 48px;" />
@@ -47,21 +57,24 @@
                         else
                         {
                             <MudStack Spacing="1">
-                                @foreach (var v in Filtered)
+                                @foreach (var v in _filtered)
                                 {
                                     var isSel = _editing?.Id == v.Id;
-                                    <MudPaper Elevation="0"
-                                              Class="pa-2"
-                                              Style="@(isSel ? "border-left: 3px solid var(--mud-palette-primary); cursor: pointer;" : "cursor: pointer;")"
-                                              @onclick="@(() => SelectExisting(v))">
+                                    var item = v;
+                                    <div class="@(isSel ? "sap-list-row sap-list-row-active" : "sap-list-row")"
+                                         tabindex="0"
+                                         role="button"
+                                         aria-pressed="@(isSel ? "true" : "false")"
+                                         @onclick="@(() => SelectExisting(item))"
+                                         @onkeydown="@((KeyboardEventArgs e) => OnRowKey(e, item))">
                                         <MudStack Spacing="0">
-                                            <MudText Typo="Typo.body2" Style="font-weight: 500;">@v.Name</MudText>
+                                            <MudText Typo="Typo.body2" Style="font-weight: 500;">@item.Name</MudText>
                                             <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                @(string.IsNullOrEmpty(v.Phone) ? "no phone" : v.Phone)
-                                                @(string.IsNullOrEmpty(v.Gstin) ? "" : " · " + v.Gstin)
+                                                @(string.IsNullOrEmpty(item.Phone) ? "no phone" : item.Phone)
+                                                @(string.IsNullOrEmpty(item.Gstin) ? "" : " · " + item.Gstin)
                                             </MudText>
                                         </MudStack>
-                                    </MudPaper>
+                                    </div>
                                 }
                             </MudStack>
                         }
@@ -81,20 +94,34 @@
                                               Variant="Variant.Outlined"
                                               MaxLength="200"
                                               Immediate="true"
+                                              AutoFocus="true"
                                               Error="@(_attempted && string.IsNullOrWhiteSpace(_form.Name))"
-                                              ErrorText="Name is required." />
+                                              ErrorText="Name is required."
+                                              OnKeyDown="OnEnter" />
                             </MudItem>
                             <MudItem xs="12" md="4">
-                                <MudTextField @bind-Value="_form.Gstin" Label="GSTIN" Variant="Variant.Outlined" MaxLength="15" />
+                                <MudTextField @bind-Value="_form.Gstin"
+                                              Label="GSTIN" Variant="Variant.Outlined" MaxLength="15" Immediate="true"
+                                              Error="@(!IndianFormats.IsGstin(_form.Gstin))"
+                                              ErrorText="Invalid GSTIN format." />
                             </MudItem>
                             <MudItem xs="12" md="6">
-                                <MudTextField @bind-Value="_form.Phone" Label="Phone" Variant="Variant.Outlined" MaxLength="15" />
+                                <MudTextField @bind-Value="_form.Phone"
+                                              Label="Phone" Variant="Variant.Outlined" MaxLength="15" Immediate="true"
+                                              Error="@(!IndianFormats.IsIndianPhone(_form.Phone))"
+                                              ErrorText="10-digit mobile, optionally with +91." />
                             </MudItem>
                             <MudItem xs="12" md="6">
-                                <MudTextField @bind-Value="_form.AltPhone" Label="Alt phone" Variant="Variant.Outlined" MaxLength="15" />
+                                <MudTextField @bind-Value="_form.AltPhone"
+                                              Label="Alt phone" Variant="Variant.Outlined" MaxLength="15" Immediate="true"
+                                              Error="@(!IndianFormats.IsIndianPhone(_form.AltPhone))"
+                                              ErrorText="10-digit mobile, optionally with +91." />
                             </MudItem>
                             <MudItem xs="12">
-                                <MudTextField @bind-Value="_form.Email" Label="Email" Variant="Variant.Outlined" MaxLength="200" />
+                                <MudTextField @bind-Value="_form.Email"
+                                              Label="Email" Variant="Variant.Outlined" MaxLength="200" Immediate="true"
+                                              Error="@(!IndianFormats.IsEmail(_form.Email))"
+                                              ErrorText="Invalid email format." />
                             </MudItem>
                             <MudItem xs="12">
                                 <MudTextField @bind-Value="_form.Address" Label="Address" Variant="Variant.Outlined" MaxLength="300" />
@@ -106,21 +133,32 @@
                                 <MudTextField @bind-Value="_form.State" Label="State" Variant="Variant.Outlined" MaxLength="100" />
                             </MudItem>
                             <MudItem xs="12" md="2">
-                                <MudTextField @bind-Value="_form.Pincode" Label="PIN" Variant="Variant.Outlined" MaxLength="6" />
+                                <MudTextField @bind-Value="_form.Pincode"
+                                              Label="PIN" Variant="Variant.Outlined" MaxLength="6" Immediate="true"
+                                              Error="@(!IndianFormats.IsPincode(_form.Pincode))"
+                                              ErrorText="6 digits." />
                             </MudItem>
 
                             <MudItem xs="12"><MudText Typo="Typo.caption" Color="Color.Secondary">Bank</MudText></MudItem>
                             <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.BankName" Label="Bank name" Variant="Variant.Outlined" MaxLength="200" /></MudItem>
                             <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.AccountHolderName" Label="Account holder" Variant="Variant.Outlined" MaxLength="100" /></MudItem>
                             <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.AccountNumber" Label="Account no." Variant="Variant.Outlined" MaxLength="20" /></MudItem>
-                            <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.IfscCode" Label="IFSC" Variant="Variant.Outlined" MaxLength="11" /></MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_form.IfscCode"
+                                              Label="IFSC" Variant="Variant.Outlined" MaxLength="11" Immediate="true"
+                                              Error="@(!IndianFormats.IsIfsc(_form.IfscCode))"
+                                              ErrorText="11 chars: 4 letters + 0 + 6 alphanum." />
+                            </MudItem>
 
-                            <MudItem xs="12"><MudText Typo="Typo.caption" Color="Color.Secondary">Payment terms</MudText></MudItem>
+                            <MudItem xs="12"><MudText Typo="Typo.caption" Color="Color.Secondary">Payment terms &amp; opening balance</MudText></MudItem>
                             <MudItem xs="6" md="4">
-                                <MudNumericField T="int" @bind-Value="_form.PaymentTermDays" Label="Days allowed" Variant="Variant.Outlined" Min="0" Max="365" />
+                                <MudNumericField T="int?" @bind-Value="_form.PaymentTermDays" Label="Days allowed" Variant="Variant.Outlined" Min="0" Max="365" HelperText="defaults to 30 if blank" />
                             </MudItem>
                             <MudItem xs="6" md="4">
-                                <MudNumericField T="decimal" @bind-Value="_form.CreditLimit" Label="Credit limit ₹" Variant="Variant.Outlined" Min="0" />
+                                <MudNumericField T="decimal?" @bind-Value="_form.CreditLimit" Label="Credit limit ₹" Variant="Variant.Outlined" Min="0" />
+                            </MudItem>
+                            <MudItem xs="6" md="4">
+                                <MudNumericField T="decimal?" @bind-Value="_form.Balance" Label="Opening balance ₹" Variant="Variant.Outlined" HelperText="positive = we owe them" />
                             </MudItem>
 
                             <MudItem xs="12">
@@ -131,10 +169,20 @@
                         <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
                             @if (!_isNew)
                             {
-                                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteCurrent">Delete</MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteCurrent" Disabled="@_saving">Delete</MudButton>
                             }
-                            <MudButton Variant="Variant.Text" OnClick="Reset">Cancel</MudButton>
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@_saving">Save vendor</MudButton>
+                            <MudButton Variant="Variant.Text" OnClick="ResetWithConfirm" Disabled="@_saving">Cancel</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@_saving">
+                                @if (_saving)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    <span>Saving…</span>
+                                }
+                                else
+                                {
+                                    <span>Save vendor</span>
+                                }
+                            </MudButton>
                         </MudStack>
                     </MudStack>
                 </MudPaper>
@@ -154,32 +202,78 @@
 
 @code {
     private List<Vendor> _vendors = new();
-    private Vendor _form = new();
+    private List<Vendor> _filtered = new();
+    private VendorVm _form = new();
     private Vendor? _editing;
     private bool _isNew = true;
     private bool _attempted;
     private bool _saving;
+    private bool _loading = true;
     private string _search = "";
 
-    private List<Vendor> Filtered =>
-        string.IsNullOrWhiteSpace(_search)
-            ? _vendors
-            : _vendors.Where(v =>
-                (v.Name?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (v.Phone?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false))
-              .ToList();
+    private bool IsValid =>
+        !string.IsNullOrWhiteSpace(_form.Name) &&
+        IndianFormats.IsGstin(_form.Gstin) &&
+        IndianFormats.IsIndianPhone(_form.Phone) &&
+        IndianFormats.IsIndianPhone(_form.AltPhone) &&
+        IndianFormats.IsEmail(_form.Email) &&
+        IndianFormats.IsPincode(_form.Pincode) &&
+        IndianFormats.IsIfsc(_form.IfscCode);
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Setup.IsComplete) { Nav.NavigateTo("/setup", replace: true); return; }
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _vendors = await db.Vendors.AsNoTracking().Where(v => v.IsActive).OrderBy(v => v.Name).ToListAsync();
+        _loading = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _vendors = await db.Vendors.AsNoTracking().Where(v => v.IsActive).OrderBy(v => v.Name).ToListAsync();
+            ApplyFilter();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
+
+    private void OnSearchChanged(string s)
+    {
+        _search = s ?? "";
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            _filtered = _vendors;
+            return;
+        }
+        var qRaw = _search.Trim();
+        var qPhone = IndianFormats.StripPhone(qRaw);
+        _filtered = _vendors.Where(v =>
+            Match(v.Name, qRaw) ||
+            Match(v.Gstin, qRaw) ||
+            Match(v.City, qRaw) ||
+            Match(v.Email, qRaw) ||
+            (qPhone.Length > 0 && (
+                IndianFormats.StripPhone(v.Phone ?? "").Contains(qPhone, StringComparison.Ordinal) ||
+                IndianFormats.StripPhone(v.AltPhone ?? "").Contains(qPhone, StringComparison.Ordinal)
+            ))
+        ).ToList();
+    }
+
+    private static bool Match(string? field, string q) =>
+        !string.IsNullOrEmpty(field) && field.Contains(q, StringComparison.OrdinalIgnoreCase);
 
     private void StartNew()
     {
-        _form = new Vendor { PaymentTermDays = 30, IsActive = true };
+        _form = new VendorVm { PaymentTermDays = 30, IsActive = true };
         _editing = null;
         _isNew = true;
         _attempted = false;
@@ -188,7 +282,192 @@
     private void SelectExisting(Vendor v)
     {
         _editing = v;
-        _form = new Vendor
+        _form = VendorVm.From(v);
+        _isNew = false;
+        _attempted = false;
+    }
+
+    private void OnRowKey(KeyboardEventArgs e, Vendor v)
+    {
+        if (e.Key is "Enter" or " ") SelectExisting(v);
+    }
+
+    private async Task ResetWithConfirm()
+    {
+        // Only confirm if there's actual content the user might lose.
+        if (HasUnsavedContent())
+        {
+            var ok = await Confirm("Discard changes?",
+                "The current form will be cleared.", "Discard");
+            if (!ok) return;
+        }
+        StartNew();
+    }
+
+    private bool HasUnsavedContent() =>
+        !string.IsNullOrWhiteSpace(_form.Name) ||
+        !string.IsNullOrWhiteSpace(_form.Phone) ||
+        !string.IsNullOrWhiteSpace(_form.Gstin) ||
+        !string.IsNullOrWhiteSpace(_form.Email);
+
+    private async Task OnEnter(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        if (!_saving && IsValid) await Save();
+    }
+
+    private async Task Save()
+    {
+        _attempted = true;
+        if (!IsValid) return;
+
+        _form.Name = _form.Name.Trim();
+        _form.Gstin = NormalizeUpper(_form.Gstin);
+        _form.IfscCode = NormalizeUpper(_form.IfscCode);
+        _form.Phone = _form.Phone?.Trim();
+        _form.AltPhone = _form.AltPhone?.Trim();
+
+        _saving = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            // Soft duplicate detection on phone or GSTIN — warn but don't block.
+            var phoneDigits = string.IsNullOrWhiteSpace(_form.Phone) ? null : IndianFormats.StripPhone(_form.Phone);
+            if (phoneDigits is not null && phoneDigits.Length > 0)
+            {
+                var dup = _vendors.FirstOrDefault(v =>
+                    v.Id != _form.Id &&
+                    IndianFormats.StripPhone(v.Phone ?? "") == phoneDigits);
+                if (dup is not null)
+                {
+                    var ok = await Confirm("Vendor with this phone exists",
+                        $"\"{dup.Name}\" already has phone {dup.Phone}. Save anyway?", "Save anyway");
+                    if (!ok) return;
+                }
+            }
+            if (!string.IsNullOrWhiteSpace(_form.Gstin))
+            {
+                var dup = _vendors.FirstOrDefault(v =>
+                    v.Id != _form.Id &&
+                    string.Equals(v.Gstin, _form.Gstin, StringComparison.OrdinalIgnoreCase));
+                if (dup is not null)
+                {
+                    var ok = await Confirm("Vendor with this GSTIN exists",
+                        $"\"{dup.Name}\" already has GSTIN {dup.Gstin}. Save anyway?", "Save anyway");
+                    if (!ok) return;
+                }
+            }
+
+            int newId = _form.Id;
+            if (_isNew || _form.Id == 0)
+            {
+                var entity = _form.ToEntity();
+                entity.CreatedAt = DateTime.UtcNow;
+                entity.UpdatedAt = DateTime.UtcNow;
+                db.Vendors.Add(entity);
+                await db.SaveChangesAsync();
+                newId = entity.Id;
+            }
+            else
+            {
+                var existing = await db.Vendors.FirstOrDefaultAsync(v => v.Id == _form.Id);
+                if (existing is null)
+                {
+                    Snackbar.Add("Record was deleted elsewhere.", Severity.Warning);
+                    await LoadAsync();
+                    StartNew();
+                    return;
+                }
+                _form.ApplyTo(existing);
+                existing.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+
+            await LoadAsync();
+            var saved = _vendors.FirstOrDefault(v => v.Id == newId);
+            if (saved is not null) SelectExisting(saved);
+            else StartNew();
+            ShowOk("Vendor saved.");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Could not save: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteCurrent()
+    {
+        if (_editing is null) return;
+        var ok = await Confirm($"Delete vendor \"{_editing.Name}\"?",
+            "It will be soft-deleted and won't appear in lists.", "Delete");
+        if (!ok) return;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var existing = await db.Vendors.FirstOrDefaultAsync(v => v.Id == _editing.Id);
+            if (existing is not null)
+            {
+                existing.IsActive = false;
+                existing.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+            await LoadAsync();
+            StartNew();
+            ShowOk("Vendor removed.");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Could not delete: {ex.Message}");
+        }
+    }
+
+    private async Task<bool> Confirm(string title, string body, string yes)
+    {
+        var result = await DialogService.ShowMessageBoxAsync(title, body, yesText: yes, cancelText: "Cancel");
+        return result == true;
+    }
+
+    private static string? NormalizeUpper(string? s) =>
+        string.IsNullOrWhiteSpace(s) ? null : s.Trim().ToUpperInvariant();
+
+    private void ShowOk(string m) =>
+        Snackbar.Add(m, Severity.Success, c => c.VisibleStateDuration = 3000);
+
+    private void ShowError(string m) =>
+        Snackbar.Add(m, Severity.Error, c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 8000; });
+
+    private void Finish() => Nav.NavigateTo("/", replace: true);
+
+    private sealed class VendorVm
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string? Phone { get; set; }
+        public string? AltPhone { get; set; }
+        public string? Email { get; set; }
+        public string? Gstin { get; set; }
+        public string? Address { get; set; }
+        public string? City { get; set; }
+        public string? State { get; set; }
+        public string? Pincode { get; set; }
+        public string? BankName { get; set; }
+        public string? AccountHolderName { get; set; }
+        public string? AccountNumber { get; set; }
+        public string? IfscCode { get; set; }
+        public decimal? Balance { get; set; }
+        public int? PaymentTermDays { get; set; }
+        public decimal? CreditLimit { get; set; }
+        public string? Notes { get; set; }
+        public bool IsActive { get; set; } = true;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public static VendorVm From(Vendor v) => new()
         {
             Id = v.Id,
             Name = v.Name,
@@ -209,78 +488,53 @@
             CreditLimit = v.CreditLimit,
             Notes = v.Notes,
             IsActive = v.IsActive,
-            CreatedAt = v.CreatedAt
+            CreatedAt = v.CreatedAt,
         };
-        _isNew = false;
-        _attempted = false;
-    }
 
-    private void Reset() => StartNew();
+        public Vendor ToEntity() => new()
+        {
+            Id = Id,
+            Name = Name,
+            Phone = Phone,
+            AltPhone = AltPhone,
+            Email = Email,
+            Gstin = Gstin,
+            Address = Address,
+            City = City,
+            State = State,
+            Pincode = Pincode,
+            BankName = BankName,
+            AccountHolderName = AccountHolderName,
+            AccountNumber = AccountNumber,
+            IfscCode = IfscCode,
+            Balance = Balance ?? 0,
+            PaymentTermDays = PaymentTermDays ?? 30,
+            CreditLimit = CreditLimit ?? 0,
+            Notes = Notes,
+            IsActive = IsActive,
+            CreatedAt = CreatedAt,
+        };
 
-    private async Task Save()
-    {
-        _attempted = true;
-        if (string.IsNullOrWhiteSpace(_form.Name)) return;
-
-        _saving = true;
-        try
+        public void ApplyTo(Vendor v)
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            if (_isNew || _form.Id == 0)
-            {
-                _form.CreatedAt = DateTime.UtcNow;
-                _form.UpdatedAt = DateTime.UtcNow;
-                db.Vendors.Add(_form);
-            }
-            else
-            {
-                var existing = await db.Vendors.FirstOrDefaultAsync(v => v.Id == _form.Id);
-                if (existing is null)
-                {
-                    Snackbar.Add("Record was deleted elsewhere.", Severity.Warning);
-                    await LoadAsync();
-                    return;
-                }
-                _form.UpdatedAt = DateTime.UtcNow;
-                db.Entry(existing).CurrentValues.SetValues(_form);
-            }
-            await db.SaveChangesAsync();
-            await LoadAsync();
-            StartNew();
-            Snackbar.Add("Vendor saved.", Severity.Success);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Could not save: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _saving = false;
-        }
-    }
-
-    private async Task DeleteCurrent()
-    {
-        if (_editing is null) return;
-        try
-        {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var existing = await db.Vendors.FirstOrDefaultAsync(v => v.Id == _editing.Id);
-            if (existing is not null)
-            {
-                existing.IsActive = false;
-                existing.UpdatedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync();
-            }
-            await LoadAsync();
-            StartNew();
-            Snackbar.Add("Vendor removed.", Severity.Info);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Could not delete: {ex.Message}", Severity.Error);
+            v.Name = Name;
+            v.Phone = Phone;
+            v.AltPhone = AltPhone;
+            v.Email = Email;
+            v.Gstin = Gstin;
+            v.Address = Address;
+            v.City = City;
+            v.State = State;
+            v.Pincode = Pincode;
+            v.BankName = BankName;
+            v.AccountHolderName = AccountHolderName;
+            v.AccountNumber = AccountNumber;
+            v.IfscCode = IfscCode;
+            v.Balance = Balance ?? 0;
+            v.PaymentTermDays = PaymentTermDays ?? 30;
+            v.CreditLimit = CreditLimit ?? 0;
+            v.Notes = Notes;
+            v.IsActive = IsActive;
         }
     }
-
-    private void Finish() => Nav.NavigateTo("/", replace: true);
 }

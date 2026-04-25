@@ -1,60 +1,206 @@
 @page "/onboarding/products"
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISetupService Setup
 @inject IOnboardingService Onboarding
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>Products — Setup</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="pa-6">
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
     <MudStack Spacing="4">
         <MudStack Spacing="1">
             <MudText Typo="Typo.h5">Setting up your shop · 3 of 4</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary">
-                Add at least one product to continue. The full product flow lands in a later round —
-                for now use the sample button below to seed a placeholder so you can move on.
+                Add at least one product. You can edit prices, MRP, opening stock, and more later from Settings.
             </MudText>
             <OnboardingProgress Current="OnboardingStep.Products" />
         </MudStack>
 
-        <MudPaper Class="pa-6" Style="box-shadow: inset 4px 0 0 var(--mud-palette-tertiary), 0 2px 4px rgba(0,0,0,0.08);">
-            <MudStack Spacing="4" AlignItems="AlignItems.Center">
-                <MudIcon Icon="@Icons.Material.Rounded.Inventory2" Color="Color.Tertiary" Style="font-size: 72px;" />
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="5">
+                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 540px;">
+                    <MudStack Spacing="3">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.h6">Products (@_products.Count)</MudText>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Rounded.Add" OnClick="StartNew">Add</MudButton>
+                        </MudStack>
 
-                @if (_count == 0)
-                {
-                    <MudText Typo="Typo.body1" Align="Align.Center">
-                        No products yet.
-                    </MudText>
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               Size="Size.Large"
-                               StartIcon="@Icons.Material.Rounded.Add"
-                               OnClick="AddSample"
-                               Disabled="@_busy">
-                        Add a sample product
-                    </MudButton>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">
-                        creates "Sample product" with the default tax slab — you can edit or delete later
-                    </MudText>
-                }
-                else
-                {
-                    <MudText Typo="Typo.body1" Align="Align.Center">
-                        @_count product@(_count == 1 ? "" : "s") added.
-                    </MudText>
-                    <MudStack Row="true" Spacing="2">
-                        <MudButton Variant="Variant.Outlined"
-                                   StartIcon="@Icons.Material.Rounded.Add"
+                        <MudTextField Value="_search"
+                                      ValueChanged="OnSearchChanged"
+                                      T="string"
+                                      Placeholder="Search by name, SKU, barcode…"
+                                      Variant="Variant.Outlined"
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Rounded.Search"
+                                      Margin="Margin.Dense"
+                                      Immediate="true"
+                                      DebounceInterval="200" />
+
+                        <MudButton Size="Size.Small"
+                                   Variant="Variant.Outlined"
+                                   StartIcon="@Icons.Material.Rounded.AutoAwesome"
                                    OnClick="AddSample"
-                                   Disabled="@_busy">
-                            Add another sample
+                                   Disabled="@(_saving || _taxes.Count == 0)">
+                            Add a sample product
                         </MudButton>
+
+                        <MudDivider />
+
+                        @if (_loading)
+                        {
+                            <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                            </MudStack>
+                        }
+                        else if (_filtered.Count == 0)
+                        {
+                            <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                                <MudIcon Icon="@Icons.Material.Rounded.Inventory2" Color="Color.Secondary" Style="font-size: 48px;" />
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                    @(_products.Count == 0 ? "No products yet. Use the form on the right to add one." : "No matches.")
+                                </MudText>
+                            </MudStack>
+                        }
+                        else
+                        {
+                            <MudStack Spacing="1">
+                                @foreach (var p in _filtered)
+                                {
+                                    var isSel = _editing?.Id == p.Id;
+                                    var item = p;
+                                    <div class="@(isSel ? "sap-list-row sap-list-row-active" : "sap-list-row")"
+                                         tabindex="0"
+                                         role="button"
+                                         aria-pressed="@(isSel ? "true" : "false")"
+                                         @onclick="@(() => SelectExisting(item))"
+                                         @onkeydown="@((KeyboardEventArgs e) => OnRowKey(e, item))">
+                                        <MudStack Spacing="0">
+                                            <MudText Typo="Typo.body2" Style="font-weight: 500;">@item.Name</MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                @(string.IsNullOrEmpty(item.Sku) ? "no SKU" : item.Sku)
+                                                · ₹@item.SalePrice.ToString("0.##")
+                                                · stock @item.StockQty.ToString("0.###")
+                                            </MudText>
+                                        </MudStack>
+                                    </div>
+                                }
+                            </MudStack>
+                        }
                     </MudStack>
-                }
-            </MudStack>
-        </MudPaper>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="7">
+                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08); min-height: 540px;">
+                    <MudStack Spacing="3">
+                        <MudText Typo="Typo.h6">@(_isNew ? "➕ Add product" : $"Edit · {_form.Name}")</MudText>
+
+                        @if (_taxes.Count == 0)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true">
+                                Add at least one tax rate first — go back to step 2.
+                            </MudAlert>
+                        }
+
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12" md="8">
+                                <MudTextField @bind-Value="_form.Name"
+                                              Label="Product name *"
+                                              Variant="Variant.Outlined"
+                                              MaxLength="200"
+                                              Immediate="true"
+                                              AutoFocus="true"
+                                              Error="@(_attempted && string.IsNullOrWhiteSpace(_form.Name))"
+                                              ErrorText="Name is required."
+                                              OnKeyDown="OnEnter" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_form.Category"
+                                              Label="Category" Variant="Variant.Outlined" MaxLength="100"
+                                              HelperText="e.g. Shirts, Sarees, Kurtas" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_form.Sku"
+                                              Label="SKU" Variant="Variant.Outlined" MaxLength="50"
+                                              HelperText="auto-generated if blank" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_form.Barcode" Label="Barcode" Variant="Variant.Outlined" MaxLength="100" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_form.HsnCode"
+                                              Label="HSN" Variant="Variant.Outlined" MaxLength="8" Immediate="true"
+                                              Error="@(!IndianFormats.IsHsn(_form.HsnCode))"
+                                              ErrorText="2–8 digits." />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudSelect T="int?" @bind-Value="_form.TaxRateId"
+                                           Label="Tax rate *" Variant="Variant.Outlined"
+                                           Error="@(_attempted && _form.TaxRateId is null)"
+                                           ErrorText="Pick a tax rate.">
+                                    @foreach (var t in _taxes)
+                                    {
+                                        var taxId = t.Id;
+                                        var label = $"{t.Name} ({t.Rate:0.##}%){(t.IsDefault ? " · default" : "")}";
+                                        <MudSelectItem T="int?" Value="@((int?)taxId)">@label</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12"><MudText Typo="Typo.caption" Color="Color.Secondary">Pricing</MudText></MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudNumericField T="decimal?" @bind-Value="_form.Mrp"
+                                                 Label="MRP ₹ *" Variant="Variant.Outlined" Min="0"
+                                                 Error="@(_attempted && (_form.Mrp is null || _form.Mrp <= 0))"
+                                                 ErrorText="MRP must be > 0." />
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudNumericField T="decimal?" @bind-Value="_form.SalePrice"
+                                                 Label="Sale ₹ *" Variant="Variant.Outlined" Min="0"
+                                                 Error="@(_attempted && !SalePriceValid)"
+                                                 ErrorText="@SalePriceError" />
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudNumericField T="decimal?" @bind-Value="_form.Cost" Label="Cost ₹" Variant="Variant.Outlined" Min="0" />
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudNumericField T="decimal?" @bind-Value="_form.StockQty" Label="Opening stock" Variant="Variant.Outlined" Min="0" />
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudNumericField T="decimal?" @bind-Value="_form.ReorderLevel" Label="Reorder level" Variant="Variant.Outlined" Min="0" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_form.Notes" Label="Notes" Variant="Variant.Outlined" MaxLength="500" Lines="2" />
+                            </MudItem>
+                        </MudGrid>
+
+                        <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+                            @if (!_isNew)
+                            {
+                                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteCurrent" Disabled="@_saving">Delete</MudButton>
+                            }
+                            <MudButton Variant="Variant.Text" OnClick="ResetWithConfirm" Disabled="@_saving">Cancel</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@(_saving || _taxes.Count == 0)">
+                                @if (_saving)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    <span>Saving…</span>
+                                }
+                                else
+                                {
+                                    <span>Save product</span>
+                                }
+                            </MudButton>
+                        </MudStack>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
 
         <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
             <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Tax)))">‹ Back</MudButton>
@@ -62,41 +208,150 @@
                        Color="Color.Primary"
                        Size="Size.Large"
                        OnClick="GoNext"
-                       Disabled="@(_count == 0)">Next ›</MudButton>
+                       Disabled="@(_products.Count == 0)">Next ›</MudButton>
         </MudStack>
     </MudStack>
 </MudContainer>
 
 @code {
-    private int _count;
-    private bool _busy;
+    private List<Product> _products = new();
+    private List<Product> _filtered = new();
+    private List<TaxRate> _taxes = new();
+    private ProductVm _form = new();
+    private Product? _editing;
+    private bool _isNew = true;
+    private bool _attempted;
+    private bool _saving;
+    private bool _loading = true;
+    private string _search = "";
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private bool SalePriceValid =>
+        _form.SalePrice is > 0 &&
+        (_form.Mrp is null || _form.SalePrice <= _form.Mrp);
+
+    private string SalePriceError =>
+        _form.SalePrice is null or <= 0
+            ? "Sale price must be > 0."
+            : "Sale price cannot exceed MRP.";
+
+    private bool IsValid =>
+        !string.IsNullOrWhiteSpace(_form.Name) &&
+        _form.TaxRateId is not null &&
+        _form.Mrp is > 0 &&
+        SalePriceValid &&
+        IndianFormats.IsHsn(_form.HsnCode);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Setup.IsComplete) { Nav.NavigateTo("/setup", replace: true); return; }
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _count = await db.Products.CountAsync(p => p.IsActive);
+        _loading = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _products = await db.Products.AsNoTracking().Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();
+            _taxes = await db.TaxRates.AsNoTracking().Where(t => t.IsActive)
+                .OrderByDescending(t => t.IsDefault).ThenBy(t => t.Rate).ToListAsync();
+            ApplyFilter();
+
+            // Default the form's tax rate to the configured default if available.
+            if (_form.TaxRateId is null)
+                _form.TaxRateId = _taxes.FirstOrDefault(t => t.IsDefault)?.Id ?? _taxes.FirstOrDefault()?.Id;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnSearchChanged(string s)
+    {
+        _search = s ?? "";
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+        {
+            _filtered = _products;
+            return;
+        }
+        var q = _search.Trim();
+        _filtered = _products.Where(p =>
+            Match(p.Name, q) ||
+            Match(p.Sku, q) ||
+            Match(p.Barcode, q) ||
+            Match(p.Category, q)
+        ).ToList();
+    }
+
+    private static bool Match(string? field, string q) =>
+        !string.IsNullOrEmpty(field) && field.Contains(q, StringComparison.OrdinalIgnoreCase);
+
+    private void StartNew()
+    {
+        _form = new ProductVm
+        {
+            IsActive = true,
+            TaxRateId = _taxes.FirstOrDefault(t => t.IsDefault)?.Id ?? _taxes.FirstOrDefault()?.Id,
+        };
+        _editing = null;
+        _isNew = true;
+        _attempted = false;
+    }
+
+    private void SelectExisting(Product p)
+    {
+        _editing = p;
+        _form = ProductVm.From(p);
+        _isNew = false;
+        _attempted = false;
+    }
+
+    private void OnRowKey(KeyboardEventArgs e, Product p)
+    {
+        if (e.Key is "Enter" or " ") SelectExisting(p);
+    }
+
+    private async Task ResetWithConfirm()
+    {
+        if (HasUnsavedContent())
+        {
+            var ok = await Confirm("Discard changes?",
+                "The current form will be cleared.", "Discard");
+            if (!ok) return;
+        }
+        StartNew();
+    }
+
+    private bool HasUnsavedContent() =>
+        !string.IsNullOrWhiteSpace(_form.Name) ||
+        !string.IsNullOrWhiteSpace(_form.Sku) ||
+        _form.Mrp is not null ||
+        _form.SalePrice is not null;
+
+    private async Task OnEnter(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        if (!_saving && IsValid) await Save();
     }
 
     private async Task AddSample()
     {
-        _busy = true;
+        if (_taxes.Count == 0) return;
+        var defaultTaxId = _taxes.FirstOrDefault(t => t.IsDefault)?.Id ?? _taxes[0].Id;
+        var n = _products.Count + 1;
+        var suffix = Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+
+        _saving = true;
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            var defaultTaxId = await db.TaxRates
-                .Where(t => t.IsActive && t.IsDefault)
-                .Select(t => (int?)t.Id)
-                .FirstOrDefaultAsync()
-                ?? await db.TaxRates
-                    .Where(t => t.IsActive)
-                    .OrderBy(t => t.Id)
-                    .Select(t => (int?)t.Id)
-                    .FirstOrDefaultAsync();
-
-            var n = (await db.Products.MaxAsync(p => (int?)p.Id) ?? 0) + 1;
-            var suffix = Guid.NewGuid().ToString("N").Substring(0, 6).ToUpperInvariant();
             var p = new Product
             {
                 Name = $"Sample product {n}",
@@ -104,26 +359,212 @@
                 Mrp = 100m,
                 SalePrice = 100m,
                 Cost = 60m,
-                StockQty = 0,
+                StockQty = 10,
                 TaxRateId = defaultTaxId,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = DateTime.UtcNow,
             };
             db.Products.Add(p);
             await db.SaveChangesAsync();
             await LoadAsync();
-            Snackbar.Add($"Added {p.Name}.", Severity.Success);
+            ShowOk($"Added {p.Name}.");
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Could not add: {ex.Message}", Severity.Error);
+            ShowError($"Could not add: {ex.Message}");
         }
         finally
         {
-            _busy = false;
+            _saving = false;
         }
     }
 
+    private async Task Save()
+    {
+        _attempted = true;
+        if (!IsValid) return;
+
+        _form.Name = _form.Name.Trim();
+        _form.Sku = string.IsNullOrWhiteSpace(_form.Sku)
+            ? $"SKU-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}"
+            : _form.Sku.Trim().ToUpperInvariant();
+        _form.Barcode = string.IsNullOrWhiteSpace(_form.Barcode) ? null : _form.Barcode.Trim();
+        _form.Category = string.IsNullOrWhiteSpace(_form.Category) ? null : _form.Category.Trim();
+        _form.HsnCode = string.IsNullOrWhiteSpace(_form.HsnCode) ? null : _form.HsnCode.Trim();
+
+        _saving = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            // Friendly pre-check on SKU uniqueness.
+            var skuTaken = await db.Products
+                .Where(p => p.Sku == _form.Sku && p.Id != _form.Id)
+                .AnyAsync();
+            if (skuTaken)
+            {
+                Snackbar.Add($"SKU '{_form.Sku}' is already in use.", Severity.Error);
+                return;
+            }
+
+            int newId = _form.Id;
+            if (_isNew || _form.Id == 0)
+            {
+                var entity = _form.ToEntity();
+                entity.CreatedAt = DateTime.UtcNow;
+                entity.UpdatedAt = DateTime.UtcNow;
+                db.Products.Add(entity);
+                await db.SaveChangesAsync();
+                newId = entity.Id;
+            }
+            else
+            {
+                var existing = await db.Products.FirstOrDefaultAsync(p => p.Id == _form.Id);
+                if (existing is null)
+                {
+                    Snackbar.Add("Record was deleted elsewhere.", Severity.Warning);
+                    await LoadAsync();
+                    StartNew();
+                    return;
+                }
+                _form.ApplyTo(existing);
+                existing.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+
+            await LoadAsync();
+            var saved = _products.FirstOrDefault(p => p.Id == newId);
+            if (saved is not null) SelectExisting(saved);
+            else StartNew();
+            ShowOk("Product saved.");
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message?.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            Snackbar.Add("That SKU is already in use.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Could not save: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteCurrent()
+    {
+        if (_editing is null) return;
+        var ok = await Confirm($"Delete \"{_editing.Name}\"?",
+            "It will be soft-deleted and won't appear in lists.", "Delete");
+        if (!ok) return;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var existing = await db.Products.FirstOrDefaultAsync(p => p.Id == _editing.Id);
+            if (existing is not null)
+            {
+                existing.IsActive = false;
+                existing.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+            await LoadAsync();
+            StartNew();
+            ShowOk("Product removed.");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Could not delete: {ex.Message}");
+        }
+    }
+
+    private async Task<bool> Confirm(string title, string body, string yes)
+    {
+        var result = await DialogService.ShowMessageBoxAsync(title, body, yesText: yes, cancelText: "Cancel");
+        return result == true;
+    }
+
+    private void ShowOk(string m) =>
+        Snackbar.Add(m, Severity.Success, c => c.VisibleStateDuration = 3000);
+
+    private void ShowError(string m) =>
+        Snackbar.Add(m, Severity.Error, c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 8000; });
+
     private void GoNext() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Vendor));
+
+    private sealed class ProductVm
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string? Sku { get; set; }
+        public string? Barcode { get; set; }
+        public string? Category { get; set; }
+        public string? HsnCode { get; set; }
+        public int? TaxRateId { get; set; }
+        public decimal? Mrp { get; set; }
+        public decimal? SalePrice { get; set; }
+        public decimal? Cost { get; set; }
+        public decimal? StockQty { get; set; }
+        public decimal? ReorderLevel { get; set; }
+        public string? Notes { get; set; }
+        public bool IsActive { get; set; } = true;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public static ProductVm From(Product p) => new()
+        {
+            Id = p.Id,
+            Name = p.Name,
+            Sku = p.Sku,
+            Barcode = p.Barcode,
+            Category = p.Category,
+            HsnCode = p.HsnCode,
+            TaxRateId = p.TaxRateId,
+            Mrp = p.Mrp,
+            SalePrice = p.SalePrice,
+            Cost = p.Cost == 0 ? null : p.Cost,
+            StockQty = p.StockQty,
+            ReorderLevel = p.ReorderLevel,
+            Notes = p.Notes,
+            IsActive = p.IsActive,
+            CreatedAt = p.CreatedAt,
+        };
+
+        public Product ToEntity() => new()
+        {
+            Id = Id,
+            Name = Name,
+            Sku = Sku,
+            Barcode = Barcode,
+            Category = Category,
+            HsnCode = HsnCode,
+            TaxRateId = TaxRateId,
+            Mrp = Mrp ?? 0,
+            SalePrice = SalePrice ?? 0,
+            Cost = Cost ?? 0,
+            StockQty = StockQty ?? 0,
+            ReorderLevel = ReorderLevel,
+            Notes = Notes,
+            IsActive = IsActive,
+            CreatedAt = CreatedAt,
+        };
+
+        public void ApplyTo(Product p)
+        {
+            p.Name = Name;
+            p.Sku = Sku;
+            p.Barcode = Barcode;
+            p.Category = Category;
+            p.HsnCode = HsnCode;
+            p.TaxRateId = TaxRateId;
+            p.Mrp = Mrp ?? 0;
+            p.SalePrice = SalePrice ?? 0;
+            p.Cost = Cost ?? 0;
+            p.StockQty = StockQty ?? 0;
+            p.ReorderLevel = ReorderLevel;
+            p.Notes = Notes;
+            p.IsActive = IsActive;
+        }
+    }
 }

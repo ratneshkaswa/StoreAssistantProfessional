@@ -1,9 +1,11 @@
 @page "/onboarding/tax"
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISetupService Setup
 @inject IOnboardingService Onboarding
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>Taxes — Setup</PageTitle>
 
@@ -29,17 +31,29 @@
                         <MudStack Spacing="1">
                             <MudText Typo="Typo.caption" Color="Color.Secondary">Quick add</MudText>
                             <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => QuickAdd("GST 5%", 5m))">GST 5%</MudButton>
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => QuickAdd("GST 12%", 12m))">GST 12%</MudButton>
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => QuickAdd("GST 18%", 18m))">GST 18%</MudButton>
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => QuickAdd("GST 28%", 28m))">GST 28%</MudButton>
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => QuickAdd("Exempt", 0m, "Exempt"))">Exempt 0%</MudButton>
+                                @foreach (var preset in _quickAddPresets)
+                                {
+                                    var p = preset;
+                                    var exists = _taxes.Any(t => string.Equals(t.Name, p.Name, StringComparison.OrdinalIgnoreCase));
+                                    <MudButton Size="Size.Small"
+                                               Variant="Variant.Outlined"
+                                               Disabled="@(exists || _saving)"
+                                               OnClick="@(() => QuickAdd(p))">
+                                        @(exists ? $"{p.Label} ✓" : p.Label)
+                                    </MudButton>
+                                }
                             </MudStack>
                         </MudStack>
 
                         <MudDivider />
 
-                        @if (_taxes.Count == 0)
+                        @if (_loading)
+                        {
+                            <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                            </MudStack>
+                        }
+                        else if (_taxes.Count == 0)
                         {
                             <MudStack AlignItems="AlignItems.Center" Class="pa-4">
                                 <MudIcon Icon="@Icons.Material.Rounded.Receipt" Color="Color.Secondary" Style="font-size: 48px;" />
@@ -54,26 +68,28 @@
                                 @foreach (var t in _taxes)
                                 {
                                     var isSel = _editing?.Id == t.Id;
-                                    var leftBar = isSel ? "▎" : "  ";
-                                    <MudPaper Elevation="0"
-                                              Class="@(isSel ? "pa-2 sap-row sap-row-active" : "pa-2 sap-row")"
-                                              Style="@(isSel ? "border-left: 3px solid var(--mud-palette-primary); cursor: pointer;" : "cursor: pointer;")"
-                                              @onclick="@(() => SelectExisting(t))">
+                                    var item = t;
+                                    <div class="@(isSel ? "sap-list-row sap-list-row-active" : "sap-list-row")"
+                                         tabindex="0"
+                                         role="button"
+                                         aria-pressed="@(isSel ? "true" : "false")"
+                                         @onclick="@(() => SelectExisting(item))"
+                                         @onkeydown="@((KeyboardEventArgs e) => OnRowKey(e, item))">
                                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                             <MudStack Spacing="0">
                                                 <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                                                    <MudText Typo="Typo.body2" Style="font-weight: 500;">@t.Name</MudText>
-                                                    @if (t.IsDefault)
+                                                    <MudText Typo="Typo.body2" Style="font-weight: 500;">@item.Name</MudText>
+                                                    @if (item.IsDefault)
                                                     {
                                                         <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">default</MudChip>
                                                     }
                                                 </MudStack>
                                                 <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                    @t.Rate.ToString("0.##")% · HSN @(string.IsNullOrEmpty(t.HsnCode) ? "—" : t.HsnCode) · @t.SlabDisplay
+                                                    @item.Rate.ToString("0.##")% · HSN @(string.IsNullOrEmpty(item.HsnCode) ? "—" : item.HsnCode) · @item.SlabDisplay
                                                 </MudText>
                                             </MudStack>
                                         </MudStack>
-                                    </MudPaper>
+                                    </div>
                                 }
                             </MudStack>
                         }
@@ -93,8 +109,10 @@
                                               Variant="Variant.Outlined"
                                               MaxLength="100"
                                               Immediate="true"
+                                              AutoFocus="true"
                                               Error="@(_attempted && string.IsNullOrWhiteSpace(_form.Name))"
-                                              ErrorText="Name is required." />
+                                              ErrorText="Name is required."
+                                              OnKeyDown="OnEnter" />
                             </MudItem>
                             <MudItem xs="12" md="4">
                                 <MudCheckBox T="bool" @bind-Value="_form.IsDefault" Color="Color.Primary">
@@ -103,10 +121,16 @@
                             </MudItem>
 
                             <MudItem xs="6" md="3">
-                                <MudNumericField T="decimal" @bind-Value="_form.Rate" Label="Rate (%) *" Variant="Variant.Outlined" Min="0" Max="50" />
+                                <MudNumericField T="decimal?" @bind-Value="_form.RateNullable"
+                                                 Label="Rate (%) *" Variant="Variant.Outlined" Min="0" Max="50"
+                                                 Error="@(_attempted && !RateValid)"
+                                                 ErrorText="@RateError" />
                             </MudItem>
                             <MudItem xs="6" md="3">
-                                <MudNumericField T="decimal" @bind-Value="_form.CessRate" Label="Cess (%)" Variant="Variant.Outlined" Min="0" Max="100" />
+                                <MudNumericField T="decimal?" @bind-Value="_form.CessRateNullable"
+                                                 Label="Cess (%)" Variant="Variant.Outlined" Min="0" Max="100"
+                                                 Error="@(_attempted && !CessConsistent)"
+                                                 ErrorText="Cess rate and Cess type must be set together." />
                             </MudItem>
                             <MudItem xs="12" md="3">
                                 <MudSelect T="string" @bind-Value="_form.CessType" Label="Cess type" Variant="Variant.Outlined" Clearable="true">
@@ -126,13 +150,18 @@
                                 <MudText Typo="Typo.caption" Color="Color.Secondary">Optional price slab — leave blank for "any price".</MudText>
                             </MudItem>
                             <MudItem xs="6" md="4">
-                                <MudNumericField T="decimal?" @bind-Value="_form.MinPrice" Label="Min ₹" Variant="Variant.Outlined" />
+                                <MudNumericField T="decimal?" @bind-Value="_form.MinPrice" Label="Min ₹" Variant="Variant.Outlined" Min="0" />
                             </MudItem>
                             <MudItem xs="6" md="4">
-                                <MudNumericField T="decimal?" @bind-Value="_form.MaxPrice" Label="Max ₹ (blank = & above)" Variant="Variant.Outlined" />
+                                <MudNumericField T="decimal?" @bind-Value="_form.MaxPrice" Label="Max ₹ (blank = & above)" Variant="Variant.Outlined" Min="0"
+                                                 Error="@(_attempted && !SlabOrderValid)"
+                                                 ErrorText="Max must be greater than Min." />
                             </MudItem>
                             <MudItem xs="12" md="4">
-                                <MudTextField @bind-Value="_form.HsnCode" Label="HSN code" Variant="Variant.Outlined" MaxLength="8" />
+                                <MudTextField @bind-Value="_form.HsnCode"
+                                              Label="HSN code" Variant="Variant.Outlined" MaxLength="8" Immediate="true"
+                                              Error="@(!IndianFormats.IsHsn(_form.HsnCode))"
+                                              ErrorText="2–8 digits." />
                             </MudItem>
 
                             <MudItem xs="12">
@@ -147,9 +176,12 @@
 
                         @if (_form.Rate > 0)
                         {
+                            var sample = 600m;
+                            var cgst = sample * _form.CgstRate / 100m;
+                            var sgst = sample * _form.SgstRate / 100m;
                             <MudPaper Class="pa-2" Elevation="0" Style="background: var(--mud-palette-background-grey);">
                                 <MudText Typo="Typo.caption">
-                                    Sample · ₹600 base → CGST @($"{_form.CgstRate:0.##}%") + SGST @($"{_form.SgstRate:0.##}%") = ₹@($"{(600m * _form.Rate / 100m):0.##}")
+                                    Sample on ₹@sample.ToString("0") base · CGST @($"{_form.CgstRate:0.##}%") = ₹@($"{cgst:0.##}") + SGST @($"{_form.SgstRate:0.##}%") = ₹@($"{sgst:0.##}") · Total tax ₹@($"{(cgst + sgst):0.##}")
                                 </MudText>
                             </MudPaper>
                         }
@@ -157,10 +189,20 @@
                         <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
                             @if (!_isNew)
                             {
-                                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteCurrent">Delete</MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteCurrent" Disabled="@_saving">Delete</MudButton>
                             }
-                            <MudButton Variant="Variant.Text" OnClick="Reset">Cancel</MudButton>
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@_saving">Save tax rate</MudButton>
+                            <MudButton Variant="Variant.Text" OnClick="Reset" Disabled="@_saving">Cancel</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@_saving">
+                                @if (_saving)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    <span>Saving…</span>
+                                }
+                                else
+                                {
+                                    <span>Save tax rate</span>
+                                }
+                            </MudButton>
                         </MudStack>
                     </MudStack>
                 </MudPaper>
@@ -180,23 +222,71 @@
 
 @code {
     private List<TaxRate> _taxes = new();
-    private TaxRate _form = new();
+    private TaxVm _form = new();
     private TaxRate? _editing;
     private bool _isNew = true;
     private bool _attempted;
     private bool _saving;
+    private bool _loading = true;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private record QuickAddPreset(string Label, string Name, decimal Rate, string Category);
+
+    private static readonly QuickAddPreset[] _quickAddPresets =
+    [
+        new("GST 5%",  "GST 5%",  5m,  "Taxable"),
+        new("GST 12%", "GST 12%", 12m, "Taxable"),
+        new("GST 18%", "GST 18%", 18m, "Taxable"),
+        new("GST 28%", "GST 28%", 28m, "Taxable"),
+        new("Exempt 0%", "Exempt", 0m, "Exempt"),
+    ];
+
+    private bool RateValid => _form.Rate >= 0 && _form.Rate <= 50 && CategoryRateConsistent;
+    private bool CategoryRateConsistent =>
+        _form.TaxCategory == "Taxable" ? _form.Rate > 0 : _form.Rate == 0;
+    private bool CessConsistent =>
+        (string.IsNullOrWhiteSpace(_form.CessType) && _form.CessRate == 0) ||
+        (!string.IsNullOrWhiteSpace(_form.CessType) && _form.CessRate > 0);
+    private bool SlabOrderValid =>
+        !_form.MinPrice.HasValue || !_form.MaxPrice.HasValue || _form.MaxPrice > _form.MinPrice;
+
+    private string RateError =>
+        _form.TaxCategory == "Taxable" && _form.Rate == 0
+            ? "Taxable rate must be greater than 0%."
+            : !CategoryRateConsistent
+                ? $"Rate must be 0 for category '{_form.TaxCategory}'."
+                : "Rate must be 0–50%.";
+
+    private bool IsValid =>
+        !string.IsNullOrWhiteSpace(_form.Name) &&
+        RateValid &&
+        CessConsistent &&
+        SlabOrderValid &&
+        IndianFormats.IsHsn(_form.HsnCode);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Setup.IsComplete) { Nav.NavigateTo("/setup", replace: true); return; }
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _taxes = await db.TaxRates.AsNoTracking().Where(t => t.IsActive).OrderBy(t => t.SortOrder).ThenBy(t => t.Rate).ToListAsync();
+        _loading = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _taxes = await db.TaxRates.AsNoTracking().Where(t => t.IsActive)
+                .OrderBy(t => t.SortOrder).ThenBy(t => t.Rate).ToListAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void StartNew()
     {
-        _form = new TaxRate { TaxCategory = "Taxable", IsActive = true };
+        _form = new TaxVm { TaxCategory = "Taxable", IsActive = true };
         _editing = null;
         _isNew = true;
         _attempted = false;
@@ -205,60 +295,87 @@
     private void SelectExisting(TaxRate t)
     {
         _editing = t;
-        _form = new TaxRate
-        {
-            Id = t.Id,
-            Name = t.Name,
-            Rate = t.Rate,
-            CessRate = t.CessRate,
-            CessType = t.CessType,
-            IsTaxInclusive = t.IsTaxInclusive,
-            MinPrice = t.MinPrice,
-            MaxPrice = t.MaxPrice,
-            HsnCode = t.HsnCode,
-            TaxCategory = t.TaxCategory,
-            IsDefault = t.IsDefault,
-            SortOrder = t.SortOrder,
-            IsActive = t.IsActive,
-            CreatedAt = t.CreatedAt
-        };
+        _form = TaxVm.From(t);
         _isNew = false;
         _attempted = false;
     }
 
-    private async Task QuickAdd(string name, decimal rate, string category = "Taxable")
+    private void OnRowKey(KeyboardEventArgs e, TaxRate t)
     {
-        _form = new TaxRate { Name = name, Rate = rate, TaxCategory = category, IsActive = true };
+        if (e.Key is "Enter" or " ") SelectExisting(t);
+    }
+
+    private async Task QuickAdd(QuickAddPreset preset)
+    {
+        if (_taxes.Any(t => string.Equals(t.Name, preset.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            Snackbar.Add($"{preset.Name} already exists.", Severity.Info);
+            return;
+        }
+        _form = new TaxVm
+        {
+            Name = preset.Name,
+            Rate = preset.Rate,
+            TaxCategory = preset.Category,
+            IsActive = true,
+        };
         _editing = null;
         _isNew = true;
         await Save();
     }
 
-    private void Reset()
+    private void Reset() => StartNew();
+
+    private async Task OnEnter(KeyboardEventArgs e)
     {
-        StartNew();
+        if (e.Key != "Enter") return;
+        if (!_saving && IsValid) await Save();
     }
 
     private async Task Save()
     {
         _attempted = true;
-        if (string.IsNullOrWhiteSpace(_form.Name)) return;
+        if (!IsValid)
+        {
+            if (string.IsNullOrWhiteSpace(_form.Name))
+                Snackbar.Add("Tax rate name is required.", Severity.Warning);
+            return;
+        }
+
+        _form.Name = _form.Name.Trim();
+        _form.HsnCode = string.IsNullOrWhiteSpace(_form.HsnCode) ? null : _form.HsnCode.Trim();
 
         _saving = true;
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
 
+            // Pre-check name uniqueness (active rows only) so we get a friendly
+            // error before SQLite's UNIQUE constraint speaks up.
+            var nameTaken = await db.TaxRates
+                .Where(t => t.IsActive && t.Id != _form.Id && t.Name == _form.Name)
+                .AnyAsync();
+            if (nameTaken)
+            {
+                Snackbar.Add("A tax rate with that name already exists.", Severity.Error);
+                return;
+            }
+
             if (_form.IsDefault)
             {
-                var existingDefaults = await db.TaxRates.Where(t => t.IsDefault && t.Id != _form.Id).ToListAsync();
+                var existingDefaults = await db.TaxRates
+                    .Where(t => t.IsDefault && t.Id != _form.Id).ToListAsync();
                 foreach (var d in existingDefaults) d.IsDefault = false;
             }
 
+            int newId = _form.Id;
             if (_isNew || _form.Id == 0)
             {
-                _form.CreatedAt = DateTime.UtcNow;
-                db.TaxRates.Add(_form);
+                var entity = _form.ToEntity();
+                entity.CreatedAt = DateTime.UtcNow;
+                db.TaxRates.Add(entity);
+                await db.SaveChangesAsync();
+                newId = entity.Id;
             }
             else
             {
@@ -267,15 +384,19 @@
                 {
                     Snackbar.Add("Record was deleted elsewhere.", Severity.Warning);
                     await LoadAsync();
+                    StartNew();
                     return;
                 }
-                db.Entry(existing).CurrentValues.SetValues(_form);
+                _form.ApplyTo(existing);
+                await db.SaveChangesAsync();
             }
 
-            await db.SaveChangesAsync();
             await LoadAsync();
-            StartNew();
-            Snackbar.Add("Tax rate saved.", Severity.Success);
+            // Keep the just-saved row selected so the user sees confirmation.
+            var saved = _taxes.FirstOrDefault(t => t.Id == newId);
+            if (saved is not null) SelectExisting(saved);
+            else StartNew();
+            ShowOk("Tax rate saved.");
         }
         catch (DbUpdateException ex) when (ex.InnerException?.Message?.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) == true)
         {
@@ -283,7 +404,7 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Could not save: {ex.Message}", Severity.Error);
+            ShowError($"Could not save: {ex.Message}");
         }
         finally
         {
@@ -294,6 +415,10 @@
     private async Task DeleteCurrent()
     {
         if (_editing is null) return;
+        var ok = await Confirm($"Delete tax rate \"{_editing.Name}\"?",
+            "It will be soft-deleted and won't appear in lists.", "Delete");
+        if (!ok) return;
+
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
@@ -301,17 +426,121 @@
             if (existing is not null)
             {
                 existing.IsActive = false;
+                existing.IsDefault = false;
                 await db.SaveChangesAsync();
             }
             await LoadAsync();
             StartNew();
-            Snackbar.Add("Tax rate removed.", Severity.Info);
+            ShowOk("Tax rate removed.");
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Could not delete: {ex.Message}", Severity.Error);
+            ShowError($"Could not delete: {ex.Message}");
         }
     }
 
+    private async Task<bool> Confirm(string title, string body, string yes)
+    {
+        var result = await DialogService.ShowMessageBoxAsync(title, body, yesText: yes, cancelText: "Cancel");
+        return result == true;
+    }
+
+    private void ShowOk(string m) =>
+        Snackbar.Add(m, Severity.Success, c => c.VisibleStateDuration = 3000);
+
+    private void ShowError(string m) =>
+        Snackbar.Add(m, Severity.Error, c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 8000; });
+
     private void GoNext() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Products));
+
+    // VM with nullable wrappers for non-nullable decimals so MudNumericField
+    // can represent "cleared" without silently saving 0.
+    private sealed class TaxVm
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public decimal Rate { get; set; }
+        public decimal? RateNullable
+        {
+            get => _rateBlank ? null : Rate;
+            set { Rate = value ?? 0; _rateBlank = value is null; }
+        }
+        private bool _rateBlank = true;
+
+        public decimal CessRate { get; set; }
+        public decimal? CessRateNullable
+        {
+            get => _cessBlank ? null : CessRate;
+            set { CessRate = value ?? 0; _cessBlank = value is null; }
+        }
+        private bool _cessBlank = true;
+
+        public string? CessType { get; set; }
+        public bool IsTaxInclusive { get; set; }
+        public decimal? MinPrice { get; set; }
+        public decimal? MaxPrice { get; set; }
+        public string? HsnCode { get; set; }
+        public string TaxCategory { get; set; } = "Taxable";
+        public bool IsDefault { get; set; }
+        public int SortOrder { get; set; }
+        public bool IsActive { get; set; } = true;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public decimal CgstRate => Rate / 2;
+        public decimal SgstRate => Rate / 2;
+
+        public static TaxVm From(TaxRate t) => new()
+        {
+            Id = t.Id,
+            Name = t.Name,
+            Rate = t.Rate,
+            _rateBlank = false,
+            CessRate = t.CessRate,
+            _cessBlank = t.CessRate == 0,
+            CessType = t.CessType,
+            IsTaxInclusive = t.IsTaxInclusive,
+            MinPrice = t.MinPrice,
+            MaxPrice = t.MaxPrice,
+            HsnCode = t.HsnCode,
+            TaxCategory = string.IsNullOrWhiteSpace(t.TaxCategory) ? "Taxable" : t.TaxCategory,
+            IsDefault = t.IsDefault,
+            SortOrder = t.SortOrder,
+            IsActive = t.IsActive,
+            CreatedAt = t.CreatedAt,
+        };
+
+        public TaxRate ToEntity() => new()
+        {
+            Id = Id,
+            Name = Name,
+            Rate = Rate,
+            CessRate = CessRate,
+            CessType = CessType,
+            IsTaxInclusive = IsTaxInclusive,
+            MinPrice = MinPrice,
+            MaxPrice = MaxPrice,
+            HsnCode = HsnCode,
+            TaxCategory = TaxCategory,
+            IsDefault = IsDefault,
+            SortOrder = SortOrder,
+            IsActive = IsActive,
+            CreatedAt = CreatedAt,
+        };
+
+        public void ApplyTo(TaxRate t)
+        {
+            t.Name = Name;
+            t.Rate = Rate;
+            t.CessRate = CessRate;
+            t.CessType = CessType;
+            t.IsTaxInclusive = IsTaxInclusive;
+            t.MinPrice = MinPrice;
+            t.MaxPrice = MaxPrice;
+            t.HsnCode = HsnCode;
+            t.TaxCategory = TaxCategory;
+            t.IsDefault = IsDefault;
+            t.SortOrder = SortOrder;
+            t.IsActive = IsActive;
+        }
+    }
 }

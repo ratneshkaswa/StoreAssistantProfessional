@@ -46,7 +46,9 @@ public sealed class AppDbContext : DbContext
         b.Entity<Firm>().Property(p => p.Id).ValueGeneratedNever();
         b.Entity<AppSettings>().Property(p => p.Id).ValueGeneratedNever();
 
-        b.Entity<TaxRate>().HasIndex(t => t.Name).IsUnique();
+        // Filtered unique index — soft-deleted (IsActive = 0) rows must not block
+        // a user from recreating a name they previously deleted.
+        b.Entity<TaxRate>().HasIndex(t => t.Name).IsUnique().HasFilter("\"IsActive\" = 1");
         b.Entity<TaxRate>().HasIndex(t => t.IsDefault);
 
         b.Entity<Vendor>().HasIndex(v => v.Name);
