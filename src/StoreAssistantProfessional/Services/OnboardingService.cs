@@ -30,8 +30,13 @@ public sealed class OnboardingService : IOnboardingService
     public async Task<OnboardingStep> CurrentStepAsync()
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
-        // `Trim` keeps a whitespace-only Name from passing as a real firm.
-        if (!await db.Firms.AnyAsync(f => f.Name != null && f.Name.Trim() != "")) return OnboardingStep.Firm;
+        // EF Core's SQLite provider doesn't reliably translate `Trim()` across
+        // versions (sometimes falls back to client eval, which materializes the
+        // entire table). Filter on plain non-empty server-side, then drop
+        // whitespace-only entries client-side. The Firms table has at most one
+        // row, so the trip-through-memory cost is constant.
+        var firms = await db.Firms.Where(f => f.Name != null && f.Name != "").Select(f => f.Name!).ToListAsync();
+        if (!firms.Any(n => !string.IsNullOrWhiteSpace(n))) return OnboardingStep.Firm;
         if (!await db.TaxRates.AnyAsync(t => t.IsActive)) return OnboardingStep.Tax;
         if (!await db.Products.AnyAsync(p => p.IsActive)) return OnboardingStep.Products;
         if (!await db.Vendors.AnyAsync(v => v.IsActive)) return OnboardingStep.Vendor;

@@ -1,11 +1,14 @@
 @page "/onboarding/products"
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Logging
+@using StoreAssistantProfessional.Components.Shared
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject ISetupService Setup
 @inject IOnboardingService Onboarding
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject ILogger<ProductsPage> Logger
 
 <PageTitle>Products — Setup</PageTitle>
 
@@ -29,7 +32,7 @@
                         <MudTextField Value="_search"
                                       ValueChanged="OnSearchChanged"
                                       T="string"
-                                      Placeholder="Search by name, SKU, barcode…"
+                                      Placeholder="Search by name, SKU, barcode, HSN, category, notes…"
                                       Variant="Variant.Outlined"
                                       Adornment="Adornment.Start"
                                       AdornmentIcon="@Icons.Material.Rounded.Search"
@@ -52,6 +55,13 @@
                             <MudStack AlignItems="AlignItems.Center" Class="pa-4">
                                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
                             </MudStack>
+                        }
+                        else if (_loadError is not null)
+                        {
+                            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                                Could not load products. @_loadError
+                                <MudButton Class="ml-2" Size="Size.Small" Variant="Variant.Text" OnClick="ReloadAsync">Retry</MudButton>
+                            </MudAlert>
                         }
                         else if (_filtered.Count == 0)
                         {
@@ -131,7 +141,7 @@
                             <MudItem xs="12" md="4">
                                 <MudTextField @bind-Value="_form.HsnCode"
                                               Label="HSN" Variant="Variant.Outlined" MaxLength="8" Immediate="true"
-                                              Error="@(!IndianFormats.IsHsn(_form.HsnCode))"
+                                              Error="@(_attempted && !IndianFormats.IsHsn(_form.HsnCode))"
                                               ErrorText="2–8 digits." />
                             </MudItem>
 
@@ -140,10 +150,12 @@
                                            Label="Tax rate *" Variant="Variant.Outlined"
                                            Error="@(_attempted && _form.TaxRateId is null)"
                                            ErrorText="Pick a tax rate.">
-                                    @foreach (var t in _taxes)
+                                    @foreach (var t in _taxesForDropdown)
                                     {
                                         var taxId = t.Id;
-                                        var label = $"{t.Name} ({t.Rate:0.##}%){(t.IsDefault ? " · default" : "")}";
+                                        var suffix = !t.IsActive ? " · (deleted)"
+                                                    : t.IsDefault ? " · default" : "";
+                                        var label = $"{t.Name} ({t.Rate:0.##}%){suffix}";
                                         <MudSelectItem T="int?" Value="@((int?)taxId)">@label</MudSelectItem>
                                     }
                                 </MudSelect>
@@ -214,12 +226,18 @@
     private List<Product> _products = new();
     private List<Product> _filtered = new();
     private List<TaxRate> _taxes = new();
+    // Same as _taxes but with the (possibly soft-deleted) tax that the
+    // currently-edited product references, marked inactive. Lets MudSelect
+    // render the existing selection instead of a silent blank.
+    private List<TaxRate> _taxesForDropdown = new();
     private ProductVm _form = new();
+    private ProductVm? _formOriginal;   // Cancel-revert snapshot (X3 / P7)
     private Product? _editing;
     private bool _isNew = true;
     private bool _attempted;
     private bool _saving;
     private bool _loading = true;
+    private string? _loadError;
     private string _search = "";
 
     private string? BlockingReason
@@ -244,9 +262,14 @@
 
     private bool IsValid =>
         !string.IsNullOrWhiteSpace(_form.Name) &&
+        _form.Name.Length <= 200 &&
         _form.TaxRateId is not null &&
         _form.Mrp is > 0 &&
         SalePriceValid &&
+        // P19: server-side negative-paste guard (UI Min=0 is JS-only).
+        (_form.Cost is null or >= 0m) &&
+        (_form.StockQty is null or >= 0m) &&
+        (_form.ReorderLevel is null or >= 0m) &&
         IndianFormats.IsHsn(_form.HsnCode);
 
     protected override async Task OnInitializedAsync()
@@ -258,6 +281,7 @@
     private async Task LoadAsync()
     {
         _loading = true;
+        _loadError = null;
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
@@ -266,16 +290,43 @@
             // (IsDefault) and sort the decimal Rate client-side.
             var taxRows = await db.TaxRates.AsNoTracking().Where(t => t.IsActive).ToListAsync();
             _taxes = taxRows.OrderByDescending(t => t.IsDefault).ThenBy(t => t.Rate).ToList();
+            _taxesForDropdown = _taxes.ToList();
             ApplyFilter();
 
             // Default the form's tax rate to the configured default if available.
             if (_form.TaxRateId is null)
                 _form.TaxRateId = _taxes.FirstOrDefault(t => t.IsDefault)?.Id ?? _taxes.FirstOrDefault()?.Id;
         }
+        catch (Exception ex)
+        {
+            // P9: don't crash the WebView on a DB load error.
+            Logger.LogError(ex, "Failed to load products");
+            _loadError = ex.Message;
+        }
         finally
         {
             _loading = false;
         }
+    }
+
+    private Task ReloadAsync() => LoadAsync();
+
+    // P2 / P20: when the user opens a product whose TaxRateId points to a
+    // soft-deleted tax, that tax isn't in `_taxes` (which is filtered to
+    // IsActive=true). Without it in the dropdown's option list, MudSelect
+    // can't render the selected label, so the field looks blank.
+    // Inject the orphan as an inactive entry with a "(deleted)" suffix.
+    private async Task EnsureSelectedTaxVisibleAsync(int? taxId)
+    {
+        if (taxId is null) return;
+        if (_taxes.Any(t => t.Id == taxId)) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var orphan = await db.TaxRates.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == taxId);
+        if (orphan is null) return;
+
+        _taxesForDropdown = _taxes.Concat(new[] { orphan }).ToList();
     }
 
     private void OnSearchChanged(string s)
@@ -296,7 +347,9 @@
             Match(p.Name, q) ||
             Match(p.Sku, q) ||
             Match(p.Barcode, q) ||
-            Match(p.Category, q)
+            Match(p.Category, q) ||
+            Match(p.HsnCode, q) ||
+            Match(p.Notes, q)
         ).ToList();
     }
 
@@ -310,26 +363,39 @@
             IsActive = true,
             TaxRateId = _taxes.FirstOrDefault(t => t.IsDefault)?.Id ?? _taxes.FirstOrDefault()?.Id,
         };
+        _formOriginal = null;
         _editing = null;
         _isNew = true;
         _attempted = false;
     }
 
-    private void SelectExisting(Product p)
+    private async Task SelectExisting(Product p)
     {
         _editing = p;
         _form = ProductVm.From(p);
+        _formOriginal = ProductVm.From(p);   // X3 / P7: snapshot for Cancel-revert
         _isNew = false;
         _attempted = false;
+        await EnsureSelectedTaxVisibleAsync(_form.TaxRateId);
     }
 
-    private void OnRowKey(KeyboardEventArgs e, Product p)
+    private async Task OnRowKey(KeyboardEventArgs e, Product p)
     {
-        if (e.Key is "Enter" or " ") SelectExisting(p);
+        if (e.Key is "Enter" or " ") await SelectExisting(p);
     }
 
     private async Task ResetWithConfirm()
     {
+        // X3 / P7: when editing an existing row, Cancel reverts to the loaded
+        // values instead of wiping the form. For new rows, Cancel still clears.
+        if (_formOriginal is not null && !_isNew)
+        {
+            _form = _formOriginal;
+            _formOriginal = ProductVm.From(_editing!);   // re-snapshot for next Cancel
+            _attempted = false;
+            return;
+        }
+
         if (HasUnsavedContent())
         {
             var ok = await Confirm("Discard changes?",
@@ -355,17 +421,21 @@
     {
         if (_taxes.Count == 0) return;
         var defaultTaxId = _taxes.FirstOrDefault(t => t.IsDefault)?.Id ?? _taxes[0].Id;
-        var n = _products.Count + 1;
         var suffix = Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
 
         _saving = true;
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
+
+            // P14: avoid name-collisions when sample is clicked rapidly. Compute
+            // a name based on the GUID suffix instead of `_products.Count + 1`,
+            // which used a stale local count and could collide on race.
+            var name = $"Sample product {suffix}";
             var p = new Product
             {
-                Name = $"Sample product {n}",
-                Sku = $"SAMPLE-{n:D3}-{suffix}",
+                Name = name,
+                Sku = $"SAMPLE-{suffix}",
                 Mrp = 100m,
                 SalePrice = 100m,
                 Cost = 60m,
@@ -378,11 +448,16 @@
             db.Products.Add(p);
             await db.SaveChangesAsync();
             await LoadAsync();
-            ShowOk($"Added {p.Name}.");
+
+            // P22: a sample insert shouldn't leave whatever the user was editing
+            // half-typed in the form — clear it so they aren't confused.
+            StartNew();
+            Snackbar.ShowOk($"Added {p.Name}.");
         }
         catch (Exception ex)
         {
-            ShowError($"Could not add: {ex.Message}");
+            Logger.LogError(ex, "Failed to add sample product");
+            Snackbar.ShowError($"Could not add: {ex.Message}");
         }
         finally
         {
@@ -393,28 +468,71 @@
     private async Task Save()
     {
         _attempted = true;
-        if (!IsValid) return;
+        if (!IsValid)
+        {
+            Snackbar.ShowWarning(FirstInvalidReason());
+            return;
+        }
 
         _form.Name = _form.Name.Trim();
-        _form.Sku = string.IsNullOrWhiteSpace(_form.Sku)
-            ? $"SKU-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}"
-            : _form.Sku.Trim().ToUpperInvariant();
+
+        // P1 / P12: SKU rules differ between new and edit.
+        //   - New row + blank: auto-generate.
+        //   - Edit + blank: preserve the previously-saved SKU (don't silently
+        //     replace with a new auto-generated one — barcodes already printed
+        //     would no longer scan).
+        //   - Otherwise: trim, uppercase, and reject anything outside [A-Z0-9-_].
+        if (string.IsNullOrWhiteSpace(_form.Sku))
+        {
+            if (_isNew || _formOriginal is null)
+            {
+                _form.Sku = $"SKU-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+            }
+            else
+            {
+                _form.Sku = _formOriginal.Sku;   // P1: preserve on edit
+            }
+        }
+        else
+        {
+            var sku = _form.Sku.Trim().ToUpperInvariant();
+            // P6 / P17: clamp SKU to [A-Z0-9-_]. Anything else (spaces, slashes,
+            // punctuation) breaks barcode/label pipelines downstream.
+            if (!System.Text.RegularExpressions.Regex.IsMatch(sku, @"^[A-Z0-9_-]+$"))
+            {
+                Snackbar.ShowError("SKU may only contain letters, digits, hyphen, and underscore.");
+                return;
+            }
+            _form.Sku = sku;
+        }
+
         _form.Barcode = string.IsNullOrWhiteSpace(_form.Barcode) ? null : _form.Barcode.Trim();
         _form.Category = string.IsNullOrWhiteSpace(_form.Category) ? null : _form.Category.Trim();
         _form.HsnCode = string.IsNullOrWhiteSpace(_form.HsnCode) ? null : _form.HsnCode.Trim();
+        _form.Notes = string.IsNullOrWhiteSpace(_form.Notes) ? null : _form.Notes.Trim();
 
         _saving = true;
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
 
-            // Friendly pre-check on SKU uniqueness.
+            // P3: validate the chosen TaxRateId still exists and is active —
+            // otherwise EF will surface an FK violation as a generic save error.
+            if (_form.TaxRateId is int tid &&
+                !await db.TaxRates.AnyAsync(t => t.Id == tid && t.IsActive))
+            {
+                Snackbar.ShowError("The selected tax rate has been deleted. Pick another.");
+                return;
+            }
+
+            // Friendly pre-check on SKU uniqueness against active rows only
+            // (the unique index is now filtered to IsActive=1).
             var skuTaken = await db.Products
-                .Where(p => p.Sku == _form.Sku && p.Id != _form.Id)
+                .Where(p => p.IsActive && p.Sku == _form.Sku && p.Id != _form.Id)
                 .AnyAsync();
             if (skuTaken)
             {
-                Snackbar.Add($"SKU '{_form.Sku}' is already in use.", Severity.Error);
+                Snackbar.ShowError($"SKU '{_form.Sku}' is already in use.");
                 return;
             }
 
@@ -445,22 +563,44 @@
 
             await LoadAsync();
             var saved = _products.FirstOrDefault(p => p.Id == newId);
-            if (saved is not null) SelectExisting(saved);
+            if (saved is not null) await SelectExisting(saved);
             else StartNew();
-            ShowOk("Product saved.");
+            _attempted = false;
+            Snackbar.ShowOk("Product saved.");
         }
         catch (DbUpdateException ex) when (ex.InnerException?.Message?.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) == true)
         {
-            Snackbar.Add("That SKU is already in use.", Severity.Error);
+            Snackbar.ShowError("That SKU is already in use.");
+        }
+        catch (DbUpdateException ex)
+        {
+            Logger.LogError(ex, "Failed to save product (DB)");
+            Snackbar.ShowError($"Could not save: {ex.InnerException?.Message ?? ex.Message}");
         }
         catch (Exception ex)
         {
-            ShowError($"Could not save: {ex.Message}");
+            Logger.LogError(ex, "Failed to save product");
+            Snackbar.ShowError($"Could not save: {ex.Message}");
         }
         finally
         {
             _saving = false;
         }
+    }
+
+    // Walk validators in priority order to surface the most actionable reason.
+    private string FirstInvalidReason()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Name)) return "Product name is required.";
+        if (_form.Name.Length > 200) return "Product name is too long (200 chars max).";
+        if (_form.TaxRateId is null) return "Pick a tax rate.";
+        if (!(_form.Mrp is > 0)) return "MRP must be greater than 0.";
+        if (!SalePriceValid) return SalePriceError;
+        if (_form.Cost is < 0) return "Cost cannot be negative.";
+        if (_form.StockQty is < 0) return "Stock cannot be negative.";
+        if (_form.ReorderLevel is < 0) return "Reorder level cannot be negative.";
+        if (!IndianFormats.IsHsn(_form.HsnCode)) return "HSN must be 2–8 digits.";
+        return "Form has errors — fix the highlighted fields.";
     }
 
     private async Task DeleteCurrent()
@@ -482,11 +622,12 @@
             }
             await LoadAsync();
             StartNew();
-            ShowOk("Product removed.");
+            Snackbar.ShowOk("Product removed.");
         }
         catch (Exception ex)
         {
-            ShowError($"Could not delete: {ex.Message}");
+            Logger.LogError(ex, "Failed to delete product");
+            Snackbar.ShowError($"Could not delete: {ex.Message}");
         }
     }
 
@@ -495,12 +636,6 @@
         var result = await DialogService.ShowMessageBoxAsync(title, body, yesText: yes, cancelText: "Cancel");
         return result == true;
     }
-
-    private void ShowOk(string m) =>
-        Snackbar.Add(m, Severity.Success, c => c.VisibleStateDuration = 3000);
-
-    private void ShowError(string m) =>
-        Snackbar.Add(m, Severity.Error, c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 8000; });
 
     private void GoNext() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Vendor));
 

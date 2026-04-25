@@ -1,11 +1,14 @@
 @page "/onboarding/tax"
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Logging
+@using StoreAssistantProfessional.Components.Shared
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject ISetupService Setup
 @inject IOnboardingService Onboarding
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject ILogger<TaxRatesPage> Logger
 
 <PageTitle>Taxes — Setup</PageTitle>
 
@@ -50,6 +53,13 @@
                             <MudStack AlignItems="AlignItems.Center" Class="pa-4">
                                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
                             </MudStack>
+                        }
+                        else if (_loadError is not null)
+                        {
+                            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                                Could not load tax rates. @_loadError
+                                <MudButton Class="ml-2" Size="Size.Small" Variant="Variant.Text" OnClick="ReloadAsync">Retry</MudButton>
+                            </MudAlert>
                         }
                         else if (_taxes.Count == 0)
                         {
@@ -120,13 +130,15 @@
 
                             <MudItem xs="6" md="3">
                                 <MudNumericField T="decimal?" @bind-Value="_form.RateNullable"
-                                                 Label="Rate (%) *" Variant="Variant.Outlined" Min="0" Max="50"
+                                                 Label="Rate (%) *" Variant="Variant.Outlined"
+                                                 Min="0" Max="50" Step="0.25m"
                                                  Error="@(_attempted && !RateValid)"
                                                  ErrorText="@RateError" />
                             </MudItem>
                             <MudItem xs="6" md="3">
                                 <MudNumericField T="decimal?" @bind-Value="_form.CessRateNullable"
-                                                 Label="Cess (%)" Variant="Variant.Outlined" Min="0" Max="100"
+                                                 Label="Cess (%)" Variant="Variant.Outlined"
+                                                 Min="0" Max="100" Step="0.25m"
                                                  Error="@(_attempted && !CessConsistent)"
                                                  ErrorText="Cess rate and Cess type must be set together." />
                             </MudItem>
@@ -139,9 +151,12 @@
                                 </MudSelect>
                             </MudItem>
                             <MudItem xs="12" md="3">
-                                <MudCheckBox T="bool" @bind-Value="_form.IsTaxInclusive" Color="Color.Primary">
-                                    Tax inclusive
-                                </MudCheckBox>
+                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudCheckBox T="bool" @bind-Value="_form.IsTaxInclusive" Color="Color.Primary">
+                                        Tax inclusive
+                                    </MudCheckBox>
+                                    <HelpHint Text="When ticked, the unit price you enter on a bill already includes this tax. The bill's tax line is computed by extracting the tax from that price instead of adding tax on top." />
+                                </MudStack>
                             </MudItem>
 
                             <MudItem xs="12">
@@ -158,9 +173,17 @@
                             <MudItem xs="12" md="4">
                                 <MudTextField @bind-Value="_form.HsnCode"
                                               Label="HSN code" Variant="Variant.Outlined" MaxLength="8" Immediate="true"
-                                              Error="@(!IndianFormats.IsHsn(_form.HsnCode))"
+                                              Error="@(_attempted && !IndianFormats.IsHsn(_form.HsnCode))"
                                               ErrorText="2–8 digits." />
                             </MudItem>
+                            @if (SlabIsDegenerate)
+                            {
+                                <MudItem xs="12">
+                                    <MudText Typo="Typo.caption" Color="Color.Warning">
+                                        Min=0 with blank Max isn't a slab — leave both blank if this rate covers all prices.
+                                    </MudText>
+                                </MudItem>
+                            }
 
                             <MudItem xs="12">
                                 <MudSelect T="string" @bind-Value="_form.TaxCategory" Label="Tax category" Variant="Variant.Outlined">
@@ -220,11 +243,15 @@
 @code {
     private List<TaxRate> _taxes = new();
     private TaxVm _form = new();
+    // Snapshot of the form at edit-start, so Cancel reverts changes to the
+    // currently-edited row instead of discarding the row entirely (X3 / T14).
+    private TaxVm? _formOriginal;
     private TaxRate? _editing;
     private bool _isNew = true;
     private bool _attempted;
     private bool _saving;
     private bool _loading = true;
+    private string? _loadError;
 
     private record QuickAddPreset(string Label, string Name, decimal Rate, string Category);
 
@@ -256,6 +283,12 @@
     private bool SlabOrderValid =>
         !_form.MinPrice.HasValue || !_form.MaxPrice.HasValue || _form.MaxPrice > _form.MinPrice;
 
+    // T11 / T19: Min=0 with blank Max means "all prices" — that's the absence
+    // of a slab, not a slab. If the user intended "no slab", they should leave
+    // both blank; "0..∞" is a configuration mistake we surface explicitly.
+    private bool SlabIsDegenerate =>
+        _form.MinPrice is 0m && _form.MaxPrice is null;
+
     private string RateError =>
         _form.TaxCategory == "Taxable" && _form.Rate == 0
             ? "Taxable rate must be greater than 0%."
@@ -265,9 +298,13 @@
 
     private bool IsValid =>
         !string.IsNullOrWhiteSpace(_form.Name) &&
+        _form.Name.Length <= 100 &&
         RateValid &&
         CessConsistent &&
+        // T5 / T17: server-side cess upper-clamp — paste of 200 bypasses MudNumericField.
+        _form.CessRate is >= 0m and <= 100m &&
         SlabOrderValid &&
+        !SlabIsDegenerate &&
         IndianFormats.IsHsn(_form.HsnCode);
 
     protected override async Task OnInitializedAsync()
@@ -279,6 +316,7 @@
     private async Task LoadAsync()
     {
         _loading = true;
+        _loadError = null;
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
@@ -289,15 +327,25 @@
                 .OrderBy(t => t.SortOrder).ToListAsync();
             _taxes = rows.OrderBy(t => t.SortOrder).ThenBy(t => t.Rate).ToList();
         }
+        catch (Exception ex)
+        {
+            // T7: don't let a DB load error crash the WebView. Surface it inline
+            // and keep the page renderable so the user can retry.
+            Logger.LogError(ex, "Failed to load tax rates");
+            _loadError = ex.Message;
+        }
         finally
         {
             _loading = false;
         }
     }
 
+    private Task ReloadAsync() => LoadAsync();
+
     private void StartNew()
     {
         _form = new TaxVm { TaxCategory = "Taxable", IsActive = true };
+        _formOriginal = null;   // new row has no "original" to revert to
         _editing = null;
         _isNew = true;
         _attempted = false;
@@ -307,6 +355,7 @@
     {
         _editing = t;
         _form = TaxVm.From(t);
+        _formOriginal = TaxVm.From(t);   // pristine snapshot for Cancel-revert
         _isNew = false;
         _attempted = false;
     }
@@ -335,7 +384,22 @@
         await Save();
     }
 
-    private void Reset() => StartNew();
+    private void Reset()
+    {
+        // X3 / T14: Cancel reverts an in-progress edit to the original row data
+        // instead of discarding the row entirely. For a new (unsaved) row,
+        // there's nothing to revert to, so we fall back to a fresh form.
+        if (_formOriginal is not null && !_isNew)
+        {
+            _form = _formOriginal;
+            _formOriginal = TaxVm.From(_editing!);   // re-snapshot for next Cancel
+            _attempted = false;
+        }
+        else
+        {
+            StartNew();
+        }
+    }
 
     private async Task OnEnter(KeyboardEventArgs e)
     {
@@ -348,8 +412,9 @@
         _attempted = true;
         if (!IsValid)
         {
-            if (string.IsNullOrWhiteSpace(_form.Name))
-                Snackbar.Add("Tax rate name is required.", Severity.Warning);
+            // T2: don't fail silently when invalid — surface the first issue
+            // so the user knows what's blocking the save.
+            Snackbar.ShowWarning(FirstInvalidReason());
             return;
         }
 
@@ -361,14 +426,16 @@
         {
             await using var db = await DbFactory.CreateDbContextAsync();
 
-            // Pre-check name uniqueness (active rows only) so we get a friendly
-            // error before SQLite's UNIQUE constraint speaks up.
+            // T1: case-insensitive uniqueness pre-check. The DB column has
+            // NOCASE collation so `==` is case-insensitive on a fresh DB; on
+            // older DBs we add an explicit ToLower comparison for safety.
+            var formNameLower = _form.Name.ToLowerInvariant();
             var nameTaken = await db.TaxRates
-                .Where(t => t.IsActive && t.Id != _form.Id && t.Name == _form.Name)
-                .AnyAsync();
+                .Where(t => t.IsActive && t.Id != _form.Id)
+                .AnyAsync(t => t.Name.ToLower() == formNameLower);
             if (nameTaken)
             {
-                Snackbar.Add("A tax rate with that name already exists.", Severity.Error);
+                Snackbar.ShowError("A tax rate with that name already exists.");
                 return;
             }
 
@@ -407,15 +474,22 @@
             var saved = _taxes.FirstOrDefault(t => t.Id == newId);
             if (saved is not null) SelectExisting(saved);
             else StartNew();
-            ShowOk("Tax rate saved.");
+            _attempted = false;   // X2: clear sticky errors after a clean save
+            Snackbar.ShowOk("Tax rate saved.");
         }
         catch (DbUpdateException ex) when (ex.InnerException?.Message?.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) == true)
         {
-            Snackbar.Add("A tax rate with that name already exists.", Severity.Error);
+            Snackbar.ShowError("A tax rate with that name already exists.");
+        }
+        catch (DbUpdateException ex)
+        {
+            Logger.LogError(ex, "Failed to save tax rate (DB)");
+            Snackbar.ShowError($"Could not save: {ex.InnerException?.Message ?? ex.Message}");
         }
         catch (Exception ex)
         {
-            ShowError($"Could not save: {ex.Message}");
+            Logger.LogError(ex, "Failed to save tax rate");
+            Snackbar.ShowError($"Could not save: {ex.Message}");
         }
         finally
         {
@@ -423,30 +497,79 @@
         }
     }
 
+    // T2: walk validators in priority order to surface the most actionable
+    // reason in the snackbar. Mirrors BlockingReason but per-form-row.
+    private string FirstInvalidReason()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Name)) return "Tax rate name is required.";
+        if (_form.Name.Length > 100) return "Tax rate name is too long (100 chars max).";
+        if (!RateValid) return RateError;
+        if (!CessConsistent) return "Cess rate and Cess type must be set together.";
+        if (_form.CessRate is < 0m or > 100m) return "Cess rate must be 0–100%.";
+        if (!SlabOrderValid) return "Slab Max must be greater than Min.";
+        if (SlabIsDegenerate) return "Min=0 with blank Max isn't a slab — leave both blank for any-price.";
+        if (!IndianFormats.IsHsn(_form.HsnCode)) return "HSN must be 2–8 digits.";
+        return "Form has errors — fix the highlighted fields.";
+    }
+
     private async Task DeleteCurrent()
     {
         if (_editing is null) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // T3: refuse to delete a tax rate that active products point to —
+        // those products would end up with a dangling TaxRateId that the
+        // dropdown can't render. Tell the user how many products are affected
+        // so they can reassign before retrying.
+        var inUseCount = await db.Products.AsNoTracking()
+            .CountAsync(p => p.IsActive && p.TaxRateId == _editing.Id);
+        if (inUseCount > 0)
+        {
+            Snackbar.ShowWarning(
+                $"\"{_editing.Name}\" is used by {inUseCount} product{(inUseCount == 1 ? "" : "s")}. " +
+                "Reassign them first, then delete.");
+            return;
+        }
+
         var ok = await Confirm($"Delete tax rate \"{_editing.Name}\"?",
             "It will be soft-deleted and won't appear in lists.", "Delete");
         if (!ok) return;
 
         try
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
             var existing = await db.TaxRates.FirstOrDefaultAsync(t => t.Id == _editing.Id);
-            if (existing is not null)
+            if (existing is null) { await LoadAsync(); StartNew(); return; }
+
+            var wasDefault = existing.IsDefault;
+            existing.IsActive = false;
+            existing.IsDefault = false;
+
+            // T4: if we just removed the default, auto-promote another active
+            // tax rate so downstream forms (e.g. Products) keep getting a
+            // sensible default value. Pick the lowest-rate Taxable row.
+            if (wasDefault)
             {
-                existing.IsActive = false;
-                existing.IsDefault = false;
-                await db.SaveChangesAsync();
+                var others = await db.TaxRates
+                    .Where(t => t.IsActive && t.Id != existing.Id).ToListAsync();
+                var promote = others
+                    .OrderBy(t => t.TaxCategory == "Taxable" ? 0 : 1)
+                    .ThenBy(t => t.Rate)
+                    .FirstOrDefault();
+                if (promote is not null) promote.IsDefault = true;
             }
+
+            await db.SaveChangesAsync();
             await LoadAsync();
             StartNew();
-            ShowOk("Tax rate removed.");
+            Snackbar.ShowOk(wasDefault
+                ? "Tax rate removed and default re-assigned."
+                : "Tax rate removed.");
         }
         catch (Exception ex)
         {
-            ShowError($"Could not delete: {ex.Message}");
+            Logger.LogError(ex, "Failed to delete tax rate");
+            Snackbar.ShowError($"Could not delete: {ex.Message}");
         }
     }
 
@@ -455,12 +578,6 @@
         var result = await DialogService.ShowMessageBoxAsync(title, body, yesText: yes, cancelText: "Cancel");
         return result == true;
     }
-
-    private void ShowOk(string m) =>
-        Snackbar.Add(m, Severity.Success, c => c.VisibleStateDuration = 3000);
-
-    private void ShowError(string m) =>
-        Snackbar.Add(m, Severity.Error, c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 8000; });
 
     private void GoNext() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Products));
 

@@ -1,0 +1,98 @@
+@page "/onboarding/done"
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISetupService Setup
+@inject NavigationManager Nav
+
+@*
+   X12 / R2: Onboarding completion screen — shown once after Vendor → Finish.
+   Confirms the four counts so the user has a moment of "yes, that's mine"
+   before being dropped onto Billing. Without this the four-step flow ends
+   with a silent redirect, which feels abrupt.
+*@
+
+<PageTitle>You're set — Setup</PageTitle>
+
+<div class="sap-step-root is-no-hero">
+    <h1 class="sap-visually-hidden">Setup complete</h1>
+    <div class="sap-step-form-col">
+        <MudContainer MaxWidth="MaxWidth.Small" Class="sap-step-form">
+            <MudStack Spacing="4" AlignItems="AlignItems.Center" Class="pa-8">
+                <MudIcon Icon="@Icons.Material.Rounded.CheckCircle"
+                         Color="Color.Success"
+                         Style="font-size: 96px;" />
+
+                <MudText Typo="Typo.h4" Align="Align.Center" Class="sap-firm-plate-name">
+                    @(_firmName ?? "You're set.")
+                </MudText>
+
+                <MudText Typo="Typo.body1" Align="Align.Center" Color="Color.Secondary">
+                    Your setup is complete. Here's what's on the books:
+                </MudText>
+
+                <MudPaper Elevation="1" Class="pa-4 sap-step-card" Style="width: 100%;">
+                    <MudGrid Spacing="2">
+                        <MudItem xs="6">
+                            <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.h5" Class="sap-amount">@_taxCount</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">tax rates</MudText>
+                            </MudStack>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.h5" Class="sap-amount">@_productCount</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">products</MudText>
+                            </MudStack>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.h5" Class="sap-amount">@_vendorCount</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">vendors</MudText>
+                            </MudStack>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.h5" Class="sap-amount">@(Setup.Current?.FirmName?.Length is null or 0 ? "—" : "✓")</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">firm</MudText>
+                            </MudStack>
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">
+                    You can revise any of these later from Settings.
+                </MudText>
+
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo("/onboarding/firm"))">
+                        Review firm
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Size="Size.Large"
+                               OnClick="@(() => Nav.NavigateTo("/", replace: true))">
+                        Open the till ›
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        </MudContainer>
+    </div>
+</div>
+
+@code {
+    private string? _firmName;
+    private int _taxCount;
+    private int _productCount;
+    private int _vendorCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Setup.IsComplete) { Nav.NavigateTo("/setup", replace: true); return; }
+        _firmName = Setup.Current?.FirmName;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _taxCount = await db.TaxRates.CountAsync(t => t.IsActive);
+        _productCount = await db.Products.CountAsync(p => p.IsActive);
+        _vendorCount = await db.Vendors.CountAsync(v => v.IsActive);
+    }
+}

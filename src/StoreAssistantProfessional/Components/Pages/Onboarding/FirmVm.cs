@@ -174,18 +174,41 @@ internal sealed class FirmVm
 
     public bool IsValid =>
         !string.IsNullOrWhiteSpace(Name) &&
+        Name.Length <= 200 &&
         IndianFormats.IsGstin(Gstin) &&
         IndianFormats.IsPan(Pan) &&
         IsStateCodeShapeValid &&
         IsPanGstinConsistent &&
+        // F2: composition firms must have a GSTIN — they issue Bills of Supply
+        // with a GSTIN reference, so save is blocked when the box is ticked
+        // and the field is blank. (Cosmetic warning was already shown.)
+        !CompositionWithoutGstin &&
         IndianFormats.IsIndianPhone(Phone) &&
         IndianFormats.IsIndianPhone(AltPhone) &&
         IndianFormats.IsEmail(Email) &&
         IndianFormats.IsPincode(Pincode) &&
         IndianFormats.IsIfsc(IfscCode) &&
+        IsBankInfoConsistent &&
         IsInvoicePrefixValid &&
         AllowedPaddings.Contains(InvoiceNumberPadding) &&
         AllowedDateFormats.Contains(DateFormat);
+
+    // F8 / F23: receipts pull bank info as a unit. If any of the four primary
+    // fields is set, all four must be set — receipts with half-typed bank
+    // details look broken. Empty-all is fine (bank info is optional overall).
+    public bool IsBankInfoConsistent
+    {
+        get
+        {
+            var any = !string.IsNullOrWhiteSpace(BankName)
+                   || !string.IsNullOrWhiteSpace(AccountHolderName)
+                   || !string.IsNullOrWhiteSpace(AccountNumber)
+                   || !string.IsNullOrWhiteSpace(IfscCode);
+            if (!any) return true;
+            return !string.IsNullOrWhiteSpace(AccountNumber)
+                && !string.IsNullOrWhiteSpace(IfscCode);
+        }
+    }
 
     public bool IsStateCodeShapeValid =>
         string.IsNullOrWhiteSpace(StateCode) ||

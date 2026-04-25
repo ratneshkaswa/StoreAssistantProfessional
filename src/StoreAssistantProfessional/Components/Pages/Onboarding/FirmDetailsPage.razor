@@ -1,11 +1,13 @@
 @page "/onboarding/firm"
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.Logging
+@using StoreAssistantProfessional.Components.Shared
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject ISetupService Setup
 @inject IOnboardingService Onboarding
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @inject ILogger<FirmDetailsPage> Logger
 
 <PageTitle>Firm details — Setup</PageTitle>
@@ -344,7 +346,14 @@
                 </MudItem>
             </MudGrid>
 
-            <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd" Class="mt-3">
+            <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd" AlignItems="AlignItems.Center" Class="mt-3">
+                @if (LastSavedLabel is not null)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-auto">
+                        <MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Color="Color.Success" Size="Size.Small" Class="mr-1" />
+                        @LastSavedLabel
+                    </MudText>
+                }
                 <MudButton OnClick="SaveAsync"
                            Variant="Variant.Outlined"
                            Color="Color.Primary"
@@ -395,6 +404,10 @@
     private bool _isRenamingFirm;
     private string? _firmNameOriginal;
     private MudTextField<string>? _nameField;
+    private DateTime? _lastSavedAt;
+    // Snapshot of FY day/month at load — used to detect a change post-bills.
+    private int _loadedFyStartDay;
+    private int _loadedFyStartMonth;
 
     private string HeroHeading =>
         string.IsNullOrWhiteSpace(_firm.Name)
@@ -432,8 +445,28 @@
         {
             var prefix = string.IsNullOrWhiteSpace(_firm.InvoicePrefix) ? "INV" : _firm.InvoicePrefix.Trim().ToUpperInvariant();
             var pad = FirmVm.AllowedPaddings.Contains(_firm.InvoiceNumberPadding) ? _firm.InvoiceNumberPadding : "0000";
-            var n = _firm.InvoiceStartNumber <= 0 ? 1 : _firm.InvoiceStartNumber;
+            // F17: when bills exist, the next bill won't use Start # — it uses
+            // NextInvoiceNumber. Show that so the example reflects reality.
+            var n = _locked
+                ? Math.Max(_firm.NextInvoiceNumber, 1)
+                : (_firm.InvoiceStartNumber <= 0 ? 1 : _firm.InvoiceStartNumber);
             return $"{prefix}-{n.ToString(pad)}";
+        }
+    }
+
+    // F21: shown next to the action buttons after a successful save so the
+    // user gets a persistent acknowledgement, not just the snackbar that
+    // dismisses after 3 seconds.
+    private string? LastSavedLabel
+    {
+        get
+        {
+            if (_lastSavedAt is null) return null;
+            var ago = DateTime.UtcNow - _lastSavedAt.Value;
+            if (ago.TotalSeconds < 5) return "Saved just now";
+            if (ago.TotalMinutes < 1) return $"Saved {(int)ago.TotalSeconds}s ago";
+            if (ago.TotalMinutes < 60) return $"Saved {(int)ago.TotalMinutes}m ago";
+            return $"Saved at {_lastSavedAt.Value.ToLocalTime():HH:mm}";
         }
     }
 
@@ -470,26 +503,49 @@
         }
     }
 
-    // Used by the OnboardingShell's blocker line. First-priority issue wins —
-    // a one-liner the user can act on without scrolling to find the field.
+    // F4: live readiness check. First failing predicate wins; we walk through
+    // them in priority order so the user gets the most actionable next-step
+    // message at the top. Drops the old "click Save" placeholder text once
+    // every field is valid, so the user gets the green "Ready to continue."
+    // line as soon as they've finished typing instead of after a save.
     private string? BlockingReason
     {
         get
         {
             if (_loading) return null;
-            if (!_attempted && !_savedAtLeastOnce) return "Fill firm details and click Save changes (or Continue) to proceed.";
             if (string.IsNullOrWhiteSpace(_firm.Name)) return "Firm name is required.";
-            if (!_firm.IsPanGstinConsistent) return "PAN must match GSTIN positions 3–12.";
             if (!IndianFormats.IsGstin(_firm.Gstin)) return "GSTIN format is invalid.";
             if (!IndianFormats.IsPan(_firm.Pan)) return "PAN format is invalid.";
+            if (!_firm.IsPanGstinConsistent) return "PAN must match GSTIN positions 3–12.";
+            if (_firm.IsCompositionScheme && string.IsNullOrWhiteSpace(_firm.Gstin))
+                return "Composition scheme requires a GSTIN.";
             if (!IndianFormats.IsIndianPhone(_firm.Phone) || !IndianFormats.IsIndianPhone(_firm.AltPhone))
                 return "Phone format is invalid.";
             if (!IndianFormats.IsEmail(_firm.Email)) return "Email format is invalid.";
             if (!IndianFormats.IsPincode(_firm.Pincode)) return "Pincode is invalid.";
             if (!IndianFormats.IsIfsc(_firm.IfscCode)) return "IFSC format is invalid.";
+            if (BankInfoIncomplete) return "Bank: enter Account number and IFSC together (or leave both blank).";
             if (!_firm.IsInvoicePrefixValid) return InvoicePrefixError;
             if (!_savedAtLeastOnce) return "Click Save changes or Continue to apply.";
             return null;
+        }
+    }
+
+    // F8 / F23: bank fields are individually optional, but the *combination*
+    // matters for receipts. If the user filled in any of the four primary
+    // bank fields they should fill all four — half-typed bank info prints
+    // garbage on the receipt.
+    private bool BankInfoIncomplete
+    {
+        get
+        {
+            var any = !string.IsNullOrWhiteSpace(_firm.BankName)
+                   || !string.IsNullOrWhiteSpace(_firm.AccountHolderName)
+                   || !string.IsNullOrWhiteSpace(_firm.AccountNumber)
+                   || !string.IsNullOrWhiteSpace(_firm.IfscCode);
+            if (!any) return false;
+            return string.IsNullOrWhiteSpace(_firm.AccountNumber)
+                || string.IsNullOrWhiteSpace(_firm.IfscCode);
         }
     }
 
@@ -530,7 +586,13 @@
                 _firm.Name = Setup.Current.FirmName;
             }
             _firmNameOriginal = _firm.Name;
+            _loadedFyStartDay = _firm.FyStartDay;
+            _loadedFyStartMonth = _firm.FyStartMonth;
             _locked = await db.Bills.AsNoTracking().AnyAsync();
+            // X11: re-normalize on load so legacy data with mixed case / untrimmed
+            // strings shows the user the canonical form. They get the chance to
+            // see what will be persisted before they save.
+            _firm.Normalize();
         }
         catch (Exception ex)
         {
@@ -572,7 +634,7 @@
 
     private void OnGstinChanged(string? v)
     {
-        // Live-uppercase so the user sees what will be saved (#11). Caret is
+        // Live-uppercase so the user sees what will be saved. Caret is
         // preserved by MudBlazor when the new value is the same length.
         _firm.Gstin = string.IsNullOrEmpty(v) ? v : v.ToUpperInvariant();
 
@@ -588,6 +650,24 @@
             // hold onto stale values the user can't see came from GSTIN.
             _firm.StateCode = null;
             _firm.StateName = null;
+        }
+        // F10: only clear stale state when the user has typed 2+ chars (i.e.
+        // they're far enough into the GSTIN that the leading two chars are
+        // committed) but those chars don't form a known state code. A user
+        // who typed a single char gets the benefit of the doubt.
+        else if ((_firm.Gstin?.Length ?? 0) >= 2)
+        {
+            _firm.StateCode = null;
+            _firm.StateName = null;
+        }
+
+        // F1 / F22: GSTIN encodes PAN at positions 3-12. Auto-fill PAN when
+        // the user has typed a valid GSTIN and PAN is blank, so the user
+        // doesn't have to retype the same 10 chars in two fields.
+        var derivedPan = IndianFormats.PanFromGstin(_firm.Gstin);
+        if (derivedPan is not null && string.IsNullOrWhiteSpace(_firm.Pan))
+        {
+            _firm.Pan = derivedPan;
         }
     }
 
@@ -622,14 +702,23 @@
 
     private async Task OnPageKeyDown(KeyboardEventArgs e)
     {
-        // Ctrl+S to save, Ctrl+Enter to save & continue.
+        // Ctrl+S to save, Ctrl+Enter to save & continue. We surface a snackbar
+        // explaining why the shortcut bounced when the form is invalid — the
+        // disabled button has a tooltip but the keyboard user never sees it.
+        // F5 note: we don't preventDefault here because Blazor's @onkeydown
+        // doesn't expose preventDefault; the BlazorWebView in WPF doesn't
+        // forward Ctrl+S to the host (no Save-Page-As dialog), so this is OK.
         if (e.CtrlKey && e.Key is "s" or "S")
         {
-            if (!_saving && _firm.IsValid) await SaveAsync();
+            if (_saving) return;
+            if (_firm.IsValid) { await SaveAsync(); return; }
+            Snackbar.ShowWarning(BlockingReason ?? "Form has errors — fix them and try again.");
         }
         else if (e.CtrlKey && e.Key == "Enter")
         {
-            if (!_saving && _firm.IsValid) await SaveAndContinueAsync();
+            if (_saving) return;
+            if (_firm.IsValid) { await SaveAndContinueAsync(); return; }
+            Snackbar.ShowWarning(BlockingReason ?? "Form has errors — fix them and try again.");
         }
     }
 
@@ -641,6 +730,19 @@
     {
         _attempted = true;
         if (!_firm.IsValid) return;
+
+        // F12: FY day/month change after bills exist retroactively reclassifies
+        // every existing bill. Make the user confirm before letting it through.
+        if (_savedAtLeastOnce && _locked &&
+            (_firm.FyStartDay != _loadedFyStartDay || _firm.FyStartMonth != _loadedFyStartMonth))
+        {
+            var confirmed = await DialogService.ShowMessageBoxAsync(
+                "Change financial year?",
+                "Bills have already been issued. Changing the FY start date will reclassify every existing bill into a different financial year for reports. Continue?",
+                yesText: "Change FY",
+                cancelText: "Cancel");
+            if (confirmed != true) return;
+        }
 
         _saving = true;
         _continueAfterSave = continueAfter;
@@ -676,17 +778,36 @@
 
             _savedAtLeastOnce = true;
             _attempted = false;
-            ShowOk("Firm saved.");
+            _lastSavedAt = DateTime.UtcNow;
+            Snackbar.ShowOk("Firm saved.");
 
             if (continueAfter)
             {
                 Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Tax));
             }
         }
+        catch (DbUpdateException ex)
+        {
+            // F11: surface the SQLite-side reason (FK violation, unique constraint,
+            // etc.) instead of the generic "Could not save". Inner message is
+            // user-readable enough for ops debugging without leaking secrets.
+            Logger.LogError(ex, "Failed to save firm (DB)");
+            Snackbar.ShowError($"Could not save: {ex.InnerException?.Message ?? ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Logger.LogError(ex, "Failed to save firm (IO)");
+            Snackbar.ShowError($"Disk error: {ex.Message}");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Logger.LogError(ex, "Failed to save firm (permissions)");
+            Snackbar.ShowError($"Permission denied: {ex.Message}");
+        }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Failed to save firm");
-            ShowError("Could not save firm details. Please try again.");
+            Snackbar.ShowError($"Could not save: {ex.Message}");
         }
         finally
         {
@@ -694,12 +815,6 @@
             _continueAfterSave = false;
         }
     }
-
-    private void ShowOk(string m) =>
-        Snackbar.Add(m, Severity.Success, c => c.VisibleStateDuration = 3000);
-
-    private void ShowError(string m) =>
-        Snackbar.Add(m, Severity.Error, c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 8000; });
 
     private static (string Code, string Name)[] BuildStateOptions()
     {

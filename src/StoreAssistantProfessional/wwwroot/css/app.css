@@ -94,6 +94,10 @@ html, body {
        are used for blocker text/icon so the message is actually readable. */
     --sap-warning-fg: #4A3318;
     --sap-success-fg: #1E3A1C;
+
+    /* Single source of truth for master-detail card heights so the four
+       onboarding steps don't drift apart when fields are added. */
+    --sap-step-card-min-height: 520px;
 }
 
 /* Visually hidden but kept in the accessibility tree (for h1 etc.). */
@@ -430,6 +434,23 @@ html, body {
 }
 .sap-step-slim-row {
     width: 100%;
+}
+
+/* Slim header content: heading on the left, progress on the right at sm+,
+   stacked vertically below sm so the progress strip doesn't crash into
+   the heading on narrow viewports. */
+.sap-step-slim-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+}
+@media (min-width: 600px) {
+    .sap-step-slim-grid {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
 }
 
 /* Unified card style — single primary accent across all sections, replacing

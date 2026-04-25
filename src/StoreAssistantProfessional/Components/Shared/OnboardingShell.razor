@@ -7,19 +7,19 @@
    form on the right with a blocker line at top and the page's content below.
 *@
 <div class="sap-step-root @(HideHero ? "is-no-hero" : WideForm ? "is-wide" : "")">
-    <h1 class="sap-visually-hidden">@HeroHeading — Setting up your shop</h1>
+    <h1 class="sap-visually-hidden">Setting up your shop — step @(((int)Current) + 1) of 4</h1>
     @if (HideHero)
     {
         @* Compact mode — no hero column. The form takes full width with a
            slim top header that still surfaces step / progress / next-hint. *@
         <div class="sap-step-form-col">
-            <MudContainer MaxWidth="MaxWidth.False" Class="sap-step-form" role="form" aria-label="@HeroHeading">
+            <MudContainer MaxWidth="MaxWidth.False" Class="sap-step-form" role="form" aria-label="Setup form">
                 <MudStack Spacing="3">
                     <div class="sap-step-slim">
                         <MudText Typo="Typo.overline" Class="sap-step-slim-overline">
                             STORE ASSISTANT PROFESSIONAL · STEP @(((int)Current) + 1) OF 4
                         </MudText>
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="3" Class="sap-step-slim-row">
+                        <div class="sap-step-slim-grid">
                             <MudStack Spacing="0">
                                 <MudText Typo="Typo.h5" Class="sap-step-slim-heading">@HeroHeading</MudText>
                                 @if (!string.IsNullOrEmpty(NextHint))
@@ -28,9 +28,11 @@
                                 }
                             </MudStack>
                             <OnboardingProgress Current="Current" />
-                        </MudStack>
+                        </div>
                     </div>
 
+                    @if (BlockingReason is not null || !string.IsNullOrEmpty(ReadyMessage))
+                    {
                     <div class="sap-step-blocker">
                         <div role="status" aria-live="polite" aria-atomic="true"
                              class="sap-step-blocker-live @(BlockingReason is null ? "" : "is-warn")">
@@ -52,6 +54,7 @@
                             </div>
                         }
                     </div>
+                    }
 
                     @ChildContent
                 </MudStack>
@@ -98,8 +101,10 @@
         </MudItem>
 
         <MudItem xs="12" sm="@FormSm" md="@FormMd" Class="sap-step-form-col">
-            <MudContainer MaxWidth="MaxWidth.False" Class="sap-step-form" role="form" aria-label="@HeroHeading">
+            <MudContainer MaxWidth="MaxWidth.False" Class="sap-step-form" role="form" aria-label="Setup form">
                 <MudStack Spacing="3">
+                    @if (BlockingReason is not null || !string.IsNullOrEmpty(ReadyMessage))
+                    {
                     <div class="sap-step-blocker">
                         <div role="status" aria-live="polite" aria-atomic="true"
                              class="sap-step-blocker-live @(BlockingReason is null ? "" : "is-warn")">
@@ -121,6 +126,7 @@
                             </div>
                         }
                     </div>
+                    }
 
                     @ChildContent
                 </MudStack>

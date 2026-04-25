@@ -61,13 +61,15 @@ public static partial class IndianFormats
     public static bool IsHsn(string? s) =>
         IsBlank(s) || HsnRegex().IsMatch(s!.Trim());
 
-    // Strips spaces, dashes, parens, and a leading +91 / 91 / 0 country/trunk prefix
-    // so user input like "+91 98xxx-xxxxx" or "098xxxxxxxxx" matches a stored 10-digit number.
+    // Strips spaces, dashes, parens, dots, and a leading +91 / 91 / 0 country/trunk
+    // prefix so user input like "+91 98xxx-xxxxx", "(98) 765.4321", or "098xxxxxxxxx"
+    // collapses to the canonical 10-digit form. Everything non-digit goes; we don't
+    // try to detect international numbers, only Indian.
     public static string StripPhone(string s)
     {
-        var t = s.Trim();
-        var buf = new System.Text.StringBuilder(t.Length);
-        foreach (var c in t)
+        if (string.IsNullOrEmpty(s)) return "";
+        var buf = new System.Text.StringBuilder(s.Length);
+        foreach (var c in s)
             if (c is >= '0' and <= '9') buf.Append(c);
         var d = buf.ToString();
         if (d.StartsWith("91") && d.Length == 12) d = d[2..];
@@ -75,14 +77,53 @@ public static partial class IndianFormats
         return d;
     }
 
-    // GSTIN encodes the registration state in its first two digits.
+    // GSTIN checksum: positions 1-14 are the body; position 15 is a mod-36 check digit
+    // computed by alternating weights of 1 and 2 over the base-36 value of each char,
+    // summing the digit-sum of each weighted product, then taking 36 minus that sum mod 36.
+    // Returns true for blank input (treated as "not provided"); only validates when shape
+    // already passes IsGstin so we don't double-flag obviously-invalid input.
+    public static bool IsGstinChecksumValid(string? gstin)
+    {
+        if (IsBlank(gstin)) return true;
+        var g = gstin!.Trim().ToUpperInvariant();
+        if (!GstinRegex().IsMatch(g)) return true; // shape error wins; defer to IsGstin
+        const string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        var sum = 0;
+        for (var i = 0; i < 14; i++)
+        {
+            var v = alphabet.IndexOf(g[i]);
+            if (v < 0) return false;
+            var weight = (i % 2 == 0) ? 1 : 2;
+            var prod = v * weight;
+            sum += (prod / 36) + (prod % 36);
+        }
+        var check = (36 - (sum % 36)) % 36;
+        return alphabet[check] == g[14];
+    }
+
+    // GSTIN encodes PAN at positions 3-12 (1-indexed) — i.e. characters 2..11 (0-indexed).
+    // Returns null for blank or shape-invalid input so callers can branch on "did we
+    // get something usable" without re-validating shape.
+    public static string? PanFromGstin(string? gstin)
+    {
+        if (IsBlank(gstin)) return null;
+        var g = gstin!.Trim().ToUpperInvariant();
+        if (!GstinRegex().IsMatch(g)) return null;
+        return g.Substring(2, 10);
+    }
+
+    // GSTIN encodes the registration state in its first two digits. Returns null
+    // unless the code is in the known-state range (01-38) — typos like "99" used
+    // to silently land here, then StateNameFromCode would return null and the form
+    // would visibly clear. Now we reject up front.
     public static string? StateCodeFromGstin(string? gstin)
     {
         if (IsBlank(gstin)) return null;
         var t = gstin!.Trim().ToUpperInvariant();
         if (t.Length < 2) return null;
         var code = t[..2];
-        return code.All(c => c is >= '0' and <= '9') ? code : null;
+        if (!code.All(c => c is >= '0' and <= '9')) return null;
+        return StateNameFromCode(code) is null ? null : code;
     }
 
     // Maps the 2-digit GSTIN state code to its state name. Covers all current

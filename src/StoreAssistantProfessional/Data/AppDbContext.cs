@@ -36,21 +36,30 @@ public sealed class AppDbContext : DbContext
         b.Entity<Firm>().Property(p => p.Id).ValueGeneratedNever();
         b.Entity<AppSettings>().Property(p => p.Id).ValueGeneratedNever();
 
-        // Filtered unique index — soft-deleted (IsActive = 0) rows must not block
-        // a user from recreating a name they previously deleted.
+        // Filtered unique indexes ignore soft-deleted (IsActive=0) rows so a user
+        // who removed an entry can recreate it. NOCASE collation on Name columns
+        // makes "GST 18%" and "gst 18%" collide as duplicates, and lets
+        // OrderBy(x => x.Name) sort case-insensitively in SQLite (whose default
+        // BINARY collation otherwise puts "abc" after "ZBC").
+        b.Entity<TaxRate>().Property(t => t.Name).UseCollation("NOCASE");
         b.Entity<TaxRate>().HasIndex(t => t.Name).IsUnique().HasFilter("\"IsActive\" = 1");
         b.Entity<TaxRate>().HasIndex(t => t.IsDefault);
 
+        b.Entity<Vendor>().Property(v => v.Name).UseCollation("NOCASE");
         b.Entity<Vendor>().HasIndex(v => v.Name);
         b.Entity<Vendor>().HasIndex(v => v.Phone);
 
+        b.Entity<Customer>().Property(c => c.Name).UseCollation("NOCASE");
         b.Entity<Customer>().HasIndex(c => c.Phone);
         b.Entity<Customer>().HasIndex(c => c.Name);
 
         b.Entity<Staff>().HasIndex(s => s.Code).IsUnique();
         b.Entity<Staff>().HasIndex(s => s.Name);
 
-        b.Entity<Product>().HasIndex(p => p.Sku).IsUnique();
+        b.Entity<Product>().Property(p => p.Name).UseCollation("NOCASE");
+        // SKU index is filtered: soft-deleted SKUs must not block a fresh entry
+        // (same shape as the TaxRate fix).
+        b.Entity<Product>().HasIndex(p => p.Sku).IsUnique().HasFilter("\"IsActive\" = 1");
         b.Entity<Product>().HasIndex(p => p.Barcode);
         b.Entity<Product>().HasIndex(p => p.Name);
 

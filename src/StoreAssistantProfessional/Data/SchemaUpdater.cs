@@ -74,9 +74,17 @@ public static class SchemaUpdater
         // -- TaxRate.Name unique index needs to ignore soft-deleted rows so a user
         //    who removed "GST 18%" can recreate it. EnsureCreated installed the
         //    unfiltered version on older DBs; replace it with the filtered one.
+        //    NOCASE collation on the column itself is enforced by EnsureCreated
+        //    on a fresh DB; for older DBs we don't migrate the column collation
+        //    (it would require a table rebuild). Acceptable for early users.
         await ReplaceIndexAsync(conn,
             "IX_TaxRates_Name",
             "CREATE UNIQUE INDEX \"IX_TaxRates_Name\" ON \"TaxRates\" (\"Name\") WHERE \"IsActive\" = 1");
+
+        // -- Product.Sku same shape: a soft-deleted SKU must not block recreation.
+        await ReplaceIndexAsync(conn,
+            "IX_Products_Sku",
+            "CREATE UNIQUE INDEX \"IX_Products_Sku\" ON \"Products\" (\"Sku\") WHERE \"IsActive\" = 1");
     }
 
     private static async Task<bool> ColumnExistsAsync(SqliteConnection conn, string table, string column)

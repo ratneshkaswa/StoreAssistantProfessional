@@ -1,11 +1,14 @@
 @page "/onboarding/vendor"
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Logging
+@using StoreAssistantProfessional.Components.Shared
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject ISetupService Setup
 @inject IOnboardingService Onboarding
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject ILogger<VendorsPage> Logger
 
 <PageTitle>Vendors — Setup</PageTitle>
 
@@ -44,6 +47,13 @@
                             <MudStack AlignItems="AlignItems.Center" Class="pa-4">
                                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
                             </MudStack>
+                        }
+                        else if (_loadError is not null)
+                        {
+                            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                                Could not load vendors. @_loadError
+                                <MudButton Class="ml-2" Size="Size.Small" Variant="Variant.Text" OnClick="ReloadAsync">Retry</MudButton>
+                            </MudAlert>
                         }
                         else if (_filtered.Count == 0)
                         {
@@ -100,27 +110,37 @@
                                               OnKeyDown="OnEnter" />
                             </MudItem>
                             <MudItem xs="12" md="4">
-                                <MudTextField @bind-Value="_form.Gstin"
+                                <MudTextField Value="_form.Gstin"
+                                              ValueChanged="OnGstinChanged"
+                                              T="string"
                                               Label="GSTIN" Variant="Variant.Outlined" MaxLength="15" Immediate="true"
-                                              Error="@(!IndianFormats.IsGstin(_form.Gstin))"
-                                              ErrorText="Invalid GSTIN format." />
+                                              Error="@(_attempted && (!IndianFormats.IsGstin(_form.Gstin) || !_form.IsPanGstinConsistent))"
+                                              ErrorText="@GstinError" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField Value="_form.Pan"
+                                              ValueChanged="OnPanChanged"
+                                              T="string"
+                                              Label="PAN" Variant="Variant.Outlined" MaxLength="10" Immediate="true"
+                                              Error="@(_attempted && (!IndianFormats.IsPan(_form.Pan) || !_form.IsPanGstinConsistent))"
+                                              ErrorText="@PanError" />
                             </MudItem>
                             <MudItem xs="12" md="6">
                                 <MudTextField @bind-Value="_form.Phone"
-                                              Label="Phone" Variant="Variant.Outlined" MaxLength="15" Immediate="true"
-                                              Error="@(!IndianFormats.IsIndianPhone(_form.Phone))"
+                                              Label="Phone" Variant="Variant.Outlined" MaxLength="20" Immediate="true"
+                                              Error="@(_attempted && !IndianFormats.IsIndianPhone(_form.Phone))"
                                               ErrorText="10-digit mobile, optionally with +91." />
                             </MudItem>
                             <MudItem xs="12" md="6">
                                 <MudTextField @bind-Value="_form.AltPhone"
-                                              Label="Alt phone" Variant="Variant.Outlined" MaxLength="15" Immediate="true"
-                                              Error="@(!IndianFormats.IsIndianPhone(_form.AltPhone))"
+                                              Label="Alt phone" Variant="Variant.Outlined" MaxLength="20" Immediate="true"
+                                              Error="@(_attempted && !IndianFormats.IsIndianPhone(_form.AltPhone))"
                                               ErrorText="10-digit mobile, optionally with +91." />
                             </MudItem>
                             <MudItem xs="12">
                                 <MudTextField @bind-Value="_form.Email"
                                               Label="Email" Variant="Variant.Outlined" MaxLength="200" Immediate="true"
-                                              Error="@(!IndianFormats.IsEmail(_form.Email))"
+                                              Error="@(_attempted && !IndianFormats.IsEmail(_form.Email))"
                                               ErrorText="Invalid email format." />
                             </MudItem>
                             <MudItem xs="12">
@@ -129,14 +149,21 @@
                             <MudItem xs="12" md="5">
                                 <MudTextField @bind-Value="_form.City" Label="City" Variant="Variant.Outlined" MaxLength="100" />
                             </MudItem>
-                            <MudItem xs="12" md="5">
-                                <MudTextField @bind-Value="_form.State" Label="State" Variant="Variant.Outlined" MaxLength="100" />
+                            <MudItem xs="12" md="4">
+                                <MudSelect T="string" @bind-Value="_form.State"
+                                           Label="State" Variant="Variant.Outlined" Clearable="true">
+                                    <MudSelectItem Value="@((string?)null)">— Not set —</MudSelectItem>
+                                    @foreach (var s in _stateOptions)
+                                    {
+                                        <MudSelectItem Value="@s.Name">@s.Code · @s.Name</MudSelectItem>
+                                    }
+                                </MudSelect>
                             </MudItem>
-                            <MudItem xs="12" md="2">
+                            <MudItem xs="12" md="3">
                                 <MudTextField @bind-Value="_form.Pincode"
-                                              Label="PIN" Variant="Variant.Outlined" MaxLength="6" Immediate="true"
-                                              Error="@(!IndianFormats.IsPincode(_form.Pincode))"
-                                              ErrorText="6 digits." />
+                                              Label="Pincode" Variant="Variant.Outlined" MaxLength="6" Immediate="true"
+                                              Error="@(_attempted && !IndianFormats.IsPincode(_form.Pincode))"
+                                              ErrorText="6 digits, can't start with 0." />
                             </MudItem>
 
                             <MudItem xs="12"><MudText Typo="Typo.caption" Color="Color.Secondary">Bank</MudText></MudItem>
@@ -144,9 +171,11 @@
                             <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.AccountHolderName" Label="Account holder" Variant="Variant.Outlined" MaxLength="100" /></MudItem>
                             <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.AccountNumber" Label="Account no." Variant="Variant.Outlined" MaxLength="20" /></MudItem>
                             <MudItem xs="12" md="6">
-                                <MudTextField @bind-Value="_form.IfscCode"
+                                <MudTextField Value="_form.IfscCode"
+                                              ValueChanged="OnIfscChanged"
+                                              T="string"
                                               Label="IFSC" Variant="Variant.Outlined" MaxLength="11" Immediate="true"
-                                              Error="@(!IndianFormats.IsIfsc(_form.IfscCode))"
+                                              Error="@(_attempted && !IndianFormats.IsIfsc(_form.IfscCode))"
                                               ErrorText="11 chars: 4 letters + 0 + 6 alphanum." />
                             </MudItem>
 
@@ -203,12 +232,65 @@
     private List<Vendor> _vendors = new();
     private List<Vendor> _filtered = new();
     private VendorVm _form = new();
+    private VendorVm? _formOriginal;     // X3 / V3: Cancel-revert snapshot
     private Vendor? _editing;
     private bool _isNew = true;
     private bool _attempted;
     private bool _saving;
     private bool _loading = true;
+    private string? _loadError;
     private string _search = "";
+
+    // Same state list used by FirmDetailsPage. Kept here for V21 (state dropdown
+    // instead of free-text). Built from IndianFormats.StateNameFromCode.
+    private static readonly (string Code, string Name)[] _stateOptions = BuildStateOptions();
+
+    private static (string Code, string Name)[] BuildStateOptions()
+    {
+        var list = new List<(string Code, string Name)>();
+        for (var i = 1; i <= 38; i++)
+        {
+            var code = i.ToString("D2");
+            var name = IndianFormats.StateNameFromCode(code);
+            if (name is not null) list.Add((code, name));
+        }
+        return list.ToArray();
+    }
+
+    private string GstinError
+    {
+        get
+        {
+            if (!IndianFormats.IsGstin(_form.Gstin)) return "Invalid GSTIN format.";
+            if (!_form.IsPanGstinConsistent) return "GSTIN positions 3–12 must equal PAN.";
+            return "";
+        }
+    }
+
+    private string PanError
+    {
+        get
+        {
+            if (!IndianFormats.IsPan(_form.Pan)) return "Invalid PAN format.";
+            if (!_form.IsPanGstinConsistent) return "PAN must equal GSTIN positions 3–12.";
+            return "";
+        }
+    }
+
+    private void OnGstinChanged(string? v)
+    {
+        _form.Gstin = string.IsNullOrEmpty(v) ? v : v.ToUpperInvariant();
+        // V28 + F1: auto-fill PAN from GSTIN (positions 3-12) when PAN is blank.
+        var derived = IndianFormats.PanFromGstin(_form.Gstin);
+        if (derived is not null && string.IsNullOrWhiteSpace(_form.Pan))
+            _form.Pan = derived;
+    }
+
+    private void OnPanChanged(string? v) =>
+        _form.Pan = string.IsNullOrEmpty(v) ? v : v.ToUpperInvariant();
+
+    private void OnIfscChanged(string? v) =>
+        _form.IfscCode = string.IsNullOrEmpty(v) ? v : v.ToUpperInvariant();
 
     private string? BlockingReason
     {
@@ -222,7 +304,10 @@
 
     private bool IsValid =>
         !string.IsNullOrWhiteSpace(_form.Name) &&
+        _form.Name.Length <= 200 &&
         IndianFormats.IsGstin(_form.Gstin) &&
+        IndianFormats.IsPan(_form.Pan) &&
+        _form.IsPanGstinConsistent &&        // V28
         IndianFormats.IsIndianPhone(_form.Phone) &&
         IndianFormats.IsIndianPhone(_form.AltPhone) &&
         IndianFormats.IsEmail(_form.Email) &&
@@ -238,17 +323,26 @@
     private async Task LoadAsync()
     {
         _loading = true;
+        _loadError = null;
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
             _vendors = await db.Vendors.AsNoTracking().Where(v => v.IsActive).OrderBy(v => v.Name).ToListAsync();
             ApplyFilter();
         }
+        catch (Exception ex)
+        {
+            // V3 / V7: don't crash the WebView on a DB load error.
+            Logger.LogError(ex, "Failed to load vendors");
+            _loadError = ex.Message;
+        }
         finally
         {
             _loading = false;
         }
     }
+
+    private Task ReloadAsync() => LoadAsync();
 
     private void OnSearchChanged(string s)
     {
@@ -283,6 +377,7 @@
     private void StartNew()
     {
         _form = new VendorVm { PaymentTermDays = 30, IsActive = true };
+        _formOriginal = null;
         _editing = null;
         _isNew = true;
         _attempted = false;
@@ -292,6 +387,7 @@
     {
         _editing = v;
         _form = VendorVm.From(v);
+        _formOriginal = VendorVm.From(v);   // X3 / V3: snapshot for Cancel-revert
         _isNew = false;
         _attempted = false;
     }
@@ -303,6 +399,17 @@
 
     private async Task ResetWithConfirm()
     {
+        // X3 / V3: Cancel reverts an in-progress edit on an existing vendor
+        // back to the loaded values. Only fall through to a fresh form when
+        // we're entering a new vendor (no original to revert to).
+        if (_formOriginal is not null && !_isNew)
+        {
+            _form = _formOriginal;
+            _formOriginal = VendorVm.From(_editing!);   // re-snapshot
+            _attempted = false;
+            return;
+        }
+
         // Only confirm if there's actual content the user might lose.
         if (HasUnsavedContent())
         {
@@ -328,13 +435,30 @@
     private async Task Save()
     {
         _attempted = true;
-        if (!IsValid) return;
+        if (!IsValid)
+        {
+            Snackbar.ShowWarning(FirstInvalidReason());
+            return;
+        }
 
+        // V1 / V11: canonicalize phone numbers via StripPhone so two visits with
+        // the same number entered as "+91 98xxx-xxxxx" and "98xxxxxxxxx" round-
+        // trip to the same stored 10-digit form. V2: trim every text field.
         _form.Name = _form.Name.Trim();
         _form.Gstin = NormalizeUpper(_form.Gstin);
+        _form.Pan = NormalizeUpper(_form.Pan);
         _form.IfscCode = NormalizeUpper(_form.IfscCode);
-        _form.Phone = _form.Phone?.Trim();
-        _form.AltPhone = _form.AltPhone?.Trim();
+        _form.Phone = NormalizePhone(_form.Phone);
+        _form.AltPhone = NormalizePhone(_form.AltPhone);
+        _form.Email = NormalizeLower(_form.Email);
+        _form.Address = TrimToNull(_form.Address);
+        _form.City = TrimToNull(_form.City);
+        _form.State = TrimToNull(_form.State);
+        _form.Pincode = TrimToNull(_form.Pincode);
+        _form.BankName = TrimToNull(_form.BankName);
+        _form.AccountHolderName = TrimToNull(_form.AccountHolderName);
+        _form.AccountNumber = TrimToNull(_form.AccountNumber);
+        _form.Notes = TrimToNull(_form.Notes);
 
         _saving = true;
         try
@@ -397,11 +521,18 @@
             var saved = _vendors.FirstOrDefault(v => v.Id == newId);
             if (saved is not null) SelectExisting(saved);
             else StartNew();
-            ShowOk("Vendor saved.");
+            _attempted = false;     // X2: clear sticky errors after a clean save
+            Snackbar.ShowOk("Vendor saved.");
+        }
+        catch (DbUpdateException ex)
+        {
+            Logger.LogError(ex, "Failed to save vendor (DB)");
+            Snackbar.ShowError($"Could not save: {ex.InnerException?.Message ?? ex.Message}");
         }
         catch (Exception ex)
         {
-            ShowError($"Could not save: {ex.Message}");
+            Logger.LogError(ex, "Failed to save vendor");
+            Snackbar.ShowError($"Could not save: {ex.Message}");
         }
         finally
         {
@@ -409,16 +540,48 @@
         }
     }
 
+    // Walk validators in priority order — same shape as Tax/Products.
+    private string FirstInvalidReason()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Name)) return "Vendor name is required.";
+        if (_form.Name.Length > 200) return "Vendor name is too long (200 chars max).";
+        if (!IndianFormats.IsGstin(_form.Gstin)) return "GSTIN format is invalid.";
+        if (!IndianFormats.IsPan(_form.Pan)) return "PAN format is invalid.";
+        if (!_form.IsPanGstinConsistent) return "PAN must equal GSTIN positions 3–12.";
+        if (!IndianFormats.IsIndianPhone(_form.Phone)) return "Phone format is invalid.";
+        if (!IndianFormats.IsIndianPhone(_form.AltPhone)) return "Alt phone format is invalid.";
+        if (!IndianFormats.IsEmail(_form.Email)) return "Email format is invalid.";
+        if (!IndianFormats.IsPincode(_form.Pincode)) return "Pincode is invalid.";
+        if (!IndianFormats.IsIfsc(_form.IfscCode)) return "IFSC format is invalid.";
+        return "Form has errors — fix the highlighted fields.";
+    }
+
     private async Task DeleteCurrent()
     {
         if (_editing is null) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // V27: check open inward parcels and purchase returns before soft-
+        // deleting. We don't block, because the vendor *was* legitimately a
+        // supplier on those rows, but we ask the user to confirm so the
+        // implication is explicit. (VendorId lives on InwardParcel, not
+        // InwardEntry — the parcel is the unit a single vendor ships.)
+        var parcelCount = await db.InwardParcels.AsNoTracking()
+            .CountAsync(p => p.VendorId == _editing.Id);
+        var returnCount = await db.PurchaseReturns.AsNoTracking()
+            .CountAsync(r => r.VendorId == _editing.Id);
+        var historyTotal = parcelCount + returnCount;
+        var bodyExtra = historyTotal > 0
+            ? $" {historyTotal} historical record{(historyTotal == 1 ? "" : "s")} reference this vendor — reports will still show the deleted name."
+            : "";
+
         var ok = await Confirm($"Delete vendor \"{_editing.Name}\"?",
-            "It will be soft-deleted and won't appear in lists.", "Delete");
+            $"It will be soft-deleted and won't appear in lists.{bodyExtra}", "Delete");
         if (!ok) return;
 
         try
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
             var existing = await db.Vendors.FirstOrDefaultAsync(v => v.Id == _editing.Id);
             if (existing is not null)
             {
@@ -428,11 +591,12 @@
             }
             await LoadAsync();
             StartNew();
-            ShowOk("Vendor removed.");
+            Snackbar.ShowOk("Vendor removed.");
         }
         catch (Exception ex)
         {
-            ShowError($"Could not delete: {ex.Message}");
+            Logger.LogError(ex, "Failed to delete vendor");
+            Snackbar.ShowError($"Could not delete: {ex.Message}");
         }
     }
 
@@ -445,13 +609,18 @@
     private static string? NormalizeUpper(string? s) =>
         string.IsNullOrWhiteSpace(s) ? null : s.Trim().ToUpperInvariant();
 
-    private void ShowOk(string m) =>
-        Snackbar.Add(m, Severity.Success, c => c.VisibleStateDuration = 3000);
+    private static string? NormalizeLower(string? s) =>
+        string.IsNullOrWhiteSpace(s) ? null : s.Trim().ToLowerInvariant();
 
-    private void ShowError(string m) =>
-        Snackbar.Add(m, Severity.Error, c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 8000; });
+    private static string? NormalizePhone(string? s) =>
+        string.IsNullOrWhiteSpace(s) ? null : (IndianFormats.StripPhone(s) is var d && d.Length > 0 ? d : s.Trim());
 
-    private void Finish() => Nav.NavigateTo("/", replace: true);
+    private static string? TrimToNull(string? s) =>
+        string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    // X12 / R2: route through the celebration page first instead of dumping
+    // the user straight onto Billing.
+    private void Finish() => Nav.NavigateTo("/onboarding/done");
 
     private sealed class VendorVm
     {
@@ -461,6 +630,9 @@
         public string? AltPhone { get; set; }
         public string? Email { get; set; }
         public string? Gstin { get; set; }
+        public string? Pan { get; set; }   // V28: PAN field (Vendor entity has no Pan column today,
+                                            // so this is form-side only — used purely for the GSTIN
+                                            // consistency check. Could promote to a real column later.)
         public string? Address { get; set; }
         public string? City { get; set; }
         public string? State { get; set; }
@@ -475,6 +647,20 @@
         public string? Notes { get; set; }
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        // V28: same shape as FirmVm.IsPanGstinConsistent. PAN is embedded in
+        // GSTIN[2..12]; mismatch indicates a typo. Defers to shape errors.
+        public bool IsPanGstinConsistent
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(Gstin) || string.IsNullOrWhiteSpace(Pan)) return true;
+                var g = Gstin.Trim().ToUpperInvariant();
+                var p = Pan.Trim().ToUpperInvariant();
+                if (g.Length != 15 || p.Length != 10) return true;
+                return g.Substring(2, 10) == p;
+            }
+        }
 
         public static VendorVm From(Vendor v) => new()
         {
@@ -539,9 +725,13 @@
             v.AccountHolderName = AccountHolderName;
             v.AccountNumber = AccountNumber;
             v.IfscCode = IfscCode;
-            v.Balance = Balance ?? 0;
-            v.PaymentTermDays = PaymentTermDays ?? 30;
-            v.CreditLimit = CreditLimit ?? 0;
+            // V8 / V9 / V10: when editing, preserve the previously-stored numeric
+            // value if the user cleared the field. ToEntity (new-row path) still
+            // falls back to defaults — the field-cleared semantic only matters
+            // here, where there's an existing value worth keeping.
+            if (Balance.HasValue) v.Balance = Balance.Value;
+            if (PaymentTermDays.HasValue) v.PaymentTermDays = PaymentTermDays.Value;
+            if (CreditLimit.HasValue) v.CreditLimit = CreditLimit.Value;
             v.Notes = Notes;
             v.IsActive = IsActive;
         }
