@@ -14,8 +14,7 @@ public enum OnboardingStep
 
 public interface IOnboardingService
 {
-    OnboardingStep CurrentStep();
-    bool IsComplete();
+    Task<OnboardingStep> CurrentStepAsync();
     string RouteFor(OnboardingStep step);
 }
 
@@ -28,17 +27,15 @@ public sealed class OnboardingService : IOnboardingService
         _dbFactory = dbFactory;
     }
 
-    public OnboardingStep CurrentStep()
+    public async Task<OnboardingStep> CurrentStepAsync()
     {
-        using var db = _dbFactory.CreateDbContext();
-        if (!db.Firms.Any()) return OnboardingStep.Firm;
-        if (!db.TaxRates.Any()) return OnboardingStep.Tax;
-        if (!db.Products.Any()) return OnboardingStep.Products;
-        if (!db.Vendors.Any()) return OnboardingStep.Vendor;
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        if (!await db.Firms.AnyAsync()) return OnboardingStep.Firm;
+        if (!await db.TaxRates.AnyAsync()) return OnboardingStep.Tax;
+        if (!await db.Products.AnyAsync()) return OnboardingStep.Products;
+        if (!await db.Vendors.AnyAsync()) return OnboardingStep.Vendor;
         return OnboardingStep.Done;
     }
-
-    public bool IsComplete() => CurrentStep() == OnboardingStep.Done;
 
     public string RouteFor(OnboardingStep step) => step switch
     {

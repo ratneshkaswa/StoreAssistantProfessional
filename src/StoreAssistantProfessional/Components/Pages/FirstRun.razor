@@ -44,6 +44,21 @@ else
                         <MudText Typo="Typo.body2" Align="Align.Center" Class="sap-firstrun-hero-next">
                             Next: tell us about your firm, tax rates, products, and vendors.
                         </MudText>
+
+                        <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Center" Class="sap-firstrun-hero-badges">
+                            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Rounded.CloudOff" UserAttributes="@AriaHidden" Class="sap-firstrun-hero-badge-icon" />
+                                <MudText Typo="Typo.caption">Offline-first</MudText>
+                            </MudStack>
+                            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Rounded.MoneyOff" UserAttributes="@AriaHidden" Class="sap-firstrun-hero-badge-icon" />
+                                <MudText Typo="Typo.caption">No subscription</MudText>
+                            </MudStack>
+                            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Rounded.Shield" UserAttributes="@AriaHidden" Class="sap-firstrun-hero-badge-icon" />
+                                <MudText Typo="Typo.caption">Private</MudText>
+                            </MudStack>
+                        </MudStack>
                     </MudStack>
                 </MudPaper>
             </MudItem>
@@ -66,14 +81,14 @@ else
                         }
 
                         <div id="setup-blocker" class="sap-firstrun-blocker">
-                            <div role="status" aria-live="polite" aria-atomic="true" class="sap-firstrun-blocker-live">
+                            <div role="status" aria-live="polite" aria-atomic="true"
+                                 class="sap-firstrun-blocker-live @(BlockingReason is null ? "" : "is-warn")">
                                 @if (BlockingReason is not null)
                                 {
                                     <MudIcon Icon="@Icons.Material.Rounded.EditNote"
                                              UserAttributes="@AriaHidden"
-                                             Color="Color.Warning"
                                              Class="sap-firstrun-blocker-icon" />
-                                    <MudText Typo="Typo.body2" Color="Color.Warning">@BlockingReason</MudText>
+                                    <MudText Typo="Typo.body2" Class="sap-firstrun-blocker-text">@BlockingReason</MudText>
                                 }
                             </div>
                             @if (BlockingReason is null)
@@ -81,15 +96,14 @@ else
                                 <div class="sap-firstrun-blocker-ready">
                                     <MudIcon Icon="@Icons.Material.Rounded.CheckCircle"
                                              UserAttributes="@AriaHidden"
-                                             Color="Color.Success"
                                              Class="sap-firstrun-blocker-icon" />
-                                    <MudText Typo="Typo.body2" Color="Color.Success">Ready to save.</MudText>
+                                    <MudText Typo="Typo.body2" Class="sap-firstrun-blocker-text">Ready to save.</MudText>
                                 </div>
                             }
                         </div>
 
                         <MudPaper Elevation="1" Class="pa-4 sap-firstrun-card sap-firstrun-card-store">
-                            <MudStack Spacing="2">
+                            <MudStack Spacing="3">
                                 <MudText Typo="Typo.h6">Name your store</MudText>
                                 <MudTextField Value="_storeName"
                                               ValueChanged="SetStoreName"
@@ -102,8 +116,6 @@ else
                                               AutoFocus="true"
                                               Disabled="@FieldsLocked"
                                               HelperText="Shown on receipts and across the app."
-                                              Error="@(_storeNameTouched && !StoreNameValid)"
-                                              ErrorText="@StoreNameErrorText"
                                               Adornment="Adornment.End"
                                               AdornmentIcon="@(StoreNameValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
                                               AdornmentColor="@(StoreNameValid ? Color.Success : Color.Default)"
@@ -117,12 +129,15 @@ else
                             <MudStack Spacing="3">
                                 <MudStack Row="true" Spacing="0" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                     <MudText Typo="Typo.h6">Choose two PINs</MudText>
-                                    <MudIconButton Icon="@(_showPins ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
-                                                   Size="Size.Small"
-                                                   Color="Color.Default"
-                                                   OnClick="TogglePins"
-                                                   Disabled="@FieldsLocked"
-                                                   UserAttributes="@ShowPinsAttrs" />
+                                    <MudTooltip Text="@(_showPins ? "Hide PINs" : "Show PINs")" Placement="Placement.Top">
+                                        <MudIconButton Icon="@(_showPins ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
+                                                       Size="Size.Small"
+                                                       Color="Color.Default"
+                                                       Class="sap-firstrun-pin-toggle"
+                                                       OnClick="TogglePins"
+                                                       Disabled="@FieldsLocked"
+                                                       UserAttributes="@ShowPinsAttrs" />
+                                    </MudTooltip>
                                 </MudStack>
                                 <MudText Typo="Typo.caption" Color="Color.Default">
                                     Admin for day-to-day protected actions. Master for destructive deletions and recovery.
@@ -161,7 +176,7 @@ else
                                                   Disabled="@(FieldsLocked || _adminPin.Length < 4)"
                                                   HelperText="Re-enter"
                                                   Error="@AdminConfirmMismatch"
-                                                  ErrorText="Doesn't match the PIN above."
+                                                  ErrorText="Doesn't match."
                                                   Adornment="Adornment.End"
                                                   AdornmentIcon="@(AdminConfirmValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
                                                   AdornmentColor="@(AdminConfirmValid ? Color.Success : Color.Default)"
@@ -202,7 +217,7 @@ else
                                                   Disabled="@(FieldsLocked || _masterPin.Length < 6)"
                                                   HelperText="Re-enter"
                                                   Error="@MasterConfirmMismatch"
-                                                  ErrorText="Doesn't match the PIN above."
+                                                  ErrorText="Doesn't match."
                                                   Adornment="Adornment.End"
                                                   AdornmentIcon="@(MasterConfirmValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
                                                   AdornmentColor="@(MasterConfirmValid ? Color.Success : Color.Default)"
@@ -247,7 +262,6 @@ else
     private string _masterPin = "";
     private string _masterPinConfirm = "";
     private bool _showPins;
-    private bool _storeNameTouched;
     private bool _submitting;
     private bool _redirecting;
 
@@ -335,14 +349,9 @@ else
     private bool MasterPinValid => _masterPin.Length == 6 && !PinRules.IsWeak(_masterPin) && !MasterContainsAdmin;
     private bool MasterConfirmValid => _masterPinConfirm.Length == 6 && _masterPinConfirm == _masterPin;
 
-    private string StoreNameErrorText =>
-        string.IsNullOrWhiteSpace(_storeName)
-            ? "Store name is required."
-            : "Store name must be at least 2 characters.";
-
     private string MasterPinErrorText => MasterContainsAdmin
-        ? "Must not contain the Admin PIN."
-        : "Avoid repeats, sequences, and palindromes.";
+        ? "Contains the Admin PIN."
+        : "Too predictable.";
 
     private string AdminPinHelper => PinRules.IsStrong(_adminPin) ? "4 digits · OK" : "4 digits";
     private string MasterPinHelper => PinRules.IsStrong(_masterPin) ? "6 digits · OK" : "6 digits";
@@ -381,7 +390,6 @@ else
     private void SetStoreName(string v)
     {
         _storeName = v ?? "";
-        if (string.IsNullOrEmpty(_storeName)) _storeNameTouched = false;
     }
 
     private async Task SetAdminPin(string v)
@@ -464,21 +472,28 @@ else
 
     private void OnStoreNameBlur()
     {
-        _storeNameTouched = true;
         _storeName = _storeName.Trim();
     }
 
     private async Task OnStoreNameKeyDown(KeyboardEventArgs e)
     {
         if (e.Key != "Enter") return;
-        _storeNameTouched = true;
         if (StoreNameValid && _adminPinField is not null)
             await _adminPinField.FocusAsync();
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && CanSubmit) await Submit();
+        if (e.Key != "Enter") return;
+        if (CanSubmit)
+        {
+            await Submit();
+        }
+        else if (BlockingReason is { } reason)
+        {
+            // Keyboard users don't see the disabled-button tooltip — surface the reason here.
+            Snackbar.Add(reason, Severity.Info, config => config.VisibleStateDuration = 4000);
+        }
     }
 
     private async Task Submit()

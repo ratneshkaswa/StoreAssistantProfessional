@@ -13,7 +13,7 @@
 </MudContainer>
 
 @code {
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         if (!Setup.IsComplete)
         {
@@ -21,7 +21,7 @@
             return;
         }
 
-        var step = Onboarding.CurrentStep();
+        var step = await Onboarding.CurrentStepAsync();
         if (step != OnboardingStep.Done)
         {
             Nav.NavigateTo(Onboarding.RouteFor(step), replace: true);

@@ -87,6 +87,13 @@ html, body {
     --sap-hero-grad-mid:   #E8B584;
     --sap-hero-grad-end:   #D9A5A5;
     --sap-hero-text:       #4A2F1A;
+
+    /* Dark contrast-text variants of the warning/success palette colors.
+       The default Color.Warning (#E8C084) and Color.Success (#8FBF87) hit
+       only ~1.7:1 / ~2.1:1 against white — fail AA. These dark variants
+       are used for blocker text/icon so the message is actually readable. */
+    --sap-warning-fg: #4A3318;
+    --sap-success-fg: #1E3A1C;
 }
 
 /* Visually hidden but kept in the accessibility tree (for h1 etc.). */
@@ -112,6 +119,12 @@ html, body {
     transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
 }
 
+/* Tooltip popovers — fade in/out smoothly inside first-run. */
+.mud-tooltip-popover,
+.mud-tooltip-arrow {
+    transition: opacity 150ms ease !important;
+}
+
 .sap-firstrun-root { width: 100%; }
 
 .sap-firstrun-redirect {
@@ -132,7 +145,6 @@ html, body {
     flex-direction: column;
     align-items: center;
     justify-content: safe center;
-    scrollbar-gutter: stable;
 }
 
 .sap-firstrun-form {
@@ -146,13 +158,9 @@ html, body {
 @media (min-width: 600px) {
     .sap-firstrun-hero {
         min-height: 100vh;
-        max-height: 100vh;
-        overflow-x: hidden;
-        overflow-y: auto;
     }
     .sap-firstrun-form-col {
-        max-height: 100vh;
-        overflow-y: auto;
+        min-height: 100vh;
         display: flex;
         flex-direction: column;
         justify-content: safe center;
@@ -187,6 +195,9 @@ html, body {
     font-size: 88px !important;
     opacity: 0.9;
 }
+@media (max-height: 720px) {
+    .sap-firstrun-hero-icon { font-size: 56px !important; }
+}
 
 .sap-firstrun-hero-heading {
     font-family: Georgia, 'Times New Roman', serif;
@@ -205,15 +216,48 @@ html, body {
     line-height: 1.5;
 }
 
+.sap-firstrun-hero-badges {
+    margin-top: 8px;
+    opacity: 0.8;
+}
+
+.sap-firstrun-hero-badge-icon {
+    font-size: 18px !important;
+}
+
 /* All form cards share the same neutral primary accent — no error-rose on
    master, no info-blue on store, no fragmented palette. */
 .sap-firstrun-card {
     box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08) !important;
 }
 
-/* Two PINs side-by-side; each takes half the row's width on every viewport. */
-.sap-firstrun-pin-row { width: 100%; }
+/* Two PINs side-by-side; each takes half the row's width on every viewport.
+   align-items: flex-start so a wrapped helper-text on one field doesn't push
+   the other field's label down — they hang from the same y. */
+.sap-firstrun-pin-row {
+    width: 100%;
+    align-items: flex-start;
+}
 .sap-firstrun-pin-row > .mud-input-control { flex: 1 1 0; min-width: 0; }
+
+/* The PIN visibility-toggle IconButton sits in the heading row at flex-end,
+   which puts its right edge flush at card-content-right. But every field
+   adornment below has a built-in margin-right: 12px (Mud's outlined-input
+   adornment offset). Match that offset so the eye icon's right edge lines up
+   with the check-icons in the rows below. */
+.sap-firstrun-pin-toggle {
+    margin-right: 12px !important;
+}
+
+/* Pin some adornment + helper alignment so the two side-by-side fields stay
+   true to each other when one is in error state. */
+.sap-firstrun-pin-row .mud-input-adornment-end {
+    flex: 0 0 auto;
+}
+.sap-firstrun-pin-row .mud-input-helper-text {
+    text-align: start;
+    overflow-wrap: break-word;
+}
 
 .sap-firstrun-blocker {
     min-height: 28px;
@@ -230,7 +274,31 @@ html, body {
     min-height: 28px;
 }
 
+/* High-contrast text/icon override; theme Color.Warning / Color.Success
+   would only hit ~1.7-2.1:1 against the cream form background. */
+.sap-firstrun-blocker-live.is-warn .sap-firstrun-blocker-icon,
+.sap-firstrun-blocker-live.is-warn .sap-firstrun-blocker-text {
+    color: var(--sap-warning-fg) !important;
+}
+.sap-firstrun-blocker-ready .sap-firstrun-blocker-icon,
+.sap-firstrun-blocker-ready .sap-firstrun-blocker-text {
+    color: var(--sap-success-fg) !important;
+}
+
 .sap-firstrun-blocker-icon { font-size: 18px !important; }
+.sap-firstrun-blocker-text { font-weight: 500 !important; }
+
+/* Visible focus rings — the global `transition: none !important` shouldn't dull
+   the ones in first-run, and Outlined fields need a clearer focus colour than
+   the muted theme default. */
+.sap-firstrun-root .mud-input-outlined.mud-focused .mud-input-outlined-border {
+    border-width: 2px !important;
+}
+.sap-firstrun-root .mud-button-root:focus-visible,
+.sap-firstrun-root .mud-icon-button:focus-visible {
+    outline: 2px solid var(--mud-palette-primary) !important;
+    outline-offset: 2px;
+}
 
 /* ========== App shell ========== */
 .sap-shell {
