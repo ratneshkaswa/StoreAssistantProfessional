@@ -1,0 +1,13 @@
+@inject NavigationManager Nav
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+    <MudButton StartIcon="@Icons.Material.Rounded.ArrowBack" Variant="Variant.Text" OnClick="GoBack">
+        Back to settings
+    </MudButton>
+    <MudText Typo="Typo.h5">@Title</MudText>
+</MudStack>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    private void GoBack() => Nav.NavigateTo("/settings");
+}

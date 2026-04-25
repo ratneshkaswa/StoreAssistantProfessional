@@ -1,0 +1,90 @@
+@page "/settings/sessions"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject ISessionService Session
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<PageTitle>Sessions — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="Sessions &amp; activity" />
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.h6">Current session</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="6" md="3"><MudText Typo="Typo.caption" Color="Color.Secondary">Role</MudText></MudItem>
+                <MudItem xs="6" md="9"><MudText Typo="Typo.body2">@Session.Current</MudText></MudItem>
+                <MudItem xs="6" md="3"><MudText Typo="Typo.caption" Color="Color.Secondary">Counter</MudText></MudItem>
+                <MudItem xs="6" md="9"><MudText Typo="Typo.body2">Counter 1 (this PC)</MudText></MudItem>
+            </MudGrid>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="2">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">Recent activity</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">last 50 events</MudText>
+            </MudStack>
+
+            @if (_events.Count == 0)
+            {
+                <MudPaper Class="pa-4" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                    <MudStack AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@Icons.Material.Rounded.History" Color="Color.Secondary" Style="font-size: 48px;" />
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">No session events yet.</MudText>
+                    </MudStack>
+                </MudPaper>
+            }
+            else
+            {
+                <MudSimpleTable Hover="true" Dense="true">
+                    <thead>
+                        <tr>
+                            <th>When</th>
+                            <th>Kind</th>
+                            <th>Role</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in _events)
+                        {
+                            <tr>
+                                <td>@e.At.ToLocalTime().ToString("dd MMM HH:mm:ss")</td>
+                                <td>
+                                    <MudChip T="string" Size="Size.Small" Color="@KindColor(e.Kind)" Variant="Variant.Outlined">@e.Kind</MudChip>
+                                </td>
+                                <td>@(e.Role ?? "—")</td>
+                                <td>@(e.Reason ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private List<SessionEvent> _events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _events = await db.SessionEvents.AsNoTracking()
+            .OrderByDescending(e => e.At)
+            .Take(50)
+            .ToListAsync();
+    }
+
+    private static Color KindColor(string kind) => kind switch
+    {
+        "RoleEnter"     => Color.Primary,
+        "RoleExit"      => Color.Default,
+        "AutoDrop"      => Color.Warning,
+        "FailedUnlock"  => Color.Error,
+        _               => Color.Default
+    };
+}

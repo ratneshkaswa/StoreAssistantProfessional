@@ -1,0 +1,130 @@
+@page "/inward"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>Inward — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h5">📥 Inward</MudText>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Undo" OnClick="@(() => Nav.NavigateTo("/returns"))">
+                New return
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="NewInward">
+                New inward
+            </MudButton>
+        </MudStack>
+    </MudStack>
+
+    <MudPaper Class="pa-3">
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+            <MudTextField @bind-Value="_search"
+                          Placeholder="Search inward # / vendor / LR…"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Rounded.Search"
+                          Margin="Margin.Dense"
+                          Immediate="true"
+                          DebounceInterval="200" />
+            <MudSelect T="string" @bind-Value="_statusFilter" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 140px;">
+                <MudSelectItem Value="@("all")">All</MudSelectItem>
+                <MudSelectItem Value="@("Draft")">Draft</MudSelectItem>
+                <MudSelectItem Value="@("Received")">Received</MudSelectItem>
+            </MudSelect>
+        </MudStack>
+    </MudPaper>
+
+    @if (Filtered.Count == 0)
+    {
+        <MudPaper Class="pa-8" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Rounded.MoveToInbox" Color="Color.Secondary" Style="font-size: 64px;" />
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    @(_entries.Count == 0 ? "No inward entries yet." : "No matches.")
+                </MudText>
+                @if (_entries.Count == 0)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Click "New inward" above to record your first parcel receipt.
+                    </MudText>
+                }
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <MudSimpleTable Hover="true" Dense="true" Style="overflow: auto;">
+            <thead>
+                <tr>
+                    <th>Inward #</th>
+                    <th>Date</th>
+                    <th>Vendors</th>
+                    <th style="text-align: right;">Parcels</th>
+                    <th style="text-align: right;">Items</th>
+                    <th style="text-align: right;">Cost</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var e in Filtered)
+                {
+                    <tr style="cursor: pointer;" @onclick="@(() => OpenEntry(e.Id))">
+                        <td>@e.InwardNumber</td>
+                        <td>@e.EntryDate.ToString("dd MMM")</td>
+                        <td>
+                            @string.Join(", ", e.Parcels.Select(p => p.Vendor?.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct())
+                        </td>
+                        <td style="text-align: right;">@e.Parcels.Count</td>
+                        <td style="text-align: right;" class="sap-amount">@e.Parcels.Sum(p => p.Items.Count)</td>
+                        <td style="text-align: right;" class="sap-amount">₹@(((e.Parcels.SelectMany(p => p.Items).Sum(i => i.LineTotal)) + e.TransportCharges).ToString("N0"))</td>
+                        <td>
+                            @if (e.Status == "Received")
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">received</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">draft</MudChip>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudStack>
+
+@code {
+    private List<InwardEntry> _entries = new();
+    private string _search = "";
+    private string _statusFilter = "all";
+
+    private List<InwardEntry> Filtered =>
+        _entries.Where(e =>
+            (_statusFilter == "all" || e.Status == _statusFilter) &&
+            (string.IsNullOrWhiteSpace(_search) ||
+             e.InwardNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+             (e.LrNumber?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+             e.Parcels.Any(p => (p.Vendor?.Name ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase))))
+        .OrderByDescending(e => e.EntryDate)
+        .ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _entries = await db.InwardEntries
+            .Include(e => e.Parcels).ThenInclude(p => p.Vendor)
+            .Include(e => e.Parcels).ThenInclude(p => p.Items)
+            .AsNoTracking()
+            .OrderByDescending(e => e.EntryDate)
+            .ToListAsync();
+    }
+
+    private void NewInward() => Nav.NavigateTo("/inward/new");
+    private void OpenEntry(int id) => Nav.NavigateTo($"/inward/{id}");
+}

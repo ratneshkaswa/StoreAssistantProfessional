@@ -1,0 +1,89 @@
+@inject ICartService Cart
+@inject ISessionService Session
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Edit line</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@_line?.Description</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="6">
+                    <MudNumericField T="decimal" @bind-Value="_qty" Label="Quantity" Variant="Variant.Outlined" Min="0" />
+                </MudItem>
+                <MudItem xs="6">
+                    <MudNumericField T="decimal" @bind-Value="_unitPrice" Label="Unit price ₹" Variant="Variant.Outlined" Min="0" />
+                </MudItem>
+                @if (_line is not null && _line.Mrp > 0)
+                {
+                    <MudItem xs="12">
+                        <MudPaper Class="pa-2" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                MRP ₹@_line.Mrp.ToString("N2")
+                                @if (_unitPrice > _line.Mrp)
+                                {
+                                    <span style="color: var(--mud-palette-error);"> · ⚠ price exceeds MRP — Admin role required to override</span>
+                                }
+                            </MudText>
+                        </MudPaper>
+                    </MudItem>
+                }
+                <MudItem xs="12">
+                    <MudNumericField T="decimal" @bind-Value="_discount" Label="Discount ₹ (whole-line)" Variant="Variant.Outlined" Min="0" />
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Text" OnClick="Remove">Remove</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public int ProductId { get; set; }
+
+    private CartLine? _line;
+    private decimal _qty;
+    private decimal _unitPrice;
+    private decimal _discount;
+
+    protected override void OnInitialized()
+    {
+        _line = Cart.Active.Lines.FirstOrDefault(l => l.ProductId == ProductId);
+        if (_line is null) { Dialog.Close(DialogResult.Cancel()); return; }
+        _qty = _line.Quantity;
+        _unitPrice = _line.UnitPrice;
+        _discount = _line.Discount;
+    }
+
+    private void Cancel() => Dialog.Cancel();
+
+    private void Remove()
+    {
+        Cart.RemoveLine(ProductId);
+        Dialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Save()
+    {
+        if (_line is null) { Dialog.Cancel(); return; }
+
+        if (_line.Mrp > 0 && _unitPrice > _line.Mrp && Session.Current != Role.Admin)
+        {
+            Snackbar.Add("Price exceeds MRP. Switch to Admin from the status bar to override.", Severity.Warning);
+            return;
+        }
+
+        Cart.SetUnitPrice(ProductId, _unitPrice);
+        Cart.SetLineDiscount(ProductId, _discount);
+        if (_qty != _line.Quantity)
+            Cart.SetQuantity(ProductId, _qty);
+
+        Dialog.Close(DialogResult.Ok(true));
+    }
+}

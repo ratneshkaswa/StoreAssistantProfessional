@@ -1,0 +1,317 @@
+@page "/onboarding/tax"
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IOnboardingService Onboarding
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Taxes — Setup</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
+    <MudStack Spacing="4">
+        <MudStack Spacing="1">
+            <MudText Typo="Typo.h5">Setting up your shop · 2 of 4</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Add at least one tax rate. Common GST slabs in India: 5%, 12%, 18%.
+            </MudText>
+            <OnboardingProgress Current="OnboardingStep.Tax" />
+        </MudStack>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="5">
+                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 480px;">
+                    <MudStack Spacing="3">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.h6">Tax rates (@_taxes.Count)</MudText>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Rounded.Add" OnClick="StartNew">Add</MudButton>
+                        </MudStack>
+
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Quick add</MudText>
+                            <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => QuickAdd("GST 5%", 5m))">GST 5%</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => QuickAdd("GST 12%", 12m))">GST 12%</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => QuickAdd("GST 18%", 18m))">GST 18%</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => QuickAdd("GST 28%", 28m))">GST 28%</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => QuickAdd("Exempt", 0m, "Exempt"))">Exempt 0%</MudButton>
+                            </MudStack>
+                        </MudStack>
+
+                        <MudDivider />
+
+                        @if (_taxes.Count == 0)
+                        {
+                            <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                                <MudIcon Icon="@Icons.Material.Rounded.Receipt" Color="Color.Secondary" Style="font-size: 48px;" />
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                    No tax rates yet. Use a quick-add chip above or click Add to create one.
+                                </MudText>
+                            </MudStack>
+                        }
+                        else
+                        {
+                            <MudStack Spacing="1">
+                                @foreach (var t in _taxes)
+                                {
+                                    var isSel = _editing?.Id == t.Id;
+                                    var leftBar = isSel ? "▎" : "  ";
+                                    <MudPaper Elevation="0"
+                                              Class="@(isSel ? "pa-2 sap-row sap-row-active" : "pa-2 sap-row")"
+                                              Style="@(isSel ? "border-left: 3px solid var(--mud-palette-primary); cursor: pointer;" : "cursor: pointer;")"
+                                              @onclick="@(() => SelectExisting(t))">
+                                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                            <MudStack Spacing="0">
+                                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                                                    <MudText Typo="Typo.body2" Style="font-weight: 500;">@t.Name</MudText>
+                                                    @if (t.IsDefault)
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">default</MudChip>
+                                                    }
+                                                </MudStack>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    @t.Rate.ToString("0.##")% · HSN @(string.IsNullOrEmpty(t.HsnCode) ? "—" : t.HsnCode) · @t.SlabDisplay
+                                                </MudText>
+                                            </MudStack>
+                                        </MudStack>
+                                    </MudPaper>
+                                }
+                            </MudStack>
+                        }
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="7">
+                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08); min-height: 480px;">
+                    <MudStack Spacing="3">
+                        <MudText Typo="Typo.h6">@(_isNew ? "➕ Add tax rate" : $"Edit · {_form.Name}")</MudText>
+
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12" md="8">
+                                <MudTextField @bind-Value="_form.Name"
+                                              Label="Name *"
+                                              Variant="Variant.Outlined"
+                                              MaxLength="100"
+                                              Immediate="true"
+                                              Error="@(_attempted && string.IsNullOrWhiteSpace(_form.Name))"
+                                              ErrorText="Name is required." />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudCheckBox T="bool" @bind-Value="_form.IsDefault" Color="Color.Primary">
+                                    Default rate
+                                </MudCheckBox>
+                            </MudItem>
+
+                            <MudItem xs="6" md="3">
+                                <MudNumericField T="decimal" @bind-Value="_form.Rate" Label="Rate (%) *" Variant="Variant.Outlined" Min="0" Max="50" />
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudNumericField T="decimal" @bind-Value="_form.CessRate" Label="Cess (%)" Variant="Variant.Outlined" Min="0" Max="100" />
+                            </MudItem>
+                            <MudItem xs="12" md="3">
+                                <MudSelect T="string" @bind-Value="_form.CessType" Label="Cess type" Variant="Variant.Outlined" Clearable="true">
+                                    <MudSelectItem Value="@((string?)null)">—</MudSelectItem>
+                                    <MudSelectItem Value="@("Compensation")">Compensation</MudSelectItem>
+                                    <MudSelectItem Value="@("State")">State</MudSelectItem>
+                                    <MudSelectItem Value="@("GST")">GST</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" md="3">
+                                <MudCheckBox T="bool" @bind-Value="_form.IsTaxInclusive" Color="Color.Primary">
+                                    Tax inclusive
+                                </MudCheckBox>
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Optional price slab — leave blank for "any price".</MudText>
+                            </MudItem>
+                            <MudItem xs="6" md="4">
+                                <MudNumericField T="decimal?" @bind-Value="_form.MinPrice" Label="Min ₹" Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="6" md="4">
+                                <MudNumericField T="decimal?" @bind-Value="_form.MaxPrice" Label="Max ₹ (blank = & above)" Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_form.HsnCode" Label="HSN code" Variant="Variant.Outlined" MaxLength="8" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudSelect T="string" @bind-Value="_form.TaxCategory" Label="Tax category" Variant="Variant.Outlined">
+                                    <MudSelectItem Value="@("Taxable")">Taxable</MudSelectItem>
+                                    <MudSelectItem Value="@("NilRated")">Nil rated</MudSelectItem>
+                                    <MudSelectItem Value="@("Exempt")">Exempt</MudSelectItem>
+                                    <MudSelectItem Value="@("ZeroRated")">Zero rated</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                        </MudGrid>
+
+                        @if (_form.Rate > 0)
+                        {
+                            <MudPaper Class="pa-2" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                                <MudText Typo="Typo.caption">
+                                    Sample · ₹600 base → CGST @($"{_form.CgstRate:0.##}%") + SGST @($"{_form.SgstRate:0.##}%") = ₹@($"{(600m * _form.Rate / 100m):0.##}")
+                                </MudText>
+                            </MudPaper>
+                        }
+
+                        <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+                            @if (!_isNew)
+                            {
+                                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteCurrent">Delete</MudButton>
+                            }
+                            <MudButton Variant="Variant.Text" OnClick="Reset">Cancel</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@_saving">Save tax rate</MudButton>
+                        </MudStack>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Firm)))">‹ Back</MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       OnClick="GoNext"
+                       Disabled="@(_taxes.Count == 0)">Next ›</MudButton>
+        </MudStack>
+    </MudStack>
+</MudContainer>
+
+@code {
+    private List<TaxRate> _taxes = new();
+    private TaxRate _form = new();
+    private TaxRate? _editing;
+    private bool _isNew = true;
+    private bool _attempted;
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _taxes = await db.TaxRates.AsNoTracking().Where(t => t.IsActive).OrderBy(t => t.SortOrder).ThenBy(t => t.Rate).ToListAsync();
+    }
+
+    private void StartNew()
+    {
+        _form = new TaxRate { TaxCategory = "Taxable", IsActive = true };
+        _editing = null;
+        _isNew = true;
+        _attempted = false;
+    }
+
+    private void SelectExisting(TaxRate t)
+    {
+        _editing = t;
+        _form = new TaxRate
+        {
+            Id = t.Id,
+            Name = t.Name,
+            Rate = t.Rate,
+            CessRate = t.CessRate,
+            CessType = t.CessType,
+            IsTaxInclusive = t.IsTaxInclusive,
+            MinPrice = t.MinPrice,
+            MaxPrice = t.MaxPrice,
+            HsnCode = t.HsnCode,
+            TaxCategory = t.TaxCategory,
+            IsDefault = t.IsDefault,
+            SortOrder = t.SortOrder,
+            IsActive = t.IsActive,
+            CreatedAt = t.CreatedAt
+        };
+        _isNew = false;
+        _attempted = false;
+    }
+
+    private async Task QuickAdd(string name, decimal rate, string category = "Taxable")
+    {
+        _form = new TaxRate { Name = name, Rate = rate, TaxCategory = category, IsActive = true };
+        _editing = null;
+        _isNew = true;
+        await Save();
+    }
+
+    private void Reset()
+    {
+        StartNew();
+    }
+
+    private async Task Save()
+    {
+        _attempted = true;
+        if (string.IsNullOrWhiteSpace(_form.Name)) return;
+
+        _saving = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            if (_form.IsDefault)
+            {
+                var existingDefaults = await db.TaxRates.Where(t => t.IsDefault && t.Id != _form.Id).ToListAsync();
+                foreach (var d in existingDefaults) d.IsDefault = false;
+            }
+
+            if (_isNew || _form.Id == 0)
+            {
+                _form.CreatedAt = DateTime.UtcNow;
+                db.TaxRates.Add(_form);
+            }
+            else
+            {
+                var existing = await db.TaxRates.FirstOrDefaultAsync(t => t.Id == _form.Id);
+                if (existing is null)
+                {
+                    Snackbar.Add("Record was deleted elsewhere.", Severity.Warning);
+                    await LoadAsync();
+                    return;
+                }
+                db.Entry(existing).CurrentValues.SetValues(_form);
+            }
+
+            await db.SaveChangesAsync();
+            await LoadAsync();
+            StartNew();
+            Snackbar.Add("Tax rate saved.", Severity.Success);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message?.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            Snackbar.Add("A tax rate with that name already exists.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not save: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteCurrent()
+    {
+        if (_editing is null) return;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var existing = await db.TaxRates.FirstOrDefaultAsync(t => t.Id == _editing.Id);
+            if (existing is not null)
+            {
+                existing.IsActive = false;
+                await db.SaveChangesAsync();
+            }
+            await LoadAsync();
+            StartNew();
+            Snackbar.Add("Tax rate removed.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not delete: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void GoNext() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Products));
+}

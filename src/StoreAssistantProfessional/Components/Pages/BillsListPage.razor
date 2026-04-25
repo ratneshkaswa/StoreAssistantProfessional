@@ -1,0 +1,183 @@
+@page "/bills"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>Bills — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h5">🧾 Bills</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="@(() => Nav.NavigateTo("/billing"))">
+            New bill
+        </MudButton>
+    </MudStack>
+
+    <MudPaper Class="pa-3">
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudTextField @bind-Value="_search"
+                          Placeholder="Search # / customer / phone…"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Rounded.Search"
+                          Margin="Margin.Dense"
+                          Immediate="true"
+                          DebounceInterval="200"
+                          Style="min-width: 240px;" />
+            <MudSelect T="string" @bind-Value="_status" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 120px;">
+                <MudSelectItem Value="@("all")">All</MudSelectItem>
+                <MudSelectItem Value="@("Posted")">Posted</MudSelectItem>
+                <MudSelectItem Value="@("Voided")">Voided</MudSelectItem>
+            </MudSelect>
+            <MudSelect T="string" @bind-Value="_period" Label="Period" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 140px;">
+                <MudSelectItem Value="@("today")">Today</MudSelectItem>
+                <MudSelectItem Value="@("yesterday")">Yesterday</MudSelectItem>
+                <MudSelectItem Value="@("week")">Last 7 days</MudSelectItem>
+                <MudSelectItem Value="@("month")">This month</MudSelectItem>
+                <MudSelectItem Value="@("all")">All time</MudSelectItem>
+            </MudSelect>
+            <span class="sap-statusbar-spacer"></span>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="sap-amount">
+                @Filtered.Count bill(s) · ₹@Filtered.Sum(b => b.Total).ToString("N0")
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    @if (Filtered.Count == 0)
+    {
+        <MudPaper Class="pa-8" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Color="Color.Secondary" Style="font-size: 64px;" />
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    @(_bills.Count == 0 ? "No bills yet." : "No matches in this period.")
+                </MudText>
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <MudPaper>
+            <MudSimpleTable Hover="true" Dense="true">
+                <thead>
+                    <tr>
+                        <th>Bill #</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Customer</th>
+                        <th>Cashier</th>
+                        <th style="text-align: right;">Items</th>
+                        <th style="text-align: right;">Total</th>
+                        <th>Tender</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var b in Filtered)
+                    {
+                        <tr style="cursor: pointer;" @onclick="@(() => Nav.NavigateTo($"/bills/{b.Id}"))">
+                            <td><strong>@b.Number</strong></td>
+                            <td><MudChip T="string" Size="Size.Small" Color="@KindColor(b.Kind)" Variant="Variant.Outlined">@KindShort(b.Kind)</MudChip></td>
+                            <td>@b.At.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                            <td>@(b.Customer?.Name ?? "—")</td>
+                            <td>@(b.Staff is null ? "—" : $"{b.Staff.Code:D2} · {b.Staff.Name}")</td>
+                            <td style="text-align: right;" class="sap-amount">@b.Items.Count</td>
+                            <td style="text-align: right;" class="sap-amount">₹@b.Total.ToString("N0")</td>
+                            <td>
+                                @foreach (var p in b.Payments.GroupBy(x => x.Method))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ml-0 mr-1">@p.Key ₹@p.Sum(x => x.Amount).ToString("N0")</MudChip>
+                                }
+                            </td>
+                            <td>
+                                @if (b.Status == "Posted")
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">posted</MudChip>
+                                }
+                                else if (b.Status == "Voided")
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">voided</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">@b.Status.ToLower()</MudChip>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+</MudStack>
+
+@code {
+    private List<Bill> _bills = new();
+    private string _search = "";
+    private string _status = "all";
+    private string _period = "today";
+
+    private List<Bill> Filtered
+    {
+        get
+        {
+            var (from, to) = PeriodRange();
+            return _bills
+                .Where(b => (_status == "all" || b.Status == _status))
+                .Where(b => b.At >= from && b.At < to)
+                .Where(b => string.IsNullOrWhiteSpace(_search) ||
+                            b.Number.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                            (b.Customer?.Name?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                            (b.Customer?.Phone?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false))
+                .OrderByDescending(b => b.At)
+                .ToList();
+        }
+    }
+
+    private (DateTime from, DateTime to) PeriodRange()
+    {
+        var today = DateTime.UtcNow.Date;
+        return _period switch
+        {
+            "today"     => (today, today.AddDays(1)),
+            "yesterday" => (today.AddDays(-1), today),
+            "week"      => (today.AddDays(-7), today.AddDays(1)),
+            "month"     => (new DateTime(today.Year, today.Month, 1), today.AddDays(1)),
+            _           => (DateTime.MinValue, DateTime.MaxValue)
+        };
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _bills = await db.Bills
+            .Include(b => b.Items)
+            .Include(b => b.Payments)
+            .Include(b => b.Customer)
+            .Include(b => b.Staff)
+            .AsNoTracking()
+            .OrderByDescending(b => b.At)
+            .Take(500)
+            .ToListAsync();
+    }
+
+    private static string KindShort(string kind) => kind switch
+    {
+        "Quote" => "Quote",
+        "Proforma" => "Proforma",
+        "DeliveryChallan" => "Challan",
+        "CashReceipt" => "Cash rcpt",
+        _ => "Tax inv"
+    };
+
+    private static Color KindColor(string kind) => kind switch
+    {
+        "Quote" => Color.Info,
+        "Proforma" => Color.Info,
+        "DeliveryChallan" => Color.Warning,
+        "CashReceipt" => Color.Default,
+        _ => Color.Primary
+    };
+}

@@ -1,0 +1,9 @@
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="my-1">
+    <MudText Typo="Typo.body2">@Label</MudText>
+    <span class="sap-kbd">@K</span>
+</MudStack>
+
+@code {
+    [Parameter] public string K { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "";
+}

@@ -1,0 +1,192 @@
+@page "/vendors/{Id:int}"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>@(_vendor?.Name ?? "Vendor") — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+        <MudIconButton Icon="@Icons.Material.Rounded.ArrowBack" OnClick="@(() => Nav.NavigateTo("/vendors"))" />
+        <MudText Typo="Typo.h5">🤝 @(_vendor?.Name ?? "Vendor")</MudText>
+        @if (_vendor is not null && _vendor.Balance > 0)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Class="ml-2">
+                ₹@_vendor.Balance.ToString("N0") payable
+            </MudChip>
+        }
+    </MudStack>
+
+    @if (_vendor is null)
+    {
+        <MudPaper Class="pa-8" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+            <MudText Color="Color.Secondary">Vendor not found.</MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h6">Profile</MudText>
+                        <MudGrid Spacing="1">
+                            <MudItem xs="5"><MudText Typo="Typo.caption" Color="Color.Secondary">Phone</MudText></MudItem>
+                            <MudItem xs="7"><MudText Typo="Typo.body2">@(_vendor.Phone ?? "—")</MudText></MudItem>
+                            <MudItem xs="5"><MudText Typo="Typo.caption" Color="Color.Secondary">GSTIN</MudText></MudItem>
+                            <MudItem xs="7"><MudText Typo="Typo.body2">@(_vendor.Gstin ?? "—")</MudText></MudItem>
+                            <MudItem xs="5"><MudText Typo="Typo.caption" Color="Color.Secondary">Terms</MudText></MudItem>
+                            <MudItem xs="7"><MudText Typo="Typo.body2">@_vendor.PaymentTermDays days · limit ₹@_vendor.CreditLimit.ToString("N0")</MudText></MudItem>
+                            <MudItem xs="5"><MudText Typo="Typo.caption" Color="Color.Secondary">Bank</MudText></MudItem>
+                            <MudItem xs="7"><MudText Typo="Typo.body2">@(_vendor.BankName ?? "—")</MudText></MudItem>
+                            <MudItem xs="5"><MudText Typo="Typo.caption" Color="Color.Secondary">Address</MudText></MudItem>
+                            <MudItem xs="7"><MudText Typo="Typo.body2">@FormatAddress()</MudText></MudItem>
+                        </MudGrid>
+                        @if (!string.IsNullOrEmpty(_vendor.Notes))
+                        {
+                            <MudDivider />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Notes</MudText>
+                            <MudText Typo="Typo.body2">@_vendor.Notes</MudText>
+                        }
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Edit" OnClick="@(() => Nav.NavigateTo("/vendors"))">Edit</MudButton>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="8">
+                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.h6">Activity</MudText>
+                            <MudStack Row="true" Spacing="3">
+                                <MudStack Spacing="0" AlignItems="AlignItems.End">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Inwards</MudText>
+                                    <MudText Typo="Typo.h6" Class="sap-amount">@_inwardCount</MudText>
+                                </MudStack>
+                                <MudStack Spacing="0" AlignItems="AlignItems.End">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Returns</MudText>
+                                    <MudText Typo="Typo.h6" Class="sap-amount">@_returnCount</MudText>
+                                </MudStack>
+                                <MudStack Spacing="0" AlignItems="AlignItems.End">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Lifetime purchases</MudText>
+                                    <MudText Typo="Typo.h6" Class="sap-amount">₹@_lifetimePurchases.ToString("N0")</MudText>
+                                </MudStack>
+                            </MudStack>
+                        </MudStack>
+
+                        <MudDivider />
+
+                        <MudText Typo="Typo.subtitle2">Recent inwards</MudText>
+                        @if (_inwards.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">No inwards yet.</MudText>
+                        }
+                        else
+                        {
+                            <MudSimpleTable Dense="true">
+                                <thead>
+                                    <tr><th>Inward #</th><th>Date</th><th style="text-align: right;">Items</th><th style="text-align: right;">Cost</th><th>Status</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var entry in _inwards)
+                                    {
+                                        var parcel = entry.Parcels.FirstOrDefault(p => p.VendorId == Id);
+                                        var items = parcel?.Items.Count ?? 0;
+                                        var cost = parcel?.Items.Sum(i => i.LineTotal) ?? 0m;
+                                        <tr style="cursor: pointer;" @onclick="@(() => Nav.NavigateTo($"/inward/{entry.Id}"))">
+                                            <td>@entry.InwardNumber</td>
+                                            <td>@entry.EntryDate.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                                            <td style="text-align: right;" class="sap-amount">@items</td>
+                                            <td style="text-align: right;" class="sap-amount">₹@cost.ToString("N0")</td>
+                                            <td>
+                                                @if (entry.Status == "Received")
+                                                {
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">received</MudChip>
+                                                }
+                                                else
+                                                {
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">draft</MudChip>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        }
+
+                        @if (_returns.Count > 0)
+                        {
+                            <MudText Typo="Typo.subtitle2" Class="mt-3">Recent returns</MudText>
+                            <MudSimpleTable Dense="true">
+                                <thead>
+                                    <tr><th>Return #</th><th>Date</th><th style="text-align: right;">Items</th><th style="text-align: right;">Credit</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var r in _returns)
+                                    {
+                                        <tr>
+                                            <td>@r.ReturnNumber</td>
+                                            <td>@r.At.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                                            <td style="text-align: right;" class="sap-amount">@r.Items.Count</td>
+                                            <td style="text-align: right;" class="sap-amount">₹@r.Total.ToString("N0")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        }
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudStack>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Vendor? _vendor;
+    private int _inwardCount;
+    private int _returnCount;
+    private decimal _lifetimePurchases;
+    private List<InwardEntry> _inwards = new();
+    private List<PurchaseReturn> _returns = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _vendor = await db.Vendors.AsNoTracking().FirstOrDefaultAsync(v => v.Id == Id);
+        if (_vendor is null) return;
+
+        _inwards = await db.InwardEntries.AsNoTracking()
+            .Include(e => e.Parcels).ThenInclude(p => p.Items)
+            .Where(e => e.Parcels.Any(p => p.VendorId == Id))
+            .OrderByDescending(e => e.EntryDate)
+            .Take(20)
+            .ToListAsync();
+        _inwardCount = _inwards.Count;
+
+        _returns = await db.PurchaseReturns.AsNoTracking()
+            .Include(r => r.Items)
+            .Where(r => r.VendorId == Id)
+            .OrderByDescending(r => r.At)
+            .Take(20)
+            .ToListAsync();
+        _returnCount = _returns.Count;
+
+        _lifetimePurchases = _inwards
+            .SelectMany(e => e.Parcels)
+            .Where(p => p.VendorId == Id && p.InwardEntry?.Status == "Received")
+            .SelectMany(p => p.Items)
+            .Sum(i => i.LineTotal);
+    }
+
+    private string FormatAddress()
+    {
+        if (_vendor is null) return "—";
+        var parts = new[] { _vendor.Address, _vendor.City, _vendor.State, _vendor.Pincode }
+            .Where(s => !string.IsNullOrWhiteSpace(s));
+        var s = string.Join(", ", parts);
+        return string.IsNullOrEmpty(s) ? "—" : s;
+    }
+}

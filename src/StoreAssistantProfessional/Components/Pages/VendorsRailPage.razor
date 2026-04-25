@@ -1,0 +1,216 @@
+@page "/vendors"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Vendors — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h5">🤝 Vendors</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="StartNew">
+            Add vendor
+        </MudButton>
+    </MudStack>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-3" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 600px;">
+                <MudStack Spacing="2">
+                    <MudTextField @bind-Value="_search"
+                                  Placeholder="Search by name or phone…"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Rounded.Search"
+                                  Margin="Margin.Dense"
+                                  Immediate="true"
+                                  DebounceInterval="200" />
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@Filtered.Count of @_vendors.Count</MudText>
+                    <MudDivider />
+
+                    @if (Filtered.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                            <MudIcon Icon="@Icons.Material.Rounded.Handshake" Color="Color.Secondary" Style="font-size: 48px;" />
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                @(_vendors.Count == 0 ? "No vendors yet." : "No matches.")
+                            </MudText>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudStack Spacing="1">
+                            @foreach (var v in Filtered)
+                            {
+                                var isSel = _editing?.Id == v.Id;
+                                <MudPaper Elevation="0"
+                                          Class="pa-2"
+                                          Style="@(isSel ? "border-left: 3px solid var(--mud-palette-primary); cursor: pointer;" : "cursor: pointer;")"
+                                          @onclick="@(() => SelectExisting(v))">
+                                    <MudStack Spacing="0">
+                                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.body2" Style="font-weight: 500;">@v.Name</MudText>
+                                            @if (v.Balance > 0)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">₹@v.Balance.ToString("N0") due</MudChip>
+                                            }
+                                        </MudStack>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @(string.IsNullOrEmpty(v.Phone) ? "no phone" : v.Phone)
+                                            @(string.IsNullOrEmpty(v.Gstin) ? "" : " · " + v.Gstin)
+                                        </MudText>
+                                    </MudStack>
+                                </MudPaper>
+                            }
+                        </MudStack>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08); min-height: 600px;">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6">@(_isNew ? "➕ Add vendor" : $"Edit · {_form.Name}")</MudText>
+
+                    <MudGrid Spacing="3">
+                        <MudItem xs="12" md="8">
+                            <MudTextField @bind-Value="_form.Name" Label="Vendor name *" Variant="Variant.Outlined" MaxLength="200"
+                                          Immediate="true"
+                                          Error="@(_attempted && string.IsNullOrWhiteSpace(_form.Name))"
+                                          ErrorText="Name is required." />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudCheckBox T="bool" @bind-Value="_form.IsActive" Color="Color.Primary">Active</MudCheckBox>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.Phone" Label="Phone" Variant="Variant.Outlined" MaxLength="15" /></MudItem>
+                        <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.AltPhone" Label="Alt phone" Variant="Variant.Outlined" MaxLength="15" /></MudItem>
+                        <MudItem xs="12"><MudTextField @bind-Value="_form.Email" Label="Email" Variant="Variant.Outlined" MaxLength="200" /></MudItem>
+                        <MudItem xs="12"><MudTextField @bind-Value="_form.Gstin" Label="GSTIN" Variant="Variant.Outlined" MaxLength="15" /></MudItem>
+                        <MudItem xs="12"><MudTextField @bind-Value="_form.Address" Label="Address" Variant="Variant.Outlined" MaxLength="300" /></MudItem>
+                        <MudItem xs="12" md="5"><MudTextField @bind-Value="_form.City" Label="City" Variant="Variant.Outlined" MaxLength="100" /></MudItem>
+                        <MudItem xs="12" md="5"><MudTextField @bind-Value="_form.State" Label="State" Variant="Variant.Outlined" MaxLength="100" /></MudItem>
+                        <MudItem xs="12" md="2"><MudTextField @bind-Value="_form.Pincode" Label="PIN" Variant="Variant.Outlined" MaxLength="6" /></MudItem>
+
+                        <MudItem xs="12"><MudText Typo="Typo.caption" Color="Color.Secondary">Bank</MudText></MudItem>
+                        <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.BankName" Label="Bank name" Variant="Variant.Outlined" MaxLength="200" /></MudItem>
+                        <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.AccountHolderName" Label="Account holder" Variant="Variant.Outlined" MaxLength="100" /></MudItem>
+                        <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.AccountNumber" Label="Account no." Variant="Variant.Outlined" MaxLength="20" /></MudItem>
+                        <MudItem xs="12" md="6"><MudTextField @bind-Value="_form.IfscCode" Label="IFSC" Variant="Variant.Outlined" MaxLength="11" /></MudItem>
+
+                        <MudItem xs="12"><MudText Typo="Typo.caption" Color="Color.Secondary">Payment</MudText></MudItem>
+                        <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_form.PaymentTermDays" Label="Days allowed" Variant="Variant.Outlined" Min="0" Max="365" /></MudItem>
+                        <MudItem xs="6" md="3"><MudNumericField T="decimal" @bind-Value="_form.CreditLimit" Label="Credit limit ₹" Variant="Variant.Outlined" Min="0" /></MudItem>
+                        <MudItem xs="12" md="6"><MudNumericField T="decimal" @bind-Value="_form.Balance" Label="Outstanding ₹" Variant="Variant.Outlined" /></MudItem>
+
+                        <MudItem xs="12"><MudTextField @bind-Value="_form.Notes" Label="Notes" Variant="Variant.Outlined" MaxLength="500" Lines="2" /></MudItem>
+                    </MudGrid>
+
+                    <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+                        @if (!_isNew)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteCurrent">Deactivate</MudButton>
+                            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.OpenInNew" OnClick="@(() => Nav.NavigateTo($"/vendors/{_form.Id}"))">Open ledger</MudButton>
+                        }
+                        <MudButton Variant="Variant.Text" OnClick="Reset">Cancel</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@_saving">Save</MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
+@code {
+    private List<Vendor> _vendors = new();
+    private Vendor _form = new();
+    private Vendor? _editing;
+    private bool _isNew = true;
+    private bool _attempted;
+    private bool _saving;
+    private string _search = "";
+
+    private List<Vendor> Filtered =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _vendors
+            : _vendors.Where(v =>
+                (v.Name?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (v.Phone?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false))
+              .ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _vendors = await db.Vendors.AsNoTracking().Where(v => v.IsActive).OrderBy(v => v.Name).ToListAsync();
+    }
+
+    private void StartNew()
+    {
+        _form = new Vendor { PaymentTermDays = 30, IsActive = true };
+        _editing = null; _isNew = true; _attempted = false;
+    }
+
+    private void SelectExisting(Vendor v)
+    {
+        _editing = v;
+        _form = new Vendor
+        {
+            Id = v.Id, Name = v.Name, Phone = v.Phone, AltPhone = v.AltPhone, Email = v.Email, Gstin = v.Gstin,
+            Address = v.Address, City = v.City, State = v.State, Pincode = v.Pincode,
+            BankName = v.BankName, AccountHolderName = v.AccountHolderName, AccountNumber = v.AccountNumber, IfscCode = v.IfscCode,
+            Balance = v.Balance, PaymentTermDays = v.PaymentTermDays, CreditLimit = v.CreditLimit,
+            Notes = v.Notes, IsActive = v.IsActive, CreatedAt = v.CreatedAt
+        };
+        _isNew = false; _attempted = false;
+    }
+
+    private void Reset() => StartNew();
+
+    private async Task Save()
+    {
+        _attempted = true;
+        if (string.IsNullOrWhiteSpace(_form.Name)) return;
+        _saving = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            if (_isNew || _form.Id == 0)
+            {
+                _form.CreatedAt = DateTime.UtcNow; _form.UpdatedAt = DateTime.UtcNow;
+                db.Vendors.Add(_form);
+            }
+            else
+            {
+                var existing = await db.Vendors.FirstOrDefaultAsync(v => v.Id == _form.Id);
+                if (existing is null) { Snackbar.Add("Record was deleted elsewhere.", Severity.Warning); await LoadAsync(); return; }
+                _form.UpdatedAt = DateTime.UtcNow;
+                db.Entry(existing).CurrentValues.SetValues(_form);
+            }
+            await db.SaveChangesAsync();
+            await LoadAsync(); StartNew();
+            Snackbar.Add("Vendor saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not save: {ex.Message}", Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteCurrent()
+    {
+        if (_editing is null) return;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var existing = await db.Vendors.FirstOrDefaultAsync(v => v.Id == _editing.Id);
+            if (existing is not null) { existing.IsActive = false; existing.UpdatedAt = DateTime.UtcNow; await db.SaveChangesAsync(); }
+            await LoadAsync(); StartNew();
+            Snackbar.Add("Vendor deactivated.", Severity.Info);
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not deactivate: {ex.Message}", Severity.Error); }
+    }
+}

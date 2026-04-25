@@ -1,0 +1,128 @@
+@page "/onboarding/products"
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IOnboardingService Onboarding
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Products — Setup</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="pa-6">
+    <MudStack Spacing="4">
+        <MudStack Spacing="1">
+            <MudText Typo="Typo.h5">Setting up your shop · 3 of 4</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Add at least one product to continue. The full product flow lands in a later round —
+                for now use the sample button below to seed a placeholder so you can move on.
+            </MudText>
+            <OnboardingProgress Current="OnboardingStep.Products" />
+        </MudStack>
+
+        <MudPaper Class="pa-6" Style="box-shadow: inset 4px 0 0 var(--mud-palette-tertiary), 0 2px 4px rgba(0,0,0,0.08);">
+            <MudStack Spacing="4" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Rounded.Inventory2" Color="Color.Tertiary" Style="font-size: 72px;" />
+
+                @if (_count == 0)
+                {
+                    <MudText Typo="Typo.body1" Align="Align.Center">
+                        No products yet.
+                    </MudText>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Size="Size.Large"
+                               StartIcon="@Icons.Material.Rounded.Add"
+                               OnClick="AddSample"
+                               Disabled="@_busy">
+                        Add a sample product
+                    </MudButton>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">
+                        creates "Sample product" with the default tax slab — you can edit or delete later
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body1" Align="Align.Center">
+                        @_count product@(_count == 1 ? "" : "s") added.
+                    </MudText>
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Variant="Variant.Outlined"
+                                   StartIcon="@Icons.Material.Rounded.Add"
+                                   OnClick="AddSample"
+                                   Disabled="@_busy">
+                            Add another sample
+                        </MudButton>
+                    </MudStack>
+                }
+            </MudStack>
+        </MudPaper>
+
+        <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Tax)))">‹ Back</MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       OnClick="GoNext"
+                       Disabled="@(_count == 0)">Next ›</MudButton>
+        </MudStack>
+    </MudStack>
+</MudContainer>
+
+@code {
+    private int _count;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _count = await db.Products.CountAsync(p => p.IsActive);
+    }
+
+    private async Task AddSample()
+    {
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var defaultTaxId = await db.TaxRates
+                .Where(t => t.IsActive && t.IsDefault)
+                .Select(t => (int?)t.Id)
+                .FirstOrDefaultAsync()
+                ?? await db.TaxRates
+                    .Where(t => t.IsActive)
+                    .OrderBy(t => t.Id)
+                    .Select(t => (int?)t.Id)
+                    .FirstOrDefaultAsync();
+
+            var n = await db.Products.CountAsync() + 1;
+            var p = new Product
+            {
+                Name = $"Sample product {n}",
+                Sku = $"SAMPLE-{n:D3}",
+                Mrp = 100m,
+                SalePrice = 100m,
+                Cost = 60m,
+                StockQty = 0,
+                TaxRateId = defaultTaxId,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            db.Products.Add(p);
+            await db.SaveChangesAsync();
+            await LoadAsync();
+            Snackbar.Add($"Added {p.Name}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not add: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void GoNext() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Vendor));
+}

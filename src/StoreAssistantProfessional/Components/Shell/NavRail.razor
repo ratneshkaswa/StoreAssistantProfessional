@@ -1,0 +1,60 @@
+@inject NavigationManager Nav
+
+<nav class="sap-navrail" aria-label="Primary">
+    @foreach (var item in _items)
+    {
+        var active = IsActive(item.Path);
+        <a class="@(active ? "sap-nav-item sap-nav-active" : "sap-nav-item")"
+           href="@item.Path"
+           @onclick="@(() => Nav.NavigateTo(item.Path))"
+           @onclick:preventDefault>
+            <MudIcon Icon="@item.Icon" Size="Size.Medium" />
+            <span class="sap-nav-label">@item.Label</span>
+            @if (item.BadgeCount > 0)
+            {
+                <span class="sap-nav-badge">@item.BadgeCount</span>
+            }
+        </a>
+        @if (item.DividerAfter)
+        {
+            <div class="sap-nav-divider"></div>
+        }
+    }
+</nav>
+
+@code {
+    [Parameter] public int LowStockCount { get; set; }
+
+    private record NavItem(string Label, string Icon, string Path, bool DividerAfter = false, int BadgeCount = 0);
+
+    private List<NavItem> _items = new();
+
+    protected override void OnParametersSet()
+    {
+        _items = new()
+        {
+            new("Dash",   Icons.Material.Rounded.Home,         "/dashboard"),
+            new("Sell",   Icons.Material.Rounded.PointOfSale,  "/billing"),
+            new("Inward", Icons.Material.Rounded.MoveToInbox,  "/inward"),
+            new("Prod",   Icons.Material.Rounded.Inventory2,   "/products", BadgeCount: LowStockCount),
+            new("Cust",   Icons.Material.Rounded.People,       "/customers"),
+            new("Vendor", Icons.Material.Rounded.Handshake,    "/vendors"),
+            new("Staff",  Icons.Material.Rounded.Badge,        "/staff"),
+            new("Rep",    Icons.Material.Rounded.Analytics,    "/reports", DividerAfter: true),
+            new("Set",    Icons.Material.Rounded.Settings,     "/settings"),
+        };
+    }
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += (_, _) => InvokeAsync(StateHasChanged);
+    }
+
+    private bool IsActive(string path)
+    {
+        var current = new Uri(Nav.Uri).AbsolutePath;
+        if (path == "/dashboard" && current == "/dashboard") return true;
+        if (path == "/billing" && (current == "/" || current == "/billing")) return true;
+        return current.StartsWith(path, StringComparison.OrdinalIgnoreCase) && path.Length > 1;
+    }
+}

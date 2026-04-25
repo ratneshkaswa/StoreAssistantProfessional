@@ -1,0 +1,188 @@
+@inject NavigationManager Nav
+
+<div class="sap-topbar">
+    <MudButton Variant="Variant.Filled"
+               Color="@(IsBilling ? Color.Error : Color.Success)"
+               Size="Size.Large"
+               Class="sap-toggle"
+               OnClick="OnToggle">
+        <MudIcon Icon="@(IsBilling ? Icons.Material.Rounded.Stop : Icons.Material.Rounded.PlayArrow)" Class="mr-2" />
+        @(IsBilling ? "STOP BILLING" : "START BILLING")
+    </MudButton>
+
+    <div class="sap-topbar-search">
+        <MudTextField T="string"
+                      Placeholder="Search products, customers, bills, or > commands…"
+                      Variant="Variant.Outlined"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Rounded.Search"
+                      Margin="Margin.Dense"
+                      FullWidth="true" />
+    </div>
+
+    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+        <MudIconButton Icon="@Icons.Material.Rounded.HelpOutline"
+                       Color="Color.Default"
+                       Size="Size.Medium"
+                       OnClick="@(() => _cheatOpen = true)"
+                       title="Keyboard shortcuts" />
+
+        <MudBadge Content="@_urgentCount"
+                  Color="Color.Error"
+                  Visible="@(_urgentCount > 0)"
+                  Overlap="true">
+            <MudIconButton Icon="@Icons.Material.Rounded.Notifications"
+                           Color="Color.Default"
+                           Size="Size.Medium"
+                           OnClick="@(() => _bellOpen = !_bellOpen)" />
+        </MudBadge>
+    </MudStack>
+</div>
+
+<MudPopover Open="_bellOpen"
+            AnchorOrigin="Origin.BottomRight"
+            TransformOrigin="Origin.TopRight"
+            Style="width: 360px;">
+    <MudPaper Class="pa-3" Elevation="3">
+        <MudStack Spacing="2">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.subtitle1">Notifications</MudText>
+                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Rounded.Close" OnClick="@(() => _bellOpen = false)" />
+            </MudStack>
+
+            @if (_notifications.Count == 0)
+            {
+                <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                    <MudIcon Icon="@Icons.Material.Rounded.NotificationsNone" Color="Color.Secondary" Style="font-size: 36px;" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">All caught up.</MudText>
+                </MudStack>
+            }
+            else
+            {
+                @foreach (var group in _notifications.GroupBy(n => n.Severity))
+                {
+                    var color = group.Key switch
+                    {
+                        NoteSeverity.Urgent  => "var(--mud-palette-error)",
+                        NoteSeverity.Warning => "var(--mud-palette-warning)",
+                        _                    => "var(--mud-palette-text-secondary)"
+                    };
+                    var label = group.Key switch
+                    {
+                        NoteSeverity.Urgent  => "URGENT",
+                        NoteSeverity.Warning => "WARNING",
+                        _                    => "INFO"
+                    };
+                    <MudText Typo="Typo.caption" Style="@($"color:{color};font-weight:600;")">@label (@group.Count())</MudText>
+                    @foreach (var n in group)
+                    {
+                        <div style="@($"padding:6px 8px;border-left:3px solid {color};font-size:12px;")">
+                            @n.Message
+                        </div>
+                    }
+                }
+                <MudDivider />
+                <MudStack Row="true" Justify="Justify.SpaceBetween">
+                    <MudButton Size="Size.Small" Variant="Variant.Text">Mark all read</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text">See all</MudButton>
+                </MudStack>
+            }
+        </MudStack>
+    </MudPaper>
+</MudPopover>
+
+<MudDialog @bind-Visible="_cheatOpen" Options="_cheatOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Keyboard shortcuts</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">Billing</MudText>
+                @foreach (var (k, l) in _billingKeys) { <KeyRow K="@k" Label="@l" /> }
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">Navigation</MudText>
+                @foreach (var (k, l) in _navKeys) { <KeyRow K="@k" Label="@l" /> }
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">Search &amp; jump</MudText>
+                @foreach (var (k, l) in _searchKeys) { <KeyRow K="@k" Label="@l" /> }
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">Sessions</MudText>
+                @foreach (var (k, l) in _sessionKeys) { <KeyRow K="@k" Label="@l" /> }
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _cheatOpen = false)">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _bellOpen;
+    private bool _cheatOpen;
+    private int _urgentCount = 0;
+
+    private enum NoteSeverity { Urgent, Warning, Info }
+    private record Note(NoteSeverity Severity, string Message);
+    private readonly List<Note> _notifications = new();
+
+    private static readonly DialogOptions _cheatOptions = new()
+    {
+        CloseOnEscapeKey = true,
+        MaxWidth = MaxWidth.Medium,
+        FullWidth = true
+    };
+
+    private readonly (string, string)[] _billingKeys = new[]
+    {
+        ("F5", "New bill"),
+        ("F8", "Hold / Resume"),
+        ("F9", "Discount"),
+        ("F10", "Attach customer"),
+        ("F12", "Checkout"),
+        ("Esc", "Cancel"),
+    };
+
+    private readonly (string, string)[] _navKeys = new[]
+    {
+        ("Ctrl+1", "Dashboard"),
+        ("Ctrl+2", "Sell"),
+        ("Ctrl+3", "Products"),
+        ("Ctrl+4", "Customers"),
+        ("Ctrl+5", "Reports"),
+        ("Ctrl+,", "Settings"),
+    };
+
+    private readonly (string, string)[] _searchKeys = new[]
+    {
+        ("/", "Focus search"),
+        ("Ctrl+K", "Command palette"),
+        ("Ctrl+Z", "Undo last action"),
+        ("?", "Show shortcuts"),
+    };
+
+    private readonly (string, string)[] _sessionKeys = new[]
+    {
+        ("Ctrl+L", "Lock to User"),
+        ("Ctrl+Shift+A", "Unlock to Admin"),
+    };
+
+    private bool IsBilling => CurrentPath() is "/" or "/billing";
+
+    private string CurrentPath()
+    {
+        var uri = new Uri(Nav.Uri);
+        var path = uri.AbsolutePath;
+        return string.IsNullOrEmpty(path) ? "/" : path;
+    }
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += (_, _) => InvokeAsync(StateHasChanged);
+    }
+
+    private void OnToggle() => Nav.NavigateTo(IsBilling ? "/dashboard" : "/billing");
+}

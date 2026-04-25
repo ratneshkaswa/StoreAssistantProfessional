@@ -1,0 +1,331 @@
+@page "/staff"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Staff — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h5">👔 Staff</MudText>
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+            <MudRadioGroup T="string" @bind-Value="_filter" Class="mr-3">
+                <MudRadio T="string" Value="@("active")" Color="Color.Primary" Size="Size.Small">Active</MudRadio>
+                <MudRadio T="string" Value="@("inactive")" Color="Color.Primary" Size="Size.Small">Inactive</MudRadio>
+                <MudRadio T="string" Value="@("all")" Color="Color.Primary" Size="Size.Small">All</MudRadio>
+            </MudRadioGroup>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="StartNew">
+                Add staff
+            </MudButton>
+        </MudStack>
+    </MudStack>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-3" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 540px;">
+                <MudStack Spacing="2">
+                    <MudTextField @bind-Value="_search"
+                                  Placeholder="Search by name, code, phone…"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Rounded.Search"
+                                  Margin="Margin.Dense"
+                                  Immediate="true"
+                                  DebounceInterval="200" />
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@Filtered.Count of @_staff.Count</MudText>
+
+                    <MudDivider />
+
+                    @if (Filtered.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                            <MudIcon Icon="@Icons.Material.Rounded.Badge" Color="Color.Secondary" Style="font-size: 48px;" />
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                @(_staff.Count == 0 ? "No staff yet. Click Add staff to start." : "No matches.")
+                            </MudText>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudStack Spacing="1">
+                            @foreach (var s in Filtered)
+                            {
+                                var isSel = _editing?.Id == s.Id;
+                                <MudPaper Elevation="0"
+                                          Class="pa-2"
+                                          Style="@(isSel ? "border-left: 3px solid var(--mud-palette-primary); cursor: pointer;" : "cursor: pointer;")"
+                                          @onclick="@(() => SelectExisting(s))">
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                        <MudStack Spacing="0">
+                                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-family: Consolas, monospace;">@($"{s.Code:D2}")</MudText>
+                                                <MudText Typo="Typo.body2" Style="font-weight: 500;">@s.Name</MudText>
+                                                @if (!s.IsActive)
+                                                {
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">inactive</MudChip>
+                                                }
+                                            </MudStack>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                @(string.IsNullOrEmpty(s.Role) ? "—" : s.Role)
+                                                @if (s.Salary > 0)
+                                                {
+                                                    <span> · ₹@s.Salary.ToString("N0")/m</span>
+                                                }
+                                                @if (s.CommissionPercent > 0)
+                                                {
+                                                    <span> · @s.CommissionPercent.ToString("0.##")% comm</span>
+                                                }
+                                            </MudText>
+                                        </MudStack>
+                                    </MudStack>
+                                </MudPaper>
+                            }
+                        </MudStack>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08); min-height: 540px;">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6">@(_isNew ? "➕ Add staff" : $"Code {_form.Code:D2} · {_form.Name}")</MudText>
+
+                    <MudGrid Spacing="3">
+                        <MudItem xs="6" md="3">
+                            <MudNumericField T="int" @bind-Value="_form.Code" Label="Code" Variant="Variant.Outlined" Min="1" Max="9999" Disabled="@(!_isNew)" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_form.Name"
+                                          Label="Name *"
+                                          Variant="Variant.Outlined"
+                                          MaxLength="200"
+                                          Immediate="true"
+                                          Error="@(_attempted && string.IsNullOrWhiteSpace(_form.Name))"
+                                          ErrorText="Name is required." />
+                        </MudItem>
+                        <MudItem xs="6" md="3">
+                            <MudCheckBox T="bool" @bind-Value="_form.IsActive" Color="Color.Primary">Active</MudCheckBox>
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_form.Phone" Label="Phone" Variant="Variant.Outlined" MaxLength="15" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_form.Email" Label="Email" Variant="Variant.Outlined" MaxLength="200" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="string" @bind-Value="_form.Role" Label="Role" Variant="Variant.Outlined" Clearable="true">
+                                <MudSelectItem Value="@((string?)null)">—</MudSelectItem>
+                                <MudSelectItem Value="@("Cashier")">Cashier</MudSelectItem>
+                                <MudSelectItem Value="@("Tailor")">Tailor</MudSelectItem>
+                                <MudSelectItem Value="@("Sales")">Sales</MudSelectItem>
+                                <MudSelectItem Value="@("Manager")">Manager</MudSelectItem>
+                                <MudSelectItem Value="@("Helper")">Helper</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudDatePicker @bind-Date="_form.JoiningDate" Label="Joining date" Variant="Variant.Outlined" />
+                        </MudItem>
+
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_form.IdProofType"
+                                          Label="ID proof type"
+                                          Variant="Variant.Outlined"
+                                          MaxLength="50"
+                                          HelperText="e.g. Aadhaar / PAN / Voter ID" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_form.IdProofNumber" Label="ID proof number" Variant="Variant.Outlined" MaxLength="20" />
+                        </MudItem>
+
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_form.Address" Label="Address" Variant="Variant.Outlined" MaxLength="300" />
+                        </MudItem>
+                        <MudItem xs="8">
+                            <MudTextField @bind-Value="_form.City" Label="City" Variant="Variant.Outlined" MaxLength="100" />
+                        </MudItem>
+                        <MudItem xs="4">
+                            <MudTextField @bind-Value="_form.Pincode" Label="PIN" Variant="Variant.Outlined" MaxLength="6" />
+                        </MudItem>
+
+                        <MudItem xs="12"><MudText Typo="Typo.caption" Color="Color.Secondary">Pay</MudText></MudItem>
+                        <MudItem xs="6" md="4">
+                            <MudNumericField T="decimal" @bind-Value="_form.Salary" Label="Salary (₹/m)" Variant="Variant.Outlined" Min="0" />
+                        </MudItem>
+                        <MudItem xs="6" md="4">
+                            <MudNumericField T="decimal" @bind-Value="_form.CommissionPercent" Label="Commission %" Variant="Variant.Outlined" Min="0" Max="100" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudTextField @bind-Value="_form.SalaryFormula"
+                                          Label="Salary formula (advanced)"
+                                          Variant="Variant.Outlined"
+                                          MaxLength="200"
+                                          HelperText="e.g. base + 0.01 * sales − deductions" />
+                        </MudItem>
+
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_form.Notes" Label="Notes" Variant="Variant.Outlined" MaxLength="500" Lines="2" />
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+                        @if (!_isNew)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteCurrent">Deactivate</MudButton>
+                        }
+                        <MudButton Variant="Variant.Text" OnClick="Reset">Cancel</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@_saving">Save</MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
+@code {
+    private List<Staff> _staff = new();
+    private Staff _form = new();
+    private Staff? _editing;
+    private bool _isNew = true;
+    private bool _attempted;
+    private bool _saving;
+    private string _search = "";
+    private string _filter = "active";
+
+    private List<Staff> Filtered =>
+        _staff.Where(s => _filter switch
+        {
+            "active"   => s.IsActive,
+            "inactive" => !s.IsActive,
+            _          => true
+        }).Where(s =>
+            string.IsNullOrWhiteSpace(_search) ||
+            (s.Name?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (s.Phone?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            s.Code.ToString().Contains(_search))
+        .OrderBy(s => s.Code)
+        .ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _staff = await db.Staff.AsNoTracking().OrderBy(s => s.Code).ToListAsync();
+    }
+
+    private void StartNew()
+    {
+        var nextCode = _staff.Count == 0 ? 1 : _staff.Max(s => s.Code) + 1;
+        _form = new Staff { Code = nextCode, IsActive = true };
+        _editing = null;
+        _isNew = true;
+        _attempted = false;
+    }
+
+    private void SelectExisting(Staff s)
+    {
+        _editing = s;
+        _form = new Staff
+        {
+            Id = s.Id,
+            Code = s.Code,
+            Name = s.Name,
+            Phone = s.Phone,
+            Email = s.Email,
+            Role = s.Role,
+            PhotoBase64 = s.PhotoBase64,
+            PhotoMimeType = s.PhotoMimeType,
+            IdProofNumber = s.IdProofNumber,
+            IdProofType = s.IdProofType,
+            Address = s.Address,
+            City = s.City,
+            Pincode = s.Pincode,
+            CommissionPercent = s.CommissionPercent,
+            Salary = s.Salary,
+            SalaryFormula = s.SalaryFormula,
+            JoiningDate = s.JoiningDate,
+            Notes = s.Notes,
+            IsActive = s.IsActive,
+            CreatedAt = s.CreatedAt
+        };
+        _isNew = false;
+        _attempted = false;
+    }
+
+    private void Reset() => StartNew();
+
+    private async Task Save()
+    {
+        _attempted = true;
+        if (string.IsNullOrWhiteSpace(_form.Name)) return;
+
+        _saving = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            if (_isNew || _form.Id == 0)
+            {
+                if (await db.Staff.AnyAsync(s => s.Code == _form.Code))
+                {
+                    Snackbar.Add($"Code {_form.Code} is already used. Pick another.", Severity.Warning);
+                    return;
+                }
+                _form.CreatedAt = DateTime.UtcNow;
+                _form.UpdatedAt = DateTime.UtcNow;
+                db.Staff.Add(_form);
+            }
+            else
+            {
+                var existing = await db.Staff.FirstOrDefaultAsync(s => s.Id == _form.Id);
+                if (existing is null)
+                {
+                    Snackbar.Add("Record was deleted elsewhere.", Severity.Warning);
+                    await LoadAsync();
+                    return;
+                }
+                _form.UpdatedAt = DateTime.UtcNow;
+                db.Entry(existing).CurrentValues.SetValues(_form);
+            }
+            await db.SaveChangesAsync();
+            await LoadAsync();
+            StartNew();
+            Snackbar.Add("Staff saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not save: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteCurrent()
+    {
+        if (_editing is null) return;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var existing = await db.Staff.FirstOrDefaultAsync(s => s.Id == _editing.Id);
+            if (existing is not null)
+            {
+                existing.IsActive = false;
+                existing.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+            await LoadAsync();
+            StartNew();
+            Snackbar.Add("Staff deactivated.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not deactivate: {ex.Message}", Severity.Error);
+        }
+    }
+}

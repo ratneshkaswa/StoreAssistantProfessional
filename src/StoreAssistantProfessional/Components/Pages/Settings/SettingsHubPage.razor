@@ -1,0 +1,55 @@
+@page "/settings"
+@layout AppShell
+@inject NavigationManager Nav
+
+<PageTitle>Settings — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="4">
+    <MudText Typo="Typo.h5">Settings</MudText>
+
+    <MudGrid Spacing="3">
+        @foreach (var s in _sections)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="pa-4 sap-settings-card"
+                          Elevation="1"
+                          Style="cursor: pointer; height: 100%;"
+                          @onclick="@(() => Nav.NavigateTo(s.Path))">
+                    <MudStack Spacing="2">
+                        <MudIcon Icon="@s.Icon" Color="Color.Primary" Style="font-size: 32px;" />
+                        <MudText Typo="Typo.subtitle1">@s.Title</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@s.Description</MudText>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+</MudStack>
+
+@code {
+    private record Section(string Title, string Description, string Icon, string Path);
+
+    private readonly List<Section> _sections = new()
+    {
+        new("Firm",                  "Your store's identity, FY, invoice settings",       Icons.Material.Rounded.Storefront,        "/settings/firm"),
+        new("Cash management",       "Single drawer or separate petty cash box",          Icons.Material.Rounded.AccountBalanceWallet, "/settings/cash"),
+        new("Goals",                 "Daily / monthly target · streak",                   Icons.Material.Rounded.TrackChanges,      "/settings/goals"),
+        new("Owner alerts",          "Daily WhatsApp summary · channel · time",           Icons.Material.Rounded.Notifications,     "/settings/alerts"),
+        new("Anomaly thresholds",    "Refunds / discounts / off-hours rules",             Icons.Material.Rounded.WarningAmber,      "/settings/anomalies"),
+        new("Sessions",              "Login history · failed attempts",                   Icons.Material.Rounded.History,           "/settings/sessions"),
+        new("Update channel",        "Stable / beta · check frequency",                   Icons.Material.Rounded.SystemUpdate,      "/settings/updates"),
+        new("Cloud backup",          "Local · Drive · OneDrive · email",                  Icons.Material.Rounded.CloudUpload,       "/settings/backup"),
+        new("Operations",            "Training mode · privacy mode · power-user mode",    Icons.Material.Rounded.Tune,              "/settings/operations"),
+        new("Receipt template",      "Sections · paper · footer text",                    Icons.Material.Rounded.Receipt,           "/settings/receipt"),
+        new("Permissions",           "What User can do without Admin unlock",             Icons.Material.Rounded.Shield,            "/settings/permissions"),
+        new("E-way / E-invoice",     "NIC API credentials and turnover threshold",        Icons.Material.Rounded.Verified,          "/settings/eway"),
+        new("Recycle bin",           "Reactivate deactivated records",                    Icons.Material.Rounded.RestoreFromTrash,  "/settings/recycle"),
+        new("Reset / sandbox",       "Wipe all data (Master PIN required)",               Icons.Material.Rounded.DeleteForever,     "/settings/reset"),
+    };
+}
+
+<style>
+    .sap-settings-card:hover {
+        background: rgba(232, 181, 132, 0.08);
+    }
+</style>

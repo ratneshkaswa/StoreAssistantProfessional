@@ -1,0 +1,322 @@
+@page "/expenses"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IShellState Shell
+@inject ISnackbar Snackbar
+
+<PageTitle>Expenses — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h5">💸 Expenses</MudText>
+    </MudStack>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 540px;">
+                <MudStack Spacing="3">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.h6">Day book · @DateTime.Today.ToString("dd MMM yyyy")</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@_today.Count entries · ₹<span class="sap-amount">@_today.Sum(e => e.Amount).ToString("N0")</span></MudText>
+                    </MudStack>
+
+                    @if (_today.Count == 0)
+                    {
+                        <MudPaper Class="pa-4" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                            <MudStack AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Color="Color.Secondary" Style="font-size: 48px;" />
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">No expenses today.</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true">
+                            <thead><tr><th>Time</th><th>Category</th><th>Description</th><th>Source</th><th style="text-align: right;">Amount</th></tr></thead>
+                            <tbody>
+                                @foreach (var e in _today)
+                                {
+                                    <tr>
+                                        <td>@e.At.ToLocalTime().ToString("HH:mm")</td>
+                                        <td><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@e.Category</MudChip></td>
+                                        <td>@e.Description</td>
+                                        <td>@(e.Source == "PettyBox" ? "🗃 Petty box" : "💵 Drawer")</td>
+                                        <td style="text-align: right;" class="sap-amount">−₹@e.Amount.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6">+ Add expense</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="string" @bind-Value="_form.Category" Label="Category" Variant="Variant.Outlined">
+                                @foreach (var c in _categories)
+                                {
+                                    <MudSelectItem Value="@c">@c</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="string" @bind-Value="_form.Source" Label="Source" Variant="Variant.Outlined">
+                                <MudSelectItem Value="@("Drawer")">💵 Main drawer</MudSelectItem>
+                                @if (Shell.CashMode == CashMode.PettyBox)
+                                {
+                                    <MudSelectItem Value="@("PettyBox")">🗃 Petty box</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_form.Description" Label="Description" Variant="Variant.Outlined" MaxLength="200" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudNumericField T="decimal" @bind-Value="_form.Amount" Label="Amount ₹ *" Variant="Variant.Outlined" Min="0" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_form.Reference" Label="Reference" Variant="Variant.Outlined" MaxLength="100"
+                                          HelperText="cheque #, vendor invoice…" />
+                        </MudItem>
+                    </MudGrid>
+                    <MudStack Row="true" Justify="Justify.FlexEnd">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddExpense" Disabled="@(_busy || _form.Amount <= 0)">
+                            Add expense
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+
+            <MudPaper Class="pa-4 mt-3" Style="box-shadow: inset 4px 0 0 var(--mud-palette-tertiary), 0 2px 4px rgba(0,0,0,0.08);">
+                <MudStack Spacing="2">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.h6">Recurring</MudText>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Add" OnClick="@(() => _addRecurring = true)">Add</MudButton>
+                    </MudStack>
+
+                    @if (_recurring.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">No recurring expenses.</MudText>
+                    }
+                    else
+                    {
+                        @foreach (var r in _recurring)
+                        {
+                            <MudPaper Class="pa-2" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.body2" Style="font-weight: 500;">@r.Name</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @r.Frequency · @(r.Frequency == "Monthly" ? $"day {r.DayOfMonth}" : $"day {r.DayOfMonth} of {(r.Month is int m ? _monthNames[m - 1] : "—")}")
+                                            · next @(r.NextDue?.ToString("dd MMM") ?? "—")
+                                        </MudText>
+                                    </MudStack>
+                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                        <MudText Typo="Typo.body2" Class="sap-amount">₹@r.Amount.ToString("N0")</MudText>
+                                        <MudIconButton Icon="@Icons.Material.Rounded.Bolt" Size="Size.Small" title="Post now" OnClick="@(() => PostRecurring(r))" />
+                                    </MudStack>
+                                </MudStack>
+                            </MudPaper>
+                        }
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
+<MudDialog @bind-Visible="_addRecurring" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Add recurring expense</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_recForm.Name" Label="Name *" Variant="Variant.Outlined" MaxLength="200" />
+            <MudGrid Spacing="2">
+                <MudItem xs="6">
+                    <MudSelect T="string" @bind-Value="_recForm.Category" Label="Category" Variant="Variant.Outlined">
+                        @foreach (var c in _categories) { <MudSelectItem Value="@c">@c</MudSelectItem> }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_recForm.Amount" Label="Amount ₹" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="6">
+                    <MudSelect T="string" @bind-Value="_recForm.Frequency" Label="Frequency" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Monthly")">Monthly</MudSelectItem>
+                        <MudSelectItem Value="@("Yearly")">Yearly</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6"><MudNumericField T="int" @bind-Value="_recForm.DayOfMonth" Label="Day of month" Variant="Variant.Outlined" Min="1" Max="31" /></MudItem>
+                @if (_recForm.Frequency == "Yearly")
+                {
+                    <MudItem xs="12">
+                        <MudSelect T="int?" @bind-Value="_recForm.Month" Label="Month" Variant="Variant.Outlined">
+                            @for (var i = 1; i <= 12; i++) { var ii = i; <MudSelectItem Value="@((int?)ii)">@_monthNames[ii - 1]</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                }
+                <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_recForm.AutoPost" Color="Color.Primary">Auto-post on due date</MudCheckBox></MudItem>
+            </MudGrid>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _addRecurring = false)">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveRecurring" Disabled="@(_busy || string.IsNullOrWhiteSpace(_recForm.Name) || _recForm.Amount <= 0)">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<Expense> _today = new();
+    private List<RecurringExpense> _recurring = new();
+    private Expense _form = new();
+    private RecurringExpense _recForm = new();
+    private bool _busy;
+    private bool _addRecurring;
+
+    private static readonly string[] _categories = ["Rent", "Utility", "Salary", "Vendor", "Petty", "Travel", "Repair", "Tax", "Other"];
+    private static readonly string[] _monthNames =
+    [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+
+    private static readonly DialogOptions _dialogOptions = new()
+    {
+        CloseOnEscapeKey = true,
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        ResetForm();
+        await Refresh();
+    }
+
+    private void ResetForm()
+    {
+        _form = new Expense
+        {
+            At = DateTime.UtcNow,
+            Category = "Petty",
+            Source = Shell.CashMode == CashMode.PettyBox ? "PettyBox" : "Drawer",
+            Amount = 0
+        };
+        _recForm = new RecurringExpense
+        {
+            Frequency = "Monthly",
+            DayOfMonth = 1,
+            AutoPost = true,
+            Category = "Rent"
+        };
+    }
+
+    private async Task Refresh()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var startOfDay = DateTime.UtcNow.Date;
+        var endOfDay = startOfDay.AddDays(1);
+        _today = await db.Expenses.AsNoTracking()
+            .Where(e => e.At >= startOfDay && e.At < endOfDay)
+            .OrderByDescending(e => e.At)
+            .ToListAsync();
+
+        _recurring = await db.RecurringExpenses.AsNoTracking()
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.NextDue ?? DateTime.MaxValue)
+            .ToListAsync();
+    }
+
+    private async Task AddExpense()
+    {
+        if (_form.Amount <= 0) return;
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.Expenses.Add(new Expense
+            {
+                At = DateTime.UtcNow,
+                Category = _form.Category,
+                Description = _form.Description,
+                Amount = _form.Amount,
+                Source = _form.Source,
+                Reference = _form.Reference
+            });
+            await db.SaveChangesAsync();
+            Snackbar.Add($"Expense ₹{_form.Amount:N0} added.", Severity.Success);
+            ResetForm();
+            await Refresh();
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not save: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    private async Task SaveRecurring()
+    {
+        if (string.IsNullOrWhiteSpace(_recForm.Name) || _recForm.Amount <= 0) return;
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _recForm.NextDue ??= ComputeNextDue(_recForm);
+            db.RecurringExpenses.Add(_recForm);
+            await db.SaveChangesAsync();
+            Snackbar.Add($"Recurring expense added.", Severity.Success);
+            _addRecurring = false;
+            ResetForm();
+            await Refresh();
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not save: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    private async Task PostRecurring(RecurringExpense r)
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.Expenses.Add(new Expense
+            {
+                At = DateTime.UtcNow,
+                Category = r.Category,
+                Description = r.Name,
+                Amount = r.Amount,
+                Source = "Drawer",
+                RecurringExpenseId = r.Id
+            });
+            var entity = await db.RecurringExpenses.FirstOrDefaultAsync(x => x.Id == r.Id);
+            if (entity is not null)
+            {
+                entity.LastPosted = DateTime.UtcNow;
+                entity.NextDue = ComputeNextDue(entity);
+            }
+            await db.SaveChangesAsync();
+            Snackbar.Add($"{r.Name} posted.", Severity.Success);
+            await Refresh();
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not post: {ex.Message}", Severity.Error); }
+    }
+
+    private static DateTime ComputeNextDue(RecurringExpense r)
+    {
+        var today = DateTime.Today;
+        if (r.Frequency == "Yearly" && r.Month is int month)
+        {
+            var day = Math.Min(r.DayOfMonth, DateTime.DaysInMonth(today.Year, month));
+            var thisYear = new DateTime(today.Year, month, day);
+            return thisYear > today ? thisYear : thisYear.AddYears(1);
+        }
+        else
+        {
+            var day = Math.Min(r.DayOfMonth, DateTime.DaysInMonth(today.Year, today.Month));
+            var thisMonth = new DateTime(today.Year, today.Month, day);
+            return thisMonth > today ? thisMonth : thisMonth.AddMonths(1);
+        }
+    }
+}

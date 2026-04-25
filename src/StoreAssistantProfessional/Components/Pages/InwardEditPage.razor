@@ -1,0 +1,418 @@
+@page "/inward/new"
+@page "/inward/{Id:int}"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_entry.Id == 0 ? "New inward" : _entry.InwardNumber) — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+        <MudIconButton Icon="@Icons.Material.Rounded.ArrowBack" OnClick="GoBack" />
+        <MudText Typo="Typo.h5">
+            @if (_entry.Id == 0)
+            {
+                <span>📥 New inward · @(_entry.InwardNumber)</span>
+            }
+            else
+            {
+                <span>📥 @_entry.InwardNumber</span>
+                @if (_entry.Status == "Received")
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined" Class="ml-2">received</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Class="ml-2">draft</MudChip>
+                }
+            }
+        </MudText>
+    </MudStack>
+
+    <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">Header</MudText>
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="4">
+                    <MudDatePicker @bind-Date="_entryDate" Label="Date" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudNumericField T="decimal" @bind-Value="_entry.TransportCharges" Label="Transport ₹" Variant="Variant.Outlined" Min="0" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_entry.Carrier" Label="Carrier" Variant="Variant.Outlined" MaxLength="100" />
+                </MudItem>
+
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_entry.LrNumber" Label="LR / Bilty #" Variant="Variant.Outlined" MaxLength="50" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_entry.VehicleNumber" Label="Vehicle #" Variant="Variant.Outlined" MaxLength="20" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_entry.DriverInfo" Label="Driver name / phone" Variant="Variant.Outlined" MaxLength="100" /></MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_entry.Notes" Label="Notes" Variant="Variant.Outlined" MaxLength="500" Lines="2" />
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">Parcels</MudText>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Add" OnClick="AddParcel" Disabled="@(_vendors.Count == 0 || IsReceived)">
+                    Add parcel
+                </MudButton>
+            </MudStack>
+
+            @if (_vendors.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    No vendors yet. Add a vendor before recording parcels.
+                </MudAlert>
+            }
+
+            @if (_entry.Parcels.Count == 0)
+            {
+                <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                    <MudIcon Icon="@Icons.Material.Rounded.Inventory" Color="Color.Secondary" Style="font-size: 48px;" />
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                        No parcels yet. Click "Add parcel" above — one parcel per vendor.
+                    </MudText>
+                </MudStack>
+            }
+            else
+            {
+                @for (var pi = 0; pi < _entry.Parcels.Count; pi++)
+                {
+                    var idx = pi;
+                    var parcel = _entry.Parcels[idx];
+                    <MudPaper Class="pa-3" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                        <MudStack Spacing="2">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.subtitle2">Parcel @(idx + 1)</MudText>
+                                @if (!IsReceived)
+                                {
+                                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Rounded.Close" Color="Color.Error" OnClick="@(() => RemoveParcel(idx))" />
+                                }
+                            </MudStack>
+
+                            <MudGrid Spacing="2">
+                                <MudItem xs="12" md="6">
+                                    <MudSelect T="int" Value="parcel.VendorId" ValueChanged="@(v => parcel.VendorId = v)"
+                                               Label="Vendor *" Variant="Variant.Outlined" Disabled="@IsReceived">
+                                        @foreach (var v in _vendors)
+                                        {
+                                            <MudSelectItem T="int" Value="@v.Id">@v.Name</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+                                <MudItem xs="6" md="3">
+                                    <MudTextField @bind-Value="parcel.VendorInvoiceNumber" Label="Vendor invoice #" Variant="Variant.Outlined" MaxLength="50" Disabled="@IsReceived" />
+                                </MudItem>
+                                <MudItem xs="6" md="3">
+                                    <MudDatePicker Date="parcel.VendorInvoiceDate" DateChanged="@(d => parcel.VendorInvoiceDate = d)" Label="Invoice date" Variant="Variant.Outlined" Disabled="@IsReceived" />
+                                </MudItem>
+
+                                <MudItem xs="12">
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Items (@parcel.Items.Count)</MudText>
+                                        @if (!IsReceived)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Rounded.Add" OnClick="@(() => AddItem(idx))" Disabled="@(_products.Count == 0)">
+                                                Add item
+                                            </MudButton>
+                                        }
+                                    </MudStack>
+                                </MudItem>
+
+                                @if (parcel.Items.Count == 0)
+                                {
+                                    <MudItem xs="12">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center" Class="pa-2">
+                                            No items. Click "Add item" above.
+                                        </MudText>
+                                    </MudItem>
+                                }
+                                else
+                                {
+                                    <MudItem xs="12">
+                                        <MudSimpleTable Dense="true" Style="background: white;">
+                                            <thead>
+                                                <tr>
+                                                    <th>Product</th>
+                                                    <th style="width: 90px; text-align: right;">Qty</th>
+                                                    <th style="width: 90px; text-align: right;">Damaged</th>
+                                                    <th style="width: 110px; text-align: right;">Unit cost ₹</th>
+                                                    <th style="width: 110px; text-align: right;">Line ₹</th>
+                                                    @if (!IsReceived) { <th style="width: 40px;"></th> }
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @for (var ii = 0; ii < parcel.Items.Count; ii++)
+                                                {
+                                                    var itemIdx = ii;
+                                                    var it = parcel.Items[itemIdx];
+                                                    <tr>
+                                                        <td>
+                                                            <MudSelect T="int" Value="it.ProductId" ValueChanged="@(v => { it.ProductId = v; RecomputeLine(it); StateHasChanged(); })"
+                                                                       Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@IsReceived">
+                                                                @foreach (var p in _products)
+                                                                {
+                                                                    <MudSelectItem T="int" Value="@p.Id">@p.Name</MudSelectItem>
+                                                                }
+                                                            </MudSelect>
+                                                        </td>
+                                                        <td>
+                                                            <MudNumericField T="decimal" Value="it.Quantity" ValueChanged="@(v => { it.Quantity = v; RecomputeLine(it); })"
+                                                                             Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Disabled="@IsReceived" />
+                                                        </td>
+                                                        <td>
+                                                            <MudNumericField T="decimal" Value="it.DamagedQuantity" ValueChanged="@(v => it.DamagedQuantity = v)"
+                                                                             Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Disabled="@IsReceived" />
+                                                        </td>
+                                                        <td>
+                                                            <MudNumericField T="decimal" Value="it.UnitCost" ValueChanged="@(v => { it.UnitCost = v; RecomputeLine(it); })"
+                                                                             Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Disabled="@IsReceived" />
+                                                        </td>
+                                                        <td style="text-align: right;" class="sap-amount">₹@it.LineTotal.ToString("N2")</td>
+                                                        @if (!IsReceived)
+                                                        {
+                                                            <td><MudIconButton Size="Size.Small" Icon="@Icons.Material.Rounded.Remove" Color="Color.Error" OnClick="@(() => RemoveItem(idx, itemIdx))" /></td>
+                                                        }
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </MudSimpleTable>
+                                    </MudItem>
+                                }
+
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="parcel.Notes" Label="Parcel notes" Variant="Variant.Outlined" MaxLength="200" Disabled="@IsReceived" />
+                                </MudItem>
+                            </MudGrid>
+
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@parcel.Items.Count items</MudText>
+                                <MudText Typo="Typo.body2" Class="sap-amount">Subtotal ₹@parcel.Items.Sum(i => i.LineTotal).ToString("N2")</MudText>
+                            </MudStack>
+                        </MudStack>
+                    </MudPaper>
+                }
+            }
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-4" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@TotalItems items across @_entry.Parcels.Count parcel(s)</MudText>
+                <MudText Typo="Typo.h6" Class="sap-amount">Total ₹@TotalCost.ToString("N2")</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Items ₹@ItemsTotal.ToString("N2") + transport ₹@_entry.TransportCharges.ToString("N2")</MudText>
+            </MudStack>
+            <MudStack Row="true" Spacing="2">
+                @if (!IsReceived)
+                {
+                    <MudButton Variant="Variant.Outlined" OnClick="SaveDraft" Disabled="@_busy">Save draft</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Receive" Disabled="@(_busy || !CanReceive)">Receive · F12</MudButton>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Received on @_entry.ReceivedAt?.ToString("dd MMM yyyy HH:mm")
+                    </MudText>
+                }
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private InwardEntry _entry = new();
+    private DateTime? _entryDate = DateTime.Today;
+    private List<Vendor> _vendors = new();
+    private List<Product> _products = new();
+    private bool _busy;
+
+    private bool IsReceived => _entry.Status == "Received";
+
+    private decimal ItemsTotal => _entry.Parcels.SelectMany(p => p.Items).Sum(i => i.LineTotal);
+    private decimal TotalCost => ItemsTotal + _entry.TransportCharges;
+    private int TotalItems => _entry.Parcels.Sum(p => p.Items.Count);
+
+    private bool CanReceive =>
+        _entry.Parcels.Count > 0 &&
+        _entry.Parcels.All(p => p.VendorId > 0 && p.Items.Count > 0) &&
+        _entry.Parcels.SelectMany(p => p.Items).All(i => i.ProductId > 0 && i.Quantity > 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _vendors = await db.Vendors.AsNoTracking().Where(v => v.IsActive).OrderBy(v => v.Name).ToListAsync();
+        _products = await db.Products.AsNoTracking().Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();
+
+        if (Id is null)
+        {
+            _entry = new InwardEntry
+            {
+                InwardNumber = await NextInwardNumberAsync(db),
+                EntryDate = DateTime.UtcNow,
+                Status = "Draft"
+            };
+        }
+        else
+        {
+            var loaded = await db.InwardEntries
+                .Include(e => e.Parcels).ThenInclude(p => p.Items)
+                .Include(e => e.Parcels).ThenInclude(p => p.Vendor)
+                .FirstOrDefaultAsync(e => e.Id == Id.Value);
+            if (loaded is null)
+            {
+                Nav.NavigateTo("/inward");
+                return;
+            }
+            _entry = loaded;
+            _entryDate = _entry.EntryDate;
+        }
+    }
+
+    private static async Task<string> NextInwardNumberAsync(AppDbContext db)
+    {
+        var n = await db.InwardEntries.CountAsync() + 1;
+        return $"INW-{n:D3}";
+    }
+
+    private void GoBack() => Nav.NavigateTo("/inward");
+
+    private void AddParcel()
+    {
+        _entry.Parcels.Add(new InwardParcel { VendorId = _vendors[0].Id });
+    }
+
+    private void RemoveParcel(int idx)
+    {
+        if (idx >= 0 && idx < _entry.Parcels.Count) _entry.Parcels.RemoveAt(idx);
+    }
+
+    private void AddItem(int parcelIdx)
+    {
+        if (_products.Count == 0) return;
+        var firstProd = _products[0];
+        _entry.Parcels[parcelIdx].Items.Add(new InwardParcelItem
+        {
+            ProductId = firstProd.Id,
+            UnitCost = firstProd.Cost
+        });
+    }
+
+    private void RemoveItem(int parcelIdx, int itemIdx)
+    {
+        var items = _entry.Parcels[parcelIdx].Items;
+        if (itemIdx >= 0 && itemIdx < items.Count) items.RemoveAt(itemIdx);
+    }
+
+    private static void RecomputeLine(InwardParcelItem it)
+    {
+        it.LineTotal = decimal.Round(it.Quantity * it.UnitCost, 2);
+    }
+
+    private async Task SaveDraft()
+    {
+        _busy = true;
+        try
+        {
+            await PersistAsync(received: false);
+            Snackbar.Add("Draft saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not save: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Receive()
+    {
+        _busy = true;
+        try
+        {
+            await PersistAsync(received: true);
+            Snackbar.Add($"{_entry.InwardNumber} received. Stock updated.", Severity.Success);
+            Nav.NavigateTo("/inward");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not receive: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task PersistAsync(bool received)
+    {
+        if (_entryDate.HasValue) _entry.EntryDate = _entryDate.Value;
+
+        foreach (var item in _entry.Parcels.SelectMany(p => p.Items))
+            RecomputeLine(item);
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        if (_entry.Id == 0)
+        {
+            db.InwardEntries.Add(_entry);
+        }
+        else
+        {
+            var existing = await db.InwardEntries
+                .Include(e => e.Parcels).ThenInclude(p => p.Items)
+                .FirstOrDefaultAsync(e => e.Id == _entry.Id)
+                ?? throw new InvalidOperationException("Entry not found.");
+
+            db.InwardParcelItems.RemoveRange(existing.Parcels.SelectMany(p => p.Items));
+            db.InwardParcels.RemoveRange(existing.Parcels);
+            await db.SaveChangesAsync();
+
+            db.Entry(existing).CurrentValues.SetValues(_entry);
+            existing.Parcels = _entry.Parcels;
+            foreach (var p in existing.Parcels)
+            {
+                p.Id = 0;
+                p.InwardEntryId = existing.Id;
+                foreach (var i in p.Items) { i.Id = 0; i.InwardParcelId = 0; }
+            }
+            _entry = existing;
+        }
+
+        if (received)
+        {
+            _entry.Status = "Received";
+            _entry.ReceivedAt = DateTime.UtcNow;
+            await ApplyStockMovementsAsync(db);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private async Task ApplyStockMovementsAsync(AppDbContext db)
+    {
+        foreach (var item in _entry.Parcels.SelectMany(p => p.Items))
+        {
+            var product = await db.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId);
+            if (product is null) continue;
+            var net = item.Quantity - item.DamagedQuantity;
+            product.StockQty += net;
+            product.UpdatedAt = DateTime.UtcNow;
+            if (item.UnitCost > 0) product.Cost = item.UnitCost;
+        }
+
+        foreach (var parcel in _entry.Parcels)
+        {
+            var vendor = await db.Vendors.FirstOrDefaultAsync(v => v.Id == parcel.VendorId);
+            if (vendor is null) continue;
+            var parcelTotal = parcel.Items.Sum(i => i.LineTotal);
+            vendor.Balance += parcelTotal;
+            vendor.UpdatedAt = DateTime.UtcNow;
+        }
+    }
+}

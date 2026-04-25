@@ -1,0 +1,137 @@
+@page "/settings/reset"
+@layout AppShell
+@using System.IO
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISetupService Setup
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Reset — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="Reset / sandbox" />
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-error), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">Wipe all data</MudText>
+            <MudAlert Severity="Severity.Error" Dense="true">
+                Deletes every record in the database — bills, products, customers, vendors, staff, settings, session log,
+                and held / draft carts. The PIN setup file stays so you don't have to re-enter your PINs.
+                After reset, you'll go through the firm / tax / products / vendors onboarding again.
+            </MudAlert>
+
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Type your firm name to confirm.
+            </MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_firmName" Label="Expected" Variant="Variant.Outlined" Disabled="true" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_typed" Label="Type to confirm" Variant="Variant.Outlined" Immediate="true" />
+                </MudItem>
+            </MudGrid>
+
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_masterPin" Label="Master PIN" Variant="Variant.Outlined" InputType="InputType.Password" MaxLength="6" />
+                </MudItem>
+            </MudGrid>
+
+            <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+                <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Rounded.DeleteForever"
+                           OnClick="DoReset" Disabled="@(_busy || !CanReset)">
+                    @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Wiping…</span> }
+                    else { <span>Wipe all data</span> }
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-5">
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.h6">Note</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Keep an off-site backup before wiping. Use the Cloud backup settings for automatic backups.
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                If you want to start completely fresh (including PINs), delete the
+                <code>setup.json</code> file in <code>%LocalAppData%\StoreAssistantProfessional\</code> manually.
+            </MudText>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private string _firmName = "";
+    private string _typed = "";
+    private string _masterPin = "";
+    private bool _busy;
+
+    private bool CanReset =>
+        !string.IsNullOrWhiteSpace(_firmName) &&
+        string.Equals(_typed.Trim(), _firmName, StringComparison.Ordinal) &&
+        _masterPin.Length == 6 &&
+        _masterPin.All(char.IsDigit);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
+        _firmName = firm?.Name ?? "";
+    }
+
+    private async Task DoReset()
+    {
+        if (!CanReset) return;
+        if (!Setup.VerifyMaster(_masterPin))
+        {
+            Snackbar.Add("Master PIN is incorrect.", Severity.Error);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM SessionEvents");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM BillPayments");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM BillItems");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM Bills");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM PurchaseReturnItems");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM PurchaseReturns");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM StockAdjustments");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM InwardParcelItems");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM InwardParcels");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM InwardEntries");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM Cheques");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM Expenses");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM RecurringExpenses");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM Products");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM Customers");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM Vendors");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM Staff");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM TaxRates");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM Settings");
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM Firms");
+
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "StoreAssistantProfessional");
+            foreach (var name in new[] { "active-cart.json", "held-bills.json" })
+            {
+                var p = Path.Combine(dir, name);
+                if (File.Exists(p)) try { File.Delete(p); } catch { }
+            }
+
+            Snackbar.Add("All data wiped. Restart to begin onboarding.", Severity.Success);
+            Nav.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Reset failed: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+}

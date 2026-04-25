@@ -77,3 +77,227 @@ html, body {
     line-height: 1.66;
     margin-top: 3px;
 }
+
+/* ========== App shell ========== */
+.sap-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+.sap-shell-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    grid-template-rows: 64px 1fr 28px;
+    grid-template-areas:
+        "rail topbar"
+        "rail content"
+        "rail statusbar";
+    height: 100%;
+    overflow: hidden;
+}
+
+.sap-shell-topbar    { grid-area: topbar;    border-bottom: 1px solid rgba(0,0,0,0.06); }
+.sap-shell-rail      { grid-area: rail;      border-right:  1px solid rgba(0,0,0,0.06); background: var(--mud-palette-drawer-background); overflow-y: auto; }
+.sap-shell-content   { grid-area: content;   overflow: auto; padding: 16px; }
+.sap-shell-statusbar { grid-area: statusbar; border-top:    1px solid rgba(0,0,0,0.06); background: var(--mud-palette-background); }
+
+/* ========== Top bar ========== */
+.sap-topbar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: 0 16px;
+    height: 64px;
+    background: var(--mud-palette-background);
+}
+
+.sap-toggle {
+    min-width: 200px;
+    height: 44px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.sap-topbar-search {
+    display: flex;
+    justify-content: center;
+    max-width: 640px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* ========== Nav rail ========== */
+.sap-navrail {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 4px;
+    gap: 2px;
+}
+
+.sap-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 10px 4px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: var(--mud-palette-text-primary);
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+}
+
+.sap-nav-item:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.sap-nav-active {
+    background: rgba(232, 181, 132, 0.12);
+    box-shadow: inset 4px 0 0 var(--mud-palette-primary);
+}
+
+.sap-nav-label {
+    font-size: 11px;
+    line-height: 1.2;
+    text-align: center;
+}
+
+.sap-nav-badge {
+    position: absolute;
+    top: 4px;
+    right: 14px;
+    background: var(--mud-palette-error);
+    color: white;
+    font-size: 10px;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 8px;
+    min-width: 16px;
+    text-align: center;
+}
+
+.sap-nav-divider {
+    height: 1px;
+    background: rgba(0, 0, 0, 0.08);
+    margin: 8px 8px;
+}
+
+/* ========== Status bar ========== */
+.sap-statusbar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 28px;
+    padding: 0 8px;
+    font-size: 12px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.sap-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    height: 28px;
+    color: var(--mud-palette-text-secondary);
+    border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.sap-status-chip:last-child { border-right: none; }
+
+.sap-status-clickable { cursor: pointer; user-select: none; }
+.sap-status-clickable:hover { background: rgba(0, 0, 0, 0.04); }
+
+.sap-status-admin {
+    color: var(--mud-palette-error);
+    font-weight: 500;
+}
+
+.sap-status-backup {
+    color: var(--mud-palette-text-primary);
+}
+
+.sap-statusbar-spacer { flex: 1; }
+
+.sap-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.sap-dot-online  { background: var(--mud-palette-success); }
+.sap-dot-offline { background: var(--mud-palette-error); }
+.sap-dot-pending { background: var(--mud-palette-warning); }
+
+/* ========== Idle overlay ========== */
+.sap-idle-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--mud-palette-background);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+}
+
+/* ========== Training banner ========== */
+.sap-training-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    background: var(--mud-palette-warning);
+    color: var(--mud-palette-warning-contrasttext);
+    font-weight: 500;
+    font-size: 13px;
+}
+
+/* ========== Tabular figures for amounts ========== */
+.sap-amount {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ========== Tag / barcode label preview ========== */
+.sap-label {
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    padding: 6px 8px;
+    background: white;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    line-height: 1.2;
+    border-radius: 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+.sap-label-40  { width: 160px; }
+.sap-label-50  { width: 200px; }
+.sap-label-70  { width: 260px; }
+.sap-label-a4  { width: 180px; }
+.sap-label-store { font-size: 11px; font-weight: 600; }
+.sap-label-barcode { font-family: Consolas, monospace; letter-spacing: -1px; font-size: 18px; }
+.sap-label-code { font-family: Consolas, monospace; font-size: 10px; color: #666; }
+.sap-label-name { font-weight: 500; font-size: 12px; }
+.sap-label-cat  { font-size: 10px; color: #888; }
+.sap-label-mrp  { font-size: 11px; color: #444; }
+.sap-label-sale { font-weight: 700; font-size: 14px; }
+
+/* ========== Keyboard chip ========== */
+.sap-kbd {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 4px;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 11px;
+    color: var(--mud-palette-text-primary);
+}

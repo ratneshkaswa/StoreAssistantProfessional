@@ -1,114 +1,18 @@
 @page "/"
 @inject ISetupService Setup
-@inject ISessionService Session
+@inject IOnboardingService Onboarding
 @inject NavigationManager Nav
-@implements IDisposable
 
-<PageTitle>@(Setup.Current?.StoreName ?? "Store Assistant Professional")</PageTitle>
+<PageTitle>Loading…</PageTitle>
 
-@if (_ready)
-{
-    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-8">
-        <MudStack Spacing="4">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
-                <MudIcon Icon="@Icons.Material.Rounded.Storefront" Color="Color.Primary" Size="Size.Large" />
-                <MudText Typo="Typo.h4">@Setup.Current?.StoreName</MudText>
-            </MudStack>
-
-            <MudPaper Class="pa-6" Elevation="2">
-                <MudStack Spacing="3">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                        <MudChip T="string"
-                                 Color="@(Session.Current == Role.Admin ? Color.Error : Color.Primary)"
-                                 Icon="@(Session.Current == Role.Admin ? Icons.Material.Rounded.LockOpen : Icons.Material.Rounded.Lock)"
-                                 Size="Size.Small"
-                                 OnClick="OnRoleChipClick">
-                            @Session.Current
-                        </MudChip>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">
-                            @(Session.Current == Role.Admin ? "click to lock" : "click to unlock")
-                        </MudText>
-                    </MudStack>
-
-                    <MudText Typo="Typo.body2">
-                        Main page placeholder. Catalogue, billing, reports will live here.
-                    </MudText>
-                </MudStack>
-            </MudPaper>
-        </MudStack>
-    </MudContainer>
-
-    <MudDialog @bind-Visible="_pinDialogOpen" Options="@_dialogOptions">
-        <TitleContent>
-            <MudText Typo="Typo.h6">Unlock admin</MudText>
-        </TitleContent>
-        <DialogContent>
-            <MudStack Spacing="3">
-                @if (LockoutSecondsRemaining is int seconds)
-                {
-                    <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Rounded.Timer">
-                        Too many attempts. Try again in @seconds second@(seconds == 1 ? "" : "s").
-                    </MudAlert>
-                }
-                else
-                {
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">
-                        Enter the admin PIN to enable protected actions.
-                    </MudText>
-                }
-                <MudTextField @ref="_pinField"
-                              Value="_pinEntry"
-                              ValueChanged="OnPinChanged"
-                              T="string"
-                              Label="Admin PIN"
-                              InputType="InputType.Password"
-                              MaxLength="4"
-                              Variant="Variant.Outlined"
-                              Immediate="true"
-                              AutoFocus="true"
-                              Disabled="@(LockoutSecondsRemaining is not null)"
-                              Error="@_pinError"
-                              ErrorText="Incorrect PIN"
-                              OnKeyDown="OnPinKeyDown" />
-            </MudStack>
-        </DialogContent>
-        <DialogActions>
-            <MudButton OnClick="ClosePinDialog">Cancel</MudButton>
-            <MudButton Color="Color.Primary"
-                       Variant="Variant.Filled"
-                       OnClick="TryUnlock"
-                       Disabled="@(_pinEntry.Length != 4 || LockoutSecondsRemaining is not null)">
-                Unlock
-            </MudButton>
-        </DialogActions>
-    </MudDialog>
-}
+<MudContainer Class="mt-12">
+    <MudStack AlignItems="AlignItems.Center" Spacing="2">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Opening your store…</MudText>
+    </MudStack>
+</MudContainer>
 
 @code {
-    private bool _ready;
-    private bool _pinDialogOpen;
-    private string _pinEntry = "";
-    private bool _pinError;
-    private MudTextField<string>? _pinField;
-    private CancellationTokenSource? _lockoutTickerCts;
-
-    private static readonly DialogOptions _dialogOptions = new()
-    {
-        CloseOnEscapeKey = true,
-        MaxWidth = MaxWidth.ExtraSmall,
-        FullWidth = true
-    };
-
-    private int? LockoutSecondsRemaining
-    {
-        get
-        {
-            var remaining = Session.UnlockLockoutRemaining;
-            if (remaining is null) return null;
-            return Math.Max(1, (int)Math.Ceiling(remaining.Value.TotalSeconds));
-        }
-    }
-
     protected override void OnInitialized()
     {
         if (!Setup.IsComplete)
@@ -116,104 +20,14 @@
             Nav.NavigateTo("/setup", replace: true);
             return;
         }
-        Session.Changed += OnSessionChanged;
-        _ready = true;
-    }
 
-    private void OnSessionChanged() => InvokeAsync(StateHasChanged);
-
-    private void OnRoleChipClick()
-    {
-        if (Session.Current == Role.Admin)
+        var step = Onboarding.CurrentStep();
+        if (step != OnboardingStep.Done)
         {
-            Session.ExitAdmin();
+            Nav.NavigateTo(Onboarding.RouteFor(step), replace: true);
             return;
         }
 
-        _pinEntry = "";
-        _pinError = false;
-        _pinDialogOpen = true;
-        if (LockoutSecondsRemaining is not null) StartLockoutTicker();
-    }
-
-    private void OnPinChanged(string v)
-    {
-        _pinEntry = DigitsOnly(v, 4);
-        _pinError = false;
-    }
-
-    private async Task OnPinKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter" && _pinEntry.Length == 4) await TryUnlock();
-    }
-
-    private async Task TryUnlock()
-    {
-        if (LockoutSecondsRemaining is not null) return;
-
-        if (Setup.VerifyAdmin(_pinEntry))
-        {
-            _pinDialogOpen = false;
-            _pinEntry = "";
-            _pinError = false;
-            StopLockoutTicker();
-            Session.EnterAdmin();
-            return;
-        }
-
-        Session.RecordFailedUnlock();
-        _pinError = true;
-        _pinEntry = "";
-        if (LockoutSecondsRemaining is not null) StartLockoutTicker();
-        if (_pinField is not null) await _pinField.FocusAsync();
-    }
-
-    private void ClosePinDialog()
-    {
-        _pinDialogOpen = false;
-        _pinEntry = "";
-        _pinError = false;
-        StopLockoutTicker();
-    }
-
-    private void StartLockoutTicker()
-    {
-        StopLockoutTicker();
-        _lockoutTickerCts = new CancellationTokenSource();
-        _ = TickLockoutAsync(_lockoutTickerCts.Token);
-    }
-
-    private void StopLockoutTicker()
-    {
-        _lockoutTickerCts?.Cancel();
-        _lockoutTickerCts?.Dispose();
-        _lockoutTickerCts = null;
-    }
-
-    private async Task TickLockoutAsync(CancellationToken token)
-    {
-        try
-        {
-            while (!token.IsCancellationRequested && LockoutSecondsRemaining is not null)
-            {
-                await Task.Delay(500, token);
-                await InvokeAsync(StateHasChanged);
-            }
-            await InvokeAsync(StateHasChanged);
-        }
-        catch (OperationCanceledException) { }
-    }
-
-    private static string DigitsOnly(string s, int max)
-    {
-        if (string.IsNullOrEmpty(s)) return "";
-        var filtered = new string(s.Where(char.IsDigit).ToArray());
-        return filtered.Length > max ? filtered[..max] : filtered;
-    }
-
-    public void Dispose()
-    {
-        Session.Changed -= OnSessionChanged;
-        StopLockoutTicker();
+        Nav.NavigateTo("/billing", replace: true);
     }
 }

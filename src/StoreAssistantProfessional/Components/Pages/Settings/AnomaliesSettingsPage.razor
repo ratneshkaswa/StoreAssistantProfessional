@@ -1,0 +1,113 @@
+@page "/settings/anomalies"
+@layout AppShell
+@inject IAppSettingsService SettingsSvc
+@inject ISnackbar Snackbar
+
+<PageTitle>Anomaly thresholds — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="Anomaly thresholds" />
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Anomalies surface as red Urgent items in the notifications bell.
+            </MudText>
+
+            <MudGrid Spacing="3">
+                <MudItem xs="12">
+                    <MudCheckBox T="bool" @bind-Value="_settings.AnomalyRefundQuick" Color="Color.Primary">Refund within minutes of original bill</MudCheckBox>
+                </MudItem>
+                <MudItem xs="12" md="3" Class="ml-8">
+                    <MudNumericField T="int" @bind-Value="_settings.AnomalyRefundQuickMinutes" Label="Within (min)" Variant="Variant.Outlined" Min="1" Max="60" Disabled="@(!_settings.AnomalyRefundQuick)" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudCheckBox T="bool" @bind-Value="_settings.AnomalyDiscountHigh" Color="Color.Primary">Single-item discount above threshold</MudCheckBox>
+                </MudItem>
+                <MudItem xs="12" md="3" Class="ml-8">
+                    <MudNumericField T="int" @bind-Value="_settings.AnomalyDiscountPct" Label="Threshold %" Variant="Variant.Outlined" Min="1" Max="100" Disabled="@(!_settings.AnomalyDiscountHigh)" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudCheckBox T="bool" @bind-Value="_settings.AnomalyVoidAfterCheckout" Color="Color.Primary">Bill voided after checkout</MudCheckBox>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudCheckBox T="bool" @bind-Value="_settings.AnomalyDrawerMismatch" Color="Color.Primary">Cash drawer mismatch above amount</MudCheckBox>
+                </MudItem>
+                <MudItem xs="12" md="3" Class="ml-8">
+                    <MudNumericField T="decimal" @bind-Value="_settings.AnomalyDrawerMismatchAmount" Label="Threshold ₹" Variant="Variant.Outlined" Min="0" Disabled="@(!_settings.AnomalyDrawerMismatch)" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudCheckBox T="bool" @bind-Value="_settings.AnomalyOffHours" Color="Color.Primary">Off-hours bills</MudCheckBox>
+                </MudItem>
+                <MudItem xs="6" md="3" Class="ml-8">
+                    <MudNumericField T="int" @bind-Value="_settings.AnomalyOffHoursAfter" Label="After hour" Variant="Variant.Outlined" Min="0" Max="23" Disabled="@(!_settings.AnomalyOffHours)" />
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <MudNumericField T="int" @bind-Value="_settings.AnomalyOffHoursBefore" Label="Before hour" Variant="Variant.Outlined" Min="0" Max="23" Disabled="@(!_settings.AnomalyOffHours)" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudCheckBox T="bool" @bind-Value="_settings.AnomalyRepeatRefunds" Color="Color.Primary">Same customer with repeated refunds</MudCheckBox>
+                </MudItem>
+                <MudItem xs="6" md="3" Class="ml-8">
+                    <MudNumericField T="int" @bind-Value="_settings.AnomalyRepeatRefundsCount" Label="Refund count" Variant="Variant.Outlined" Min="1" Max="20" Disabled="@(!_settings.AnomalyRepeatRefunds)" />
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <MudNumericField T="int" @bind-Value="_settings.AnomalyRepeatRefundsDays" Label="Within days" Variant="Variant.Outlined" Min="1" Max="90" Disabled="@(!_settings.AnomalyRepeatRefunds)" />
+                </MudItem>
+            </MudGrid>
+
+            <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-2">
+                <MudButton Variant="Variant.Text" OnClick="RestoreDefaults">Restore defaults</MudButton>
+                <MudButton OnClick="Save" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_busy">
+                    @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Saving…</span> }
+                    else { <span>Save</span> }
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private AppSettings _settings = new();
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() => _settings = await SettingsSvc.LoadAsync();
+
+    private void RestoreDefaults()
+    {
+        var d = new AppSettings();
+        _settings.AnomalyRefundQuick = d.AnomalyRefundQuick;
+        _settings.AnomalyRefundQuickMinutes = d.AnomalyRefundQuickMinutes;
+        _settings.AnomalyDiscountHigh = d.AnomalyDiscountHigh;
+        _settings.AnomalyDiscountPct = d.AnomalyDiscountPct;
+        _settings.AnomalyVoidAfterCheckout = d.AnomalyVoidAfterCheckout;
+        _settings.AnomalyDrawerMismatch = d.AnomalyDrawerMismatch;
+        _settings.AnomalyDrawerMismatchAmount = d.AnomalyDrawerMismatchAmount;
+        _settings.AnomalyOffHours = d.AnomalyOffHours;
+        _settings.AnomalyOffHoursAfter = d.AnomalyOffHoursAfter;
+        _settings.AnomalyOffHoursBefore = d.AnomalyOffHoursBefore;
+        _settings.AnomalyRepeatRefunds = d.AnomalyRepeatRefunds;
+        _settings.AnomalyRepeatRefundsCount = d.AnomalyRepeatRefundsCount;
+        _settings.AnomalyRepeatRefundsDays = d.AnomalyRepeatRefundsDays;
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            await SettingsSvc.SaveAsync(_settings);
+            Snackbar.Add("Anomaly thresholds saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not save: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+}

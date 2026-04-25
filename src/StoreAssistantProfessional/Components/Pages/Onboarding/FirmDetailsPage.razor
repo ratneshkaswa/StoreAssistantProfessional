@@ -1,0 +1,261 @@
+@page "/onboarding/firm"
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IOnboardingService Onboarding
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Firm details — Setup</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="pa-6">
+    <MudStack Spacing="4">
+        <MudStack Spacing="1">
+            <MudText Typo="Typo.h5">Setting up your shop · 1 of 4</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                This desktop is bound to one firm. Fill the details below to continue.
+            </MudText>
+            <OnboardingProgress Current="OnboardingStep.Firm" />
+        </MudStack>
+
+        <MudPaper Elevation="1" Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.h6">Identity</MudText>
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="8">
+                        <MudTextField @bind-Value="_firm.Name"
+                                      Label="Firm name *"
+                                      Variant="Variant.Outlined"
+                                      MaxLength="200"
+                                      Immediate="true"
+                                      Error="@(_attempted && string.IsNullOrWhiteSpace(_firm.Name))"
+                                      ErrorText="Firm name is required." />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudCheckBox T="bool" @bind-Value="_firm.IsCompositionScheme" Color="Color.Primary">
+                            Composition scheme
+                        </MudCheckBox>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_firm.Gstin"
+                                      Label="GSTIN"
+                                      Variant="Variant.Outlined"
+                                      MaxLength="15" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_firm.Pan"
+                                      Label="PAN"
+                                      Variant="Variant.Outlined"
+                                      MaxLength="10" />
+                    </MudItem>
+                    <MudItem xs="12" md="8">
+                        <MudTextField @bind-Value="_firm.StateName"
+                                      Label="State"
+                                      Variant="Variant.Outlined"
+                                      MaxLength="100" />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudTextField @bind-Value="_firm.StateCode"
+                                      Label="State code"
+                                      Variant="Variant.Outlined"
+                                      MaxLength="2"
+                                      HelperText="e.g. 27 (auto-fills from GSTIN if entered)" />
+                    </MudItem>
+                </MudGrid>
+            </MudStack>
+        </MudPaper>
+
+        <MudPaper Elevation="1" Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.h6">Financial year</MudText>
+                <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
+                    <MudText>FY starts on</MudText>
+                    <MudSelect T="int" @bind-Value="_firm.FyStartDay" Variant="Variant.Outlined" Dense="true" Style="width: 100px;">
+                        @for (var d = 1; d <= 31; d++)
+                        {
+                            var dd = d;
+                            <MudSelectItem Value="dd">@dd</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="int" @bind-Value="_firm.FyStartMonth" Variant="Variant.Outlined" Dense="true" Style="width: 160px;">
+                        @for (var m = 1; m <= 12; m++)
+                        {
+                            var mm = m;
+                            <MudSelectItem Value="mm">@_monthNames[mm - 1]</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudStack>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Current FY based on today: @CurrentFyLabel
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Standard India FY = 1 April. Change only if your books follow a different cycle.
+                </MudText>
+            </MudStack>
+        </MudPaper>
+
+        <MudPaper Elevation="1" Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-tertiary), 0 2px 4px rgba(0,0,0,0.08);">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.h6">Contact &amp; address</MudText>
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_firm.Phone" Label="Phone" Variant="Variant.Outlined" MaxLength="15" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_firm.AltPhone" Label="Alt phone" Variant="Variant.Outlined" MaxLength="15" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_firm.Email" Label="Email" Variant="Variant.Outlined" MaxLength="200" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_firm.AddressLine1" Label="Address line 1" Variant="Variant.Outlined" MaxLength="300" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_firm.AddressLine2" Label="Address line 2" Variant="Variant.Outlined" MaxLength="300" />
+                    </MudItem>
+                    <MudItem xs="12" md="8">
+                        <MudTextField @bind-Value="_firm.City" Label="City" Variant="Variant.Outlined" MaxLength="100" />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudTextField @bind-Value="_firm.Pincode" Label="Pincode" Variant="Variant.Outlined" MaxLength="6" />
+                    </MudItem>
+                </MudGrid>
+            </MudStack>
+        </MudPaper>
+
+        <MudPaper Elevation="1" Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-info), 0 2px 4px rgba(0,0,0,0.08);">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.h6">Bank (for receipts)</MudText>
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.BankName" Label="Bank name" Variant="Variant.Outlined" MaxLength="200" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.AccountHolderName" Label="Account holder" Variant="Variant.Outlined" MaxLength="100" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.AccountNumber" Label="Account no." Variant="Variant.Outlined" MaxLength="20" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.IfscCode" Label="IFSC" Variant="Variant.Outlined" MaxLength="11" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.BranchName" Label="Branch" Variant="Variant.Outlined" MaxLength="200" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.UpiId" Label="UPI ID" Variant="Variant.Outlined" MaxLength="100" /></MudItem>
+                </MudGrid>
+            </MudStack>
+        </MudPaper>
+
+        <MudPaper Elevation="1" Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-warning), 0 2px 4px rgba(0,0,0,0.08);">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.h6">Invoice settings</MudText>
+                <MudGrid Spacing="3">
+                    <MudItem xs="6" md="3"><MudTextField @bind-Value="_firm.InvoicePrefix" Label="Prefix" Variant="Variant.Outlined" MaxLength="20" /></MudItem>
+                    <MudItem xs="6" md="3"><MudNumericField T="int" @bind-Value="_firm.InvoiceStartNumber" Label="Start #" Variant="Variant.Outlined" Min="1" /></MudItem>
+                    <MudItem xs="6" md="3"><MudTextField @bind-Value="_firm.InvoiceNumberPadding" Label="Padding" Variant="Variant.Outlined" MaxLength="10" /></MudItem>
+                    <MudItem xs="6" md="3"><MudTextField @bind-Value="_firm.DateFormat" Label="Date format" Variant="Variant.Outlined" MaxLength="20" /></MudItem>
+                    <MudItem xs="12">
+                        <MudCheckBox T="bool" @bind-Value="_firm.ResetInvoiceOnFyRollover" Color="Color.Primary">
+                            Reset invoice numbering on FY rollover
+                        </MudCheckBox>
+                    </MudItem>
+                </MudGrid>
+            </MudStack>
+        </MudPaper>
+
+        <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+            <MudButton OnClick="Save"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       Disabled="@(_saving || !IsValid)">
+                @if (_saving)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Saving…</span>
+                }
+                else
+                {
+                    <span>Save firm</span>
+                }
+            </MudButton>
+            <MudButton OnClick="GoNext"
+                       Variant="Variant.Filled"
+                       Color="Color.Secondary"
+                       Size="Size.Large"
+                       Disabled="@(!_savedAtLeastOnce)">
+                Next ›
+            </MudButton>
+        </MudStack>
+    </MudStack>
+</MudContainer>
+
+@code {
+    private Firm _firm = new();
+    private bool _attempted;
+    private bool _saving;
+    private bool _savedAtLeastOnce;
+
+    private static readonly string[] _monthNames =
+    [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+
+    private bool IsValid => !string.IsNullOrWhiteSpace(_firm.Name);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var existing = await db.Firms.FirstOrDefaultAsync();
+        if (existing is not null)
+        {
+            _firm = existing;
+            _savedAtLeastOnce = true;
+        }
+    }
+
+    private string CurrentFyLabel
+    {
+        get
+        {
+            var today = DateTime.Today;
+            var startThisYear = new DateTime(today.Year, _firm.FyStartMonth, Math.Min(_firm.FyStartDay, DateTime.DaysInMonth(today.Year, _firm.FyStartMonth)));
+            var fyStart = today >= startThisYear ? startThisYear : startThisYear.AddYears(-1);
+            var fyEnd = fyStart.AddYears(1).AddDays(-1);
+            var label = $"{fyStart:dd MMM yyyy} → {fyEnd:dd MMM yyyy}";
+            var span = fyStart.Year == fyEnd.Year ? $"FY {fyStart.Year}" : $"FY {fyStart.Year}-{(fyEnd.Year % 100):D2}";
+            return $"{span} ({label})";
+        }
+    }
+
+    private async Task Save()
+    {
+        _attempted = true;
+        if (!IsValid) return;
+
+        _saving = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var existing = await db.Firms.FirstOrDefaultAsync();
+            if (existing is null)
+            {
+                _firm.Id = Firm.SingletonId;
+                _firm.CreatedAt = DateTime.UtcNow;
+                _firm.UpdatedAt = DateTime.UtcNow;
+                db.Firms.Add(_firm);
+            }
+            else
+            {
+                _firm.Id = existing.Id;
+                _firm.CreatedAt = existing.CreatedAt;
+                _firm.UpdatedAt = DateTime.UtcNow;
+                db.Entry(existing).CurrentValues.SetValues(_firm);
+            }
+            await db.SaveChangesAsync();
+            _savedAtLeastOnce = true;
+            Snackbar.Add("Firm saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not save: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void GoNext() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Tax));
+}

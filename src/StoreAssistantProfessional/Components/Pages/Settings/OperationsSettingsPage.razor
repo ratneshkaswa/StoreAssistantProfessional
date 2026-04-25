@@ -1,0 +1,105 @@
+@page "/settings/operations"
+@layout AppShell
+@inject IAppSettingsService SettingsSvc
+@inject IShellState Shell
+@inject ISnackbar Snackbar
+
+<PageTitle>Operations — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="Operations" />
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">Modes</MudText>
+
+            <MudStack Spacing="1">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.subtitle2">Training mode</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Bills don't save, stock doesn't move. A banner appears at the top of every page.</MudText>
+                    </MudStack>
+                    <MudSwitch T="bool" Value="Shell.TrainingMode" ValueChanged="@(v => { if (v != Shell.TrainingMode) Shell.ToggleTraining(); })" Color="Color.Warning" />
+                </MudStack>
+
+                <MudDivider Class="my-2" />
+
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.subtitle2">Privacy mode</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Mask customer names, phones, and amounts in lists. Useful for screenshots / screen-sharing.</MudText>
+                    </MudStack>
+                    <MudSwitch T="bool" Value="Shell.PrivacyMode" ValueChanged="@(v => { if (v != Shell.PrivacyMode) Shell.TogglePrivacy(); })" Color="Color.Info" />
+                </MudStack>
+
+                <MudDivider Class="my-2" />
+
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.subtitle2">Power-user mode</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Skip routine confirmations once you know the app well.</MudText>
+                    </MudStack>
+                    <MudSwitch T="bool" @bind-Value="_settings.PowerUserMode" Color="Color.Primary" />
+                </MudStack>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-tertiary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">Inventory valuation</MudText>
+            <MudSelect T="string" @bind-Value="_settings.InventoryValuationMethod" Label="Method" Variant="Variant.Outlined">
+                <MudSelectItem Value="@("LastPurchase")">Last purchase cost (default)</MudSelectItem>
+                <MudSelectItem Value="@("Average")">Weighted average from inwards</MudSelectItem>
+            </MudSelect>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Affects the "Stock at cost" figure on Reports. FIFO / LIFO need full purchase queue tracking — coming later.
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">Auto-behaviour</MudText>
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <MudNumericField T="int" @bind-Value="_settings.AdminAutoDropMinutes" Label="Drop Admin → User after (minutes idle)" Variant="Variant.Outlined" Min="1" Max="60" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField T="int" @bind-Value="_settings.IdleScreenMinutes" Label="Show idle screen after (minutes)" Variant="Variant.Outlined" Min="2" Max="120" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudCheckBox T="bool" @bind-Value="_settings.CrashRecoveryEnabled" Color="Color.Primary">
+                        Recover in-progress bill after a crash
+                    </MudCheckBox>
+                </MudItem>
+            </MudGrid>
+
+            <MudStack Row="true" Justify="Justify.FlexEnd">
+                <MudButton OnClick="Save" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_busy">
+                    @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Saving…</span> }
+                    else { <span>Save</span> }
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private AppSettings _settings = new();
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() => _settings = await SettingsSvc.LoadAsync();
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            await SettingsSvc.SaveAsync(_settings);
+            Snackbar.Add("Operations settings saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not save: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+}

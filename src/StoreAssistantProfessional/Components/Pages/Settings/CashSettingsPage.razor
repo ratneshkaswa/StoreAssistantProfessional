@@ -1,0 +1,93 @@
+@page "/settings/cash"
+@layout AppShell
+@inject IAppSettingsService SettingsSvc
+@inject ISnackbar Snackbar
+
+<PageTitle>Cash management — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="Cash management" />
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="4">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Choose how petty expenses and small payouts are handled.
+            </MudText>
+
+            <MudRadioGroup T="string" @bind-Value="_settings.CashMode">
+                <MudStack Spacing="3">
+                    <MudPaper Class="pa-3" Elevation="0" Style="@CardStyle("SingleDrawer")">
+                        <MudRadio T="string" Value="@("SingleDrawer")" Color="Color.Primary">
+                            <MudStack Spacing="0" Class="ml-2">
+                                <MudText Typo="Typo.subtitle1">Single drawer</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    All petty / expenses come from the main cash drawer. One balance to reconcile.
+                                </MudText>
+                            </MudStack>
+                        </MudRadio>
+                    </MudPaper>
+
+                    <MudPaper Class="pa-3" Elevation="0" Style="@CardStyle("PettyBox")">
+                        <MudRadio T="string" Value="@("PettyBox")" Color="Color.Primary">
+                            <MudStack Spacing="0" Class="ml-2">
+                                <MudText Typo="Typo.subtitle1">Petty cash box</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Separate float, refilled from the main drawer. Two balances to reconcile.
+                                </MudText>
+                            </MudStack>
+                        </MudRadio>
+                    </MudPaper>
+                </MudStack>
+            </MudRadioGroup>
+
+            @if (_settings.CashMode == "PettyBox")
+            {
+                <MudGrid Spacing="3" Class="mt-2">
+                    <MudItem xs="12" md="4">
+                        <MudNumericField T="decimal" @bind-Value="_settings.PettyBoxFloat" Label="Float in box ₹" Variant="Variant.Outlined" Min="0" />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudNumericField T="decimal" @bind-Value="_settings.PettyBoxRefillPrompt" Label="Refill prompt at ₹" Variant="Variant.Outlined" Min="0" />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudNumericField T="decimal" @bind-Value="_settings.PettyBoxRefillStep" Label="Refill multiples ₹" Variant="Variant.Outlined" Min="0" />
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <MudStack Row="true" Justify="Justify.FlexEnd">
+                <MudButton OnClick="Save" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_busy">
+                    @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Saving…</span> }
+                    else { <span>Save</span> }
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private AppSettings _settings = new();
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() => _settings = await SettingsSvc.LoadAsync();
+
+    private string CardStyle(string mode) =>
+        _settings.CashMode == mode
+            ? "border: 2px solid var(--mud-palette-primary);"
+            : "border: 1px solid rgba(0,0,0,0.12);";
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            await SettingsSvc.SaveAsync(_settings);
+            Snackbar.Add("Cash management settings saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not save: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+}

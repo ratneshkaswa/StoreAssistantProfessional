@@ -1,0 +1,312 @@
+@page "/bills/{Id:int}"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IAppSettingsService SettingsSvc
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject ISessionService Session
+@inject ISetupService Setup
+
+<PageTitle>@(_bill?.Number ?? "Bill") — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+        <MudIconButton Icon="@Icons.Material.Rounded.ArrowBack" OnClick="GoBack" />
+        <MudText Typo="Typo.h5">@(_bill?.Number ?? "Bill")</MudText>
+        @if (_bill is not null)
+        {
+            <MudChip T="string" Size="Size.Small" Color="@KindColor(_bill.Kind)" Variant="Variant.Outlined">@KindLabel(_bill.Kind)</MudChip>
+            @if (_bill.Status == "Posted")
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">posted</MudChip>
+            }
+            else if (_bill.Status == "Voided")
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">voided</MudChip>
+            }
+            @if (_bill.IsComposition)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">composition</MudChip>
+            }
+        }
+        <span class="sap-statusbar-spacer"></span>
+        @if (_bill is not null && _bill.Status == "Posted")
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Print" OnClick="Reprint">Reprint</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Rounded.Cancel" OnClick="@(() => _voidOpen = true)">Void</MudButton>
+        }
+    </MudStack>
+
+    @if (_bill is null)
+    {
+        <MudPaper Class="pa-8" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Rounded.HelpOutline" Color="Color.Secondary" Style="font-size: 64px;" />
+                <MudText Typo="Typo.body1" Color="Color.Secondary">Bill not found.</MudText>
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="8">
+                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h6">Items (@_bill.Items.Count)</MudText>
+                        <MudSimpleTable Dense="true">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th style="width: 80px; text-align: right;">Qty</th>
+                                    <th style="width: 100px; text-align: right;">Unit ₹</th>
+                                    <th style="width: 80px; text-align: right;">Disc.</th>
+                                    <th style="width: 80px; text-align: right;">Tax %</th>
+                                    <th style="width: 110px; text-align: right;">Line ₹</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _bill.Items)
+                                {
+                                    <tr>
+                                        <td>
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.body2">@item.Description</MudText>
+                                                @if (!string.IsNullOrEmpty(item.Sku))
+                                                {
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@item.Sku</MudText>
+                                                }
+                                            </MudStack>
+                                        </td>
+                                        <td style="text-align: right;" class="sap-amount">@item.Quantity.ToString("0.###")</td>
+                                        <td style="text-align: right;" class="sap-amount">₹@item.UnitPrice.ToString("N2")</td>
+                                        <td style="text-align: right;" class="sap-amount">₹@item.Discount.ToString("N2")</td>
+                                        <td style="text-align: right;" class="sap-amount">@item.TaxPercent.ToString("0.##")%</td>
+                                        <td style="text-align: right;" class="sap-amount">₹@item.LineTotal.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudStack>
+                </MudPaper>
+
+                @if (!string.IsNullOrEmpty(_bill.Notes))
+                {
+                    <MudPaper Class="pa-3 mt-3" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Notes</MudText>
+                        <MudText Typo="Typo.body2">@_bill.Notes</MudText>
+                    </MudPaper>
+                }
+
+                @if (_bill.Status == "Voided" && !string.IsNullOrEmpty(_bill.VoidReason))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">
+                        Voided @_bill.VoidedAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm") · reason: @_bill.VoidReason
+                    </MudAlert>
+                }
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h6">Summary</MudText>
+                        <MudGrid Spacing="1">
+                            <MudItem xs="6"><MudText Typo="Typo.caption" Color="Color.Secondary">Date</MudText></MudItem>
+                            <MudItem xs="6"><MudText Typo="Typo.body2">@_bill.At.ToLocalTime().ToString("dd MMM yyyy HH:mm")</MudText></MudItem>
+                            <MudItem xs="6"><MudText Typo="Typo.caption" Color="Color.Secondary">Customer</MudText></MudItem>
+                            <MudItem xs="6"><MudText Typo="Typo.body2">@(_bill.Customer?.Name ?? "—")</MudText></MudItem>
+                            <MudItem xs="6"><MudText Typo="Typo.caption" Color="Color.Secondary">Cashier</MudText></MudItem>
+                            <MudItem xs="6"><MudText Typo="Typo.body2">@(_bill.Staff is null ? "—" : $"{_bill.Staff.Code:D2} · {_bill.Staff.Name}")</MudText></MudItem>
+                        </MudGrid>
+
+                        <MudDivider />
+                        <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.body2">Subtotal</MudText><MudText Class="sap-amount">₹@_bill.Subtotal.ToString("N2")</MudText></MudStack>
+                        @if (_bill.DiscountTotal > 0)
+                        {
+                            <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.body2">Discount</MudText><MudText Class="sap-amount">−₹@_bill.DiscountTotal.ToString("N2")</MudText></MudStack>
+                        }
+                        @if (!_bill.IsComposition && _bill.TaxTotal > 0)
+                        {
+                            <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.body2">GST</MudText><MudText Class="sap-amount">₹@_bill.TaxTotal.ToString("N2")</MudText></MudStack>
+                        }
+                        <MudDivider />
+                        <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.h6">TOTAL</MudText><MudText Typo="Typo.h6" Class="sap-amount">₹@_bill.Total.ToString("N2")</MudText></MudStack>
+
+                        <MudDivider />
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Tender</MudText>
+                        @foreach (var p in _bill.Payments)
+                        {
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">@p.Method</MudText>
+                                <MudText Typo="Typo.body2" Class="sap-amount">₹@p.Amount.ToString("N2")</MudText>
+                            </MudStack>
+                        }
+                        @if (_bill.ChangeAmount > 0)
+                        {
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">Change</MudText>
+                                <MudText Typo="Typo.body2" Class="sap-amount">₹@_bill.ChangeAmount.ToString("N2")</MudText>
+                            </MudStack>
+                        }
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudStack>
+
+<MudDialog @bind-Visible="_voidOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Void this bill?</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2">
+                Voiding will mark the bill as voided, return stock, and reverse any customer credit. The bill itself stays in the audit log — it is not deleted.
+            </MudText>
+            @if (Session.Current != Role.Admin)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">Voiding requires Admin. Switch role from the status bar first.</MudAlert>
+            }
+            <MudTextField @bind-Value="_voidReason" Label="Reason *" Variant="Variant.Outlined" MaxLength="200"
+                          Error="@(_voidAttempt && string.IsNullOrWhiteSpace(_voidReason))"
+                          ErrorText="A reason is required." />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _voidOpen = false)">Cancel</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="VoidBill"
+                   Disabled="@(Session.Current != Role.Admin || _busy)">
+            Void bill
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private Bill? _bill;
+    private bool _voidOpen;
+    private bool _voidAttempt;
+    private bool _busy;
+    private string _voidReason = "";
+
+    private static readonly DialogOptions _dialogOptions = new()
+    {
+        CloseOnEscapeKey = true,
+        MaxWidth = MaxWidth.ExtraSmall,
+        FullWidth = true
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _bill = await db.Bills
+            .Include(b => b.Items)
+            .Include(b => b.Payments)
+            .Include(b => b.Customer)
+            .Include(b => b.Staff)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == Id);
+    }
+
+    private void GoBack() => Nav.NavigateTo("/bills");
+
+    private async Task Reprint()
+    {
+        if (_bill is null) return;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
+            var settings = await SettingsSvc.LoadAsync();
+            var html = ReceiptHtmlBuilder.Build(_bill, firm, settings);
+            await JS.InvokeVoidAsync("eval",
+                "(function(html){var w=window.open('','_blank','width=420,height=640');if(w){w.document.open();w.document.write(html);w.document.close();w.focus();w.print();}})(" +
+                System.Text.Json.JsonSerializer.Serialize(html) + ")");
+            Snackbar.Add("Reprint sent.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not print: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static string KindLabel(string kind) => kind switch
+    {
+        "Quote" => "Quote",
+        "Proforma" => "Proforma",
+        "DeliveryChallan" => "Delivery challan",
+        "CashReceipt" => "Cash receipt",
+        _ => "Tax invoice"
+    };
+
+    private static Color KindColor(string kind) => kind switch
+    {
+        "Quote" => Color.Info,
+        "Proforma" => Color.Info,
+        "DeliveryChallan" => Color.Warning,
+        "CashReceipt" => Color.Default,
+        _ => Color.Primary
+    };
+
+    private async Task VoidBill()
+    {
+        _voidAttempt = true;
+        if (_bill is null || string.IsNullOrWhiteSpace(_voidReason)) return;
+        if (Session.Current != Role.Admin) return;
+
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var bill = await db.Bills
+                .Include(b => b.Items)
+                .Include(b => b.Payments)
+                .FirstOrDefaultAsync(b => b.Id == _bill.Id);
+            if (bill is null || bill.Status != "Posted") { Snackbar.Add("Bill cannot be voided.", Severity.Warning); return; }
+
+            bill.Status = "Voided";
+            bill.VoidedAt = DateTime.UtcNow;
+            bill.VoidReason = _voidReason;
+
+            var movedStock = bill.Kind != "Quote" && bill.Kind != "Proforma";
+            if (movedStock)
+            {
+                foreach (var item in bill.Items)
+                {
+                    var product = await db.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                    if (product is not null)
+                    {
+                        product.StockQty += item.Quantity;
+                        product.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+            }
+
+            if (bill.CustomerId is int cid)
+            {
+                var creditAmount = bill.Payments.Where(p => p.Method == "Credit").Sum(p => p.Amount);
+                if (creditAmount > 0)
+                {
+                    var cust = await db.Customers.FirstOrDefaultAsync(c => c.Id == cid);
+                    if (cust is not null) { cust.Balance -= creditAmount; cust.UpdatedAt = DateTime.UtcNow; }
+                }
+            }
+
+            await db.SaveChangesAsync();
+
+            Snackbar.Add($"Bill {bill.Number} voided.", Severity.Info);
+            _voidOpen = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not void: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+}

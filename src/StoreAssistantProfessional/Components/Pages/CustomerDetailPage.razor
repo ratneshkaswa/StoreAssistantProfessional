@@ -1,0 +1,153 @@
+@page "/customers/{Id:int}"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>@(_customer?.Name ?? "Customer") — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+        <MudIconButton Icon="@Icons.Material.Rounded.ArrowBack" OnClick="@(() => Nav.NavigateTo("/customers"))" />
+        <MudText Typo="Typo.h5">👤 @(_customer?.Name ?? "Customer")</MudText>
+        @if (_customer is not null && _customer.Balance != 0)
+        {
+            <MudChip T="string" Size="Size.Small" Color="@(_customer.Balance > 0 ? Color.Warning : Color.Success)" Variant="Variant.Outlined" Class="ml-2">
+                @(_customer.Balance > 0 ? $"₹{_customer.Balance:N0} due" : $"₹{Math.Abs(_customer.Balance):N0} credit")
+            </MudChip>
+        }
+    </MudStack>
+
+    @if (_customer is null)
+    {
+        <MudPaper Class="pa-8" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+            <MudText Color="Color.Secondary">Customer not found.</MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.h6">Profile</MudText>
+                        <MudGrid Spacing="1">
+                            <MudItem xs="5"><MudText Typo="Typo.caption" Color="Color.Secondary">Phone</MudText></MudItem>
+                            <MudItem xs="7"><MudText Typo="Typo.body2">@(_customer.Phone ?? "—")</MudText></MudItem>
+                            <MudItem xs="5"><MudText Typo="Typo.caption" Color="Color.Secondary">Email</MudText></MudItem>
+                            <MudItem xs="7"><MudText Typo="Typo.body2">@(_customer.Email ?? "—")</MudText></MudItem>
+                            <MudItem xs="5"><MudText Typo="Typo.caption" Color="Color.Secondary">GSTIN</MudText></MudItem>
+                            <MudItem xs="7"><MudText Typo="Typo.body2">@(_customer.Gstin ?? "—")</MudText></MudItem>
+                            <MudItem xs="5"><MudText Typo="Typo.caption" Color="Color.Secondary">Birthday</MudText></MudItem>
+                            <MudItem xs="7"><MudText Typo="Typo.body2">@(_customer.Birthday?.ToString("dd MMM") ?? "—")</MudText></MudItem>
+                            <MudItem xs="5"><MudText Typo="Typo.caption" Color="Color.Secondary">Address</MudText></MudItem>
+                            <MudItem xs="7"><MudText Typo="Typo.body2">@FormatAddress()</MudText></MudItem>
+                        </MudGrid>
+                        @if (!string.IsNullOrEmpty(_customer.Notes))
+                        {
+                            <MudDivider />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Notes</MudText>
+                            <MudText Typo="Typo.body2">@_customer.Notes</MudText>
+                        }
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Edit" OnClick="@(() => Nav.NavigateTo("/customers"))">Edit profile</MudButton>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="8">
+                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+                    <MudStack Spacing="2">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.h6">Lifetime</MudText>
+                            <MudStack Row="true" Spacing="3">
+                                <MudStack Spacing="0" AlignItems="AlignItems.End">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Bills</MudText>
+                                    <MudText Typo="Typo.h6" Class="sap-amount">@_billCount</MudText>
+                                </MudStack>
+                                <MudStack Spacing="0" AlignItems="AlignItems.End">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Spent</MudText>
+                                    <MudText Typo="Typo.h6" Class="sap-amount">₹@_lifetimeSpent.ToString("N0")</MudText>
+                                </MudStack>
+                                <MudStack Spacing="0" AlignItems="AlignItems.End">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Loyalty</MudText>
+                                    <MudText Typo="Typo.h6" Class="sap-amount">@_customer.LoyaltyPoints ⭐</MudText>
+                                </MudStack>
+                            </MudStack>
+                        </MudStack>
+
+                        <MudDivider />
+
+                        <MudText Typo="Typo.subtitle2">Recent bills</MudText>
+                        @if (_recentBills.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">No bills yet.</MudText>
+                        }
+                        else
+                        {
+                            <MudSimpleTable Dense="true">
+                                <thead>
+                                    <tr><th>Bill #</th><th>Date</th><th style="text-align: right;">Items</th><th style="text-align: right;">Total</th><th>Tender</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var b in _recentBills)
+                                    {
+                                        <tr style="cursor: pointer;" @onclick="@(() => Nav.NavigateTo($"/bills/{b.Id}"))">
+                                            <td>@b.Number</td>
+                                            <td>@b.At.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                                            <td style="text-align: right;" class="sap-amount">@b.Items.Count</td>
+                                            <td style="text-align: right;" class="sap-amount">₹@b.Total.ToString("N0")</td>
+                                            <td>
+                                                @foreach (var p in b.Payments.GroupBy(x => x.Method))
+                                                {
+                                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ml-0 mr-1">@p.Key</MudChip>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        }
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudStack>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Customer? _customer;
+    private int _billCount;
+    private decimal _lifetimeSpent;
+    private List<Bill> _recentBills = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == Id);
+        if (_customer is null) return;
+
+        _billCount = await db.Bills.AsNoTracking().CountAsync(b => b.CustomerId == Id && b.Status == "Posted");
+        _lifetimeSpent = await db.Bills.AsNoTracking()
+            .Where(b => b.CustomerId == Id && b.Status == "Posted")
+            .SumAsync(b => (decimal?)b.Total) ?? 0m;
+
+        _recentBills = await db.Bills.AsNoTracking()
+            .Include(b => b.Items)
+            .Include(b => b.Payments)
+            .Where(b => b.CustomerId == Id)
+            .OrderByDescending(b => b.At)
+            .Take(20)
+            .ToListAsync();
+    }
+
+    private string FormatAddress()
+    {
+        if (_customer is null) return "—";
+        var parts = new[] { _customer.Address, _customer.City, _customer.State, _customer.Pincode }
+            .Where(s => !string.IsNullOrWhiteSpace(s));
+        var s = string.Join(", ", parts);
+        return string.IsNullOrEmpty(s) ? "—" : s;
+    }
+}

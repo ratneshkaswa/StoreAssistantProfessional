@@ -1,0 +1,27 @@
+@using StoreAssistantProfessional.Services
+
+<MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Justify="Justify.Center" Class="my-2">
+    @for (var i = 0; i < _labels.Length; i++)
+    {
+        var idx = i;
+        var done = (int)Current > idx;
+        var active = (int)Current == idx;
+        var color = done ? Color.Success : active ? Color.Primary : Color.Default;
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@(done ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                     Color="@color"
+                     Style="font-size: 18px;" />
+            <MudText Typo="Typo.caption" Color="@color">@_labels[idx]</MudText>
+        </MudStack>
+        @if (idx < _labels.Length - 1)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Default">·</MudText>
+        }
+    }
+</MudStack>
+
+@code {
+    [Parameter] public OnboardingStep Current { get; set; } = OnboardingStep.Firm;
+
+    private static readonly string[] _labels = ["Firm", "Taxes", "Products", "Vendors"];
+}

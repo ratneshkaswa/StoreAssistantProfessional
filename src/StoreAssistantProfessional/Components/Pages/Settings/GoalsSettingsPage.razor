@@ -1,0 +1,62 @@
+@page "/settings/goals"
+@layout AppShell
+@inject IAppSettingsService SettingsSvc
+@inject ISnackbar Snackbar
+
+<PageTitle>Goals — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="Goals &amp; targets" />
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">Targets</MudText>
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <MudNumericField T="decimal" @bind-Value="_settings.DailyGoal" Label="Daily target ₹" Variant="Variant.Outlined" Min="0" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField T="decimal" @bind-Value="_settings.MonthlyGoal" Label="Monthly target ₹" Variant="Variant.Outlined" Min="0" />
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.h6" Class="mt-2">On the dashboard</MudText>
+            <MudStack Spacing="1">
+                <MudCheckBox T="bool" @bind-Value="_settings.ShowGoalBar" Color="Color.Primary">Today's goal progress bar</MudCheckBox>
+                <MudCheckBox T="bool" @bind-Value="_settings.ShowStreak" Color="Color.Primary">Streak counter</MudCheckBox>
+                <MudCheckBox T="bool" @bind-Value="_settings.ShowComparisons" Color="Color.Primary">Comparison vs. yesterday and last week</MudCheckBox>
+                <MudCheckBox T="bool" @bind-Value="_settings.GoalNudgeEnabled" Color="Color.Primary">Static "20% to go" nudge banner at 80%+</MudCheckBox>
+                <MudCheckBox T="bool" @bind-Value="_settings.ShowEomWrapUp" Color="Color.Primary">End-of-month wrap-up banner (1st-3rd of new month)</MudCheckBox>
+            </MudStack>
+
+            <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-2">
+                <MudButton OnClick="Save" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_busy">
+                    @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Saving…</span> }
+                    else { <span>Save</span> }
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private AppSettings _settings = new();
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() => _settings = await SettingsSvc.LoadAsync();
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            await SettingsSvc.SaveAsync(_settings);
+            Snackbar.Add("Goals saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not save: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+}

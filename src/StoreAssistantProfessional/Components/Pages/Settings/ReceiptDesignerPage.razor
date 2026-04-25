@@ -1,0 +1,144 @@
+@page "/settings/receipt"
+@layout AppShell
+@inject IAppSettingsService SettingsSvc
+@inject ISnackbar Snackbar
+
+<PageTitle>Receipt designer — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="Receipt designer" />
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6">Layout</MudText>
+
+                    <MudSelect T="string" @bind-Value="_settings.ReceiptPaper" Label="Paper" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("3in")">3 inch thermal (80 mm)</MudSelectItem>
+                        <MudSelectItem Value="@("4in")">4 inch thermal</MudSelectItem>
+                        <MudSelectItem Value="@("A5")">A5</MudSelectItem>
+                        <MudSelectItem Value="@("A4")">A4</MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="string" @bind-Value="_settings.ReceiptLanguage" Label="Language" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("en")">English</MudSelectItem>
+                        <MudSelectItem Value="@("hi")">Hindi (हिन्दी)</MudSelectItem>
+                    </MudSelect>
+                    <MudCheckBox T="bool" @bind-Value="_settings.ReceiptBilingual" Color="Color.Primary">
+                        Print bilingual labels (English + selected language)
+                    </MudCheckBox>
+
+                    <MudText Typo="Typo.subtitle2" Class="mt-2">Sections</MudText>
+                    <MudStack Spacing="0">
+                        <MudCheckBox T="bool" @bind-Value="_settings.ReceiptShowLogo" Color="Color.Primary">Logo</MudCheckBox>
+                        <MudCheckBox T="bool" @bind-Value="_settings.ReceiptShowAddress" Color="Color.Primary">Firm address</MudCheckBox>
+                        <MudCheckBox T="bool" @bind-Value="_settings.ReceiptShowGstin" Color="Color.Primary">GSTIN</MudCheckBox>
+                        <MudCheckBox T="bool" @bind-Value="_settings.ReceiptShowBillNumber" Color="Color.Primary">Bill # + date</MudCheckBox>
+                        <MudCheckBox T="bool" @bind-Value="_settings.ReceiptShowCashier" Color="Color.Primary">Cashier name</MudCheckBox>
+                        <MudCheckBox T="bool" @bind-Value="_settings.ReceiptShowCustomer" Color="Color.Primary">Customer info</MudCheckBox>
+                        <MudCheckBox T="bool" @bind-Value="_settings.ReceiptShowItems" Color="Color.Primary">Items table</MudCheckBox>
+                        <MudCheckBox T="bool" @bind-Value="_settings.ReceiptShowTaxSplit" Color="Color.Primary">Tax split (CGST / SGST)</MudCheckBox>
+                        <MudCheckBox T="bool" @bind-Value="_settings.ReceiptShowTender" Color="Color.Primary">Tender + change</MudCheckBox>
+                        <MudCheckBox T="bool" @bind-Value="_settings.ReceiptShowQrUpi" Color="Color.Primary">UPI QR for next visit</MudCheckBox>
+                        <MudCheckBox T="bool" @bind-Value="_settings.ReceiptShowFooter" Color="Color.Primary">Footer message</MudCheckBox>
+                    </MudStack>
+
+                    <MudTextField @bind-Value="_settings.ReceiptFooterText" Label="Footer text" Variant="Variant.Outlined" Lines="3" MaxLength="500" />
+
+                    <MudStack Row="true" Justify="Justify.FlexEnd">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="@_busy">
+                            @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Saving…</span> }
+                            else { <span>Save</span> }
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+                <MudStack Spacing="2">
+                    <MudText Typo="Typo.h6">Live preview</MudText>
+                    <MudPaper Class="pa-3" Elevation="0" Style="@PreviewStyle()">
+                        <div style="font-family: Consolas, monospace; line-height: 1.4; font-size: 12px;">
+                            @if (_settings.ReceiptShowLogo) { <div style="text-align: center;">[LOGO]</div> }
+                            <div style="text-align: center; font-weight: 600;">ACME STORE</div>
+                            @if (_settings.ReceiptShowAddress) { <div style="text-align: center;">Shop 12, MG Road, Pune</div> }
+                            @if (_settings.ReceiptShowGstin) { <div style="text-align: center;">GSTIN 27AAAAA0000A1Z5</div> }
+                            <hr />
+                            @if (_settings.ReceiptShowBillNumber) { <div>Bill INV-0042 · 23 Apr 18:42</div> }
+                            @if (_settings.ReceiptShowCashier) { <div>Cashier: 02 · Priya</div> }
+                            @if (_settings.ReceiptShowCustomer) { <div>Customer: Riya Sharma · 9876543210</div> }
+                            @if (_settings.ReceiptShowItems)
+                            {
+                                <hr />
+                                <div>Cotton Shirt</div>
+                                <div style="display:flex;justify-content:space-between;">
+                                    <span>2 × ₹600</span><span>₹1,200.00</span>
+                                </div>
+                                <div>Denim Jeans</div>
+                                <div style="display:flex;justify-content:space-between;">
+                                    <span>1 × ₹1,500</span><span>₹1,500.00</span>
+                                </div>
+                            }
+                            <hr />
+                            <div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>₹2,700.00</span></div>
+                            @if (_settings.ReceiptShowTaxSplit)
+                            {
+                                <div style="display:flex;justify-content:space-between;"><span>CGST 2.5%</span><span>₹67.50</span></div>
+                                <div style="display:flex;justify-content:space-between;"><span>SGST 2.5%</span><span>₹67.50</span></div>
+                            }
+                            <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px;"><span>TOTAL</span><span>₹2,835.00</span></div>
+                            @if (_settings.ReceiptShowTender)
+                            {
+                                <hr />
+                                <div>Cash: ₹3,000.00</div>
+                                <div>Change: ₹165.00</div>
+                            }
+                            @if (_settings.ReceiptShowQrUpi)
+                            {
+                                <hr />
+                                <div style="text-align:center;">[ UPI QR ]</div>
+                                <div style="text-align:center;font-size:10px;">scan for next visit</div>
+                            }
+                            @if (_settings.ReceiptShowFooter && !string.IsNullOrEmpty(_settings.ReceiptFooterText))
+                            {
+                                <hr />
+                                <div style="text-align:center;">@_settings.ReceiptFooterText</div>
+                            }
+                        </div>
+                    </MudPaper>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
+@code {
+    private AppSettings _settings = new();
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() => _settings = await SettingsSvc.LoadAsync();
+
+    private string PreviewStyle() => _settings.ReceiptPaper switch
+    {
+        "3in" => "width: 280px; background: #fff;",
+        "4in" => "width: 360px; background: #fff;",
+        "A5"  => "width: 420px; background: #fff;",
+        "A4"  => "width: 520px; background: #fff;",
+        _     => "width: 280px; background: #fff;"
+    };
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            await SettingsSvc.SaveAsync(_settings);
+            Snackbar.Add("Receipt template saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not save: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+}

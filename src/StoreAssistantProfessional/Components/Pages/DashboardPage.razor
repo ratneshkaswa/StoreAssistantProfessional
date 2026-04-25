@@ -1,0 +1,306 @@
+@page "/dashboard"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject ISetupService Setup
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IAppSettingsService SettingsSvc
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="4">
+    <MudText Typo="Typo.h5">Welcome back, @(_firmName ?? Setup.Current?.StoreName ?? "your store")</MudText>
+
+    @if (_settings.ShowEomWrapUp && _eom is not null)
+    {
+        <MudPaper Class="pa-4" Elevation="1" Style="box-shadow: inset 4px 0 0 var(--mud-palette-success), 0 2px 4px rgba(0,0,0,0.08);">
+            <MudStack Spacing="2">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.subtitle1">📅 @_eom.MonthName wrap-up</MudText>
+                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Rounded.Close" OnClick="@(() => _eom = null)" />
+                </MudStack>
+                <MudGrid Spacing="2">
+                    <MudItem xs="6" md="3"><MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">Bills</MudText><MudText Typo="Typo.h6" Class="sap-amount">@_eom.Bills</MudText></MudStack></MudItem>
+                    <MudItem xs="6" md="3"><MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">Sales</MudText><MudText Typo="Typo.h6" Class="sap-amount">₹@_eom.Sales.ToString("N0")</MudText></MudStack></MudItem>
+                    <MudItem xs="6" md="3"><MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">Top product</MudText><MudText Typo="Typo.body2">@(_eom.TopProduct ?? "—")</MudText></MudStack></MudItem>
+                    <MudItem xs="6" md="3"><MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">vs prior month</MudText><MudText Typo="Typo.body2" Color="@(_eom.GrowthPct >= 0 ? Color.Success : Color.Error)">@(_eom.GrowthPct >= 0 ? "+" : "")@_eom.GrowthPct%</MudText></MudStack></MudItem>
+                </MudGrid>
+            </MudStack>
+        </MudPaper>
+    }
+
+    @if (_settings.ShowGoalBar)
+    {
+        <MudPaper Class="pa-4" Elevation="1" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+            <MudStack Spacing="2">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.subtitle1">Today's goal</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="sap-amount">
+                        ₹@_todaySales.ToString("N0") / ₹@_settings.DailyGoal.ToString("N0") · @GoalPct%
+                    </MudText>
+                </MudStack>
+                <MudProgressLinear Color="Color.Primary" Value="@GoalPct" Class="my-1" />
+                @if (_settings.GoalNudgeEnabled && GoalPct >= 80 && GoalPct < 100)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Success" Style="font-weight: 500;">
+                        @(100 - GoalPct)% to go to today's target!
+                    </MudText>
+                }
+                else if (GoalPct >= 100)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Success" Style="font-weight: 500;">
+                        🎯 Daily target hit. Great work.
+                    </MudText>
+                }
+                @if (_settings.ShowComparisons)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Yesterday ₹@_yesterdaySales.ToString("N0") · this month ₹@_monthSales.ToString("N0")
+                    </MudText>
+                }
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudGrid Spacing="3">
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Today</MudText>
+                    <MudText Typo="Typo.h5" Class="sap-amount">₹@_todaySales.ToString("N0")</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Bills</MudText>
+                    <MudText Typo="Typo.h5" Class="sap-amount">@_todayBills</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Refunds</MudText>
+                    <MudText Typo="Typo.h5" Class="sap-amount">₹@_todayRefunds.ToString("N0")</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Items sold</MudText>
+                    <MudText Typo="Typo.h5" Class="sap-amount">@_todayItems</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-4" Elevation="1" Style="min-height: 240px;">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Recent activity</MudText>
+                @if (_recentBills.Count == 0)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                        <MudIcon Icon="@Icons.Material.Rounded.Inbox" Color="Color.Secondary" Style="font-size: 48px;" />
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">No bills yet today.</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Click Start Billing to begin.</MudText>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudStack Spacing="1">
+                        @foreach (var b in _recentBills)
+                        {
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="px-1">
+                                <MudText Typo="Typo.body2">
+                                    @b.At.ToLocalTime().ToString("HH:mm")  ·  @b.Number  ·  @b.Items.Count item(s)
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="sap-amount">₹@b.Total.ToString("N0")</MudText>
+                            </MudStack>
+                        }
+                    </MudStack>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-4" Elevation="1" Style="min-height: 240px;">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Top products today</MudText>
+                @if (_topProducts.Count == 0)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                        <MudIcon Icon="@Icons.Material.Rounded.TrendingUp" Color="Color.Secondary" Style="font-size: 48px;" />
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Nothing sold yet.</MudText>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudStack Spacing="1">
+                        @{ var rank = 1; }
+                        @foreach (var p in _topProducts)
+                        {
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="px-1">
+                                <MudText Typo="Typo.body2">@rank. @p.Name</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="sap-amount">@p.Qty.ToString("0.###") sold</MudText>
+                            </MudStack>
+                            rank++;
+                        }
+                    </MudStack>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="pa-3" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+            <MudIcon Icon="@Icons.Material.Rounded.Warning" Color="@(_lowStockCount > 0 ? Color.Warning : Color.Default)" Style="font-size: 18px;" />
+            <MudText Typo="Typo.caption">Low stock: @_lowStockCount item(s).</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-4">
+                💾 Last backup: @_lastBackupLabel
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    <MudText Typo="Typo.subtitle1" Class="mt-2">Quick actions</MudText>
+    <MudGrid Spacing="2">
+        @foreach (var a in _actions)
+        {
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-3 sap-quick-card" Elevation="1" Style="cursor: pointer; height: 100%;" @onclick="@(() => Nav.NavigateTo(a.Path))">
+                    <MudStack Spacing="1" AlignItems="AlignItems.Start">
+                        <MudIcon Icon="@a.Icon" Color="Color.Primary" Style="font-size: 28px;" />
+                        <MudText Typo="Typo.body2" Style="font-weight: 500;">@a.Title</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@a.Subtitle</MudText>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+</MudStack>
+
+<style>
+    .sap-quick-card:hover { background: rgba(232, 181, 132, 0.08); }
+</style>
+
+@code {
+    [Inject] private IBackupService BackupSvc { get; set; } = default!;
+
+    private string? _firmName;
+    private AppSettings _settings = new();
+
+    private decimal _todaySales;
+    private decimal _yesterdaySales;
+    private decimal _monthSales;
+    private int _todayBills;
+    private decimal _todayItems;
+    private decimal _todayRefunds = 0m;
+    private int _lowStockCount;
+    private string _lastBackupLabel = "never";
+
+    private List<Bill> _recentBills = new();
+    private List<TopProduct> _topProducts = new();
+
+    private record TopProduct(string Name, decimal Qty);
+    private record EomSummary(string MonthName, int Bills, decimal Sales, string? TopProduct, int GrowthPct);
+    private EomSummary? _eom;
+
+    private int GoalPct => _settings.DailyGoal <= 0 ? 0 : (int)Math.Min(100, Math.Round(_todaySales * 100m / _settings.DailyGoal));
+
+    private record QuickAction(string Title, string Subtitle, string Icon, string Path);
+    private readonly List<QuickAction> _actions = new()
+    {
+        new("All bills",      "view, reprint, void past bills",     Icons.Material.Rounded.ReceiptLong,  "/bills"),
+        new("Reports",        "sales · GST · cashier · stock",      Icons.Material.Rounded.Analytics,    "/reports"),
+        new("Exports",        "Tally XML · GSTR · HSN",             Icons.Material.Rounded.FileDownload, "/exports"),
+        new("Expenses",       "petty · recurring · day book",       Icons.Material.Rounded.MoneyOff,     "/expenses"),
+        new("Cheques",        "issued · received · register",       Icons.Material.Rounded.Description,  "/cheques"),
+        new("Win-back",       "WhatsApp dormant customers",         Icons.Material.Rounded.Chat,         "/winback"),
+        new("New inward",     "record a parcel from a vendor",      Icons.Material.Rounded.MoveToInbox,  "/inward/new"),
+        new("Stock take",     "count physical inventory",           Icons.Material.Rounded.FactCheck,    "/stocktake"),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await SettingsSvc.LoadAsync();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
+        _firmName = firm?.Name;
+
+        var today = DateTime.UtcNow.Date;
+        var tomorrow = today.AddDays(1);
+        var yesterday = today.AddDays(-1);
+        var monthStart = new DateTime(today.Year, today.Month, 1);
+
+        var todays = await db.Bills.AsNoTracking()
+            .Where(b => b.Status == "Posted" && b.At >= today && b.At < tomorrow)
+            .ToListAsync();
+        _todaySales = todays.Sum(b => b.Total);
+        _todayBills = todays.Count;
+        _todayItems = await db.BillItems.AsNoTracking()
+            .Where(i => i.Bill!.Status == "Posted" && i.Bill.At >= today && i.Bill.At < tomorrow)
+            .SumAsync(i => (decimal?)i.Quantity) ?? 0m;
+
+        _yesterdaySales = await db.Bills.AsNoTracking()
+            .Where(b => b.Status == "Posted" && b.At >= yesterday && b.At < today)
+            .SumAsync(b => (decimal?)b.Total) ?? 0m;
+        _monthSales = await db.Bills.AsNoTracking()
+            .Where(b => b.Status == "Posted" && b.At >= monthStart)
+            .SumAsync(b => (decimal?)b.Total) ?? 0m;
+
+        _recentBills = await db.Bills.AsNoTracking()
+            .Include(b => b.Items)
+            .Where(b => b.Status == "Posted")
+            .OrderByDescending(b => b.At)
+            .Take(8)
+            .ToListAsync();
+
+        _topProducts = await db.BillItems.AsNoTracking()
+            .Where(i => i.Bill!.Status == "Posted" && i.Bill.At >= today && i.Bill.At < tomorrow)
+            .GroupBy(i => new { i.ProductId, i.Description })
+            .Select(g => new TopProduct(g.Key.Description, g.Sum(x => x.Quantity)))
+            .OrderByDescending(x => x.Qty)
+            .Take(5)
+            .ToListAsync();
+
+        _lowStockCount = await db.Products.AsNoTracking()
+            .CountAsync(p => p.IsActive && p.ReorderLevel.HasValue && p.StockQty <= p.ReorderLevel.Value);
+
+        if (_settings.ShowEomWrapUp && today.Day <= 3)
+        {
+            var lastMonthEnd = new DateTime(today.Year, today.Month, 1);
+            var lastMonthStart = lastMonthEnd.AddMonths(-1);
+            var priorStart = lastMonthStart.AddMonths(-1);
+
+            var lastMonthBills = await db.Bills.AsNoTracking()
+                .Include(b => b.Items)
+                .Where(b => b.Status == "Posted" && b.At >= lastMonthStart && b.At < lastMonthEnd)
+                .ToListAsync();
+
+            if (lastMonthBills.Count > 0)
+            {
+                var priorSales = await db.Bills.AsNoTracking()
+                    .Where(b => b.Status == "Posted" && b.At >= priorStart && b.At < lastMonthStart)
+                    .SumAsync(b => (decimal?)b.Total) ?? 0m;
+                var lastSales = lastMonthBills.Sum(b => b.Total);
+                var growthPct = priorSales == 0 ? 0 : (int)Math.Round((lastSales - priorSales) * 100m / priorSales);
+                var top = lastMonthBills.SelectMany(b => b.Items)
+                    .GroupBy(i => i.Description)
+                    .OrderByDescending(g => g.Sum(x => x.Quantity))
+                    .Select(g => g.Key)
+                    .FirstOrDefault();
+                _eom = new EomSummary(lastMonthStart.ToString("MMMM"), lastMonthBills.Count, lastSales, top, growthPct);
+            }
+        }
+
+        var lastBackup = BackupSvc.LastBackupAt;
+        _lastBackupLabel = lastBackup is null
+            ? "never"
+            : (DateTime.Now - lastBackup.Value).TotalHours < 24
+                ? $"today at {lastBackup.Value:HH:mm}"
+                : $"{(int)(DateTime.Now - lastBackup.Value).TotalDays} days ago";
+    }
+}

@@ -1,0 +1,307 @@
+@implements IDisposable
+@inject ISetupService Setup
+@inject ISessionService Session
+@inject IShellState Shell
+@inject IBackupService BackupSvc
+@inject IActivityService Activity
+@inject ICounterPresenceService Counters
+@inject ISnackbar Snackbar
+
+<div class="sap-statusbar">
+    <span class="sap-status-chip" title="Connection · online">
+        <span class="sap-dot sap-dot-online"></span>
+    </span>
+
+    <span class="sap-status-chip" title="Store">
+        <MudIcon Icon="@Icons.Material.Rounded.Storefront" Style="font-size: 14px;" />
+        <span>@(Setup.Current?.StoreName ?? "—")</span>
+    </span>
+
+    <span class="sap-status-chip" title="Financial year">
+        <span>@FyLabel</span>
+    </span>
+
+    <span class="sap-status-chip" title="@CounterTitle">
+        <MudIcon Icon="@Icons.Material.Rounded.PointOfSale" Style="font-size: 14px;" />
+        <span>@Counters.CurrentCounter@(Counters.Others.Count > 0 ? $" · +{Counters.Others.Count}" : "")</span>
+    </span>
+
+    <span class="sap-status-chip sap-status-clickable" title="Cash drawer · click for actions" @onclick="@(() => _drawerOpen = true)">
+        <MudIcon Icon="@Icons.Material.Rounded.AccountBalanceWallet" Style="font-size: 14px;" />
+        <span class="sap-amount">₹@DrawerBalance.ToString("N0")</span>
+    </span>
+
+    <span class="@RoleChipClass" title="Click to switch role" @onclick="OnRoleClick">
+        <MudIcon Icon="@(Session.Current == Role.Admin ? Icons.Material.Rounded.LockOpen : Icons.Material.Rounded.Person)"
+                 Style="font-size: 14px;" />
+        <span>@Session.Current</span>
+    </span>
+
+    @if (Shell.PrivacyMode)
+    {
+        <span class="sap-status-chip sap-status-clickable" title="Privacy mode is on — click to toggle off" @onclick="@(() => Shell.TogglePrivacy())">
+            <MudIcon Icon="@Icons.Material.Rounded.VisibilityOff" Style="font-size: 14px;" />
+            <span>Privacy</span>
+        </span>
+    }
+
+    <span class="sap-status-chip" title="Sync">
+        <MudIcon Icon="@Icons.Material.Rounded.CloudDone" Style="font-size: 14px;" />
+        <span>Synced</span>
+    </span>
+
+    <span class="sap-status-chip" title="Printer">
+        <MudIcon Icon="@Icons.Material.Rounded.Print" Style="font-size: 14px;" />
+        <span>Ready</span>
+    </span>
+
+    <span class="sap-status-chip" title="Date · time">
+        <span>@DateTime.Now.ToString("ddd · HH:mm")</span>
+    </span>
+
+    <span class="sap-statusbar-spacer"></span>
+
+    <span class="sap-status-chip sap-status-clickable sap-status-backup" title="Backup app data and exit" @onclick="@(() => _backupOpen = true)">
+        <MudIcon Icon="@Icons.Material.Rounded.Save" Style="font-size: 14px;" />
+        <span>Backup &amp; Exit</span>
+    </span>
+</div>
+
+<MudDialog @bind-Visible="_adminPinOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Switch to Admin</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Enter the Admin PIN to unlock destructive actions.
+            </MudText>
+            <MudTextField @ref="_adminPinField"
+                          Value="_adminPinEntry"
+                          ValueChanged="OnAdminPinChanged"
+                          T="string"
+                          Label="Admin PIN"
+                          InputType="InputType.Password"
+                          MaxLength="4"
+                          Immediate="true"
+                          AutoFocus="true"
+                          Variant="Variant.Outlined"
+                          Error="@_adminPinError"
+                          ErrorText="Incorrect PIN."
+                          OnKeyDown="OnAdminPinKey" />
+            <MudSelect T="string" @bind-Value="_adminReason" Label="Reason" Variant="Variant.Outlined" Dense="true">
+                <MudSelectItem Value="@("Refund")">Refund</MudSelectItem>
+                <MudSelectItem Value="@("Stock adjustment")">Stock adjustment</MudSelectItem>
+                <MudSelectItem Value="@("Settings change")">Settings change</MudSelectItem>
+                <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+            </MudSelect>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CloseAdminDialog">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="TryUnlock"
+                   Disabled="@(_adminPinEntry.Length != 4)">
+            Unlock
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<MudDialog @bind-Visible="_backupOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Backup app data and exit?</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.body2">
+                A zip backup of your data folder will be saved to:
+            </MudText>
+            <MudPaper Class="pa-2" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                <MudText Typo="Typo.caption" Style="font-family: Consolas, monospace;">
+                    @BackupSvc.BackupDirectory
+                </MudText>
+            </MudPaper>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Last backup: @LastBackupLabel
+            </MudText>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _backupOpen = false)">Cancel</MudButton>
+        <MudButton Color="Color.Default" Variant="Variant.Outlined" OnClick="@(() => DoExit(false))">Just exit</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@(() => DoExit(true))" Disabled="@_busy">
+            @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Backing up…</span> }
+            else { <span>Backup &amp; exit</span> }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<MudPopover Open="_drawerOpen"
+            AnchorOrigin="Origin.BottomCenter"
+            TransformOrigin="Origin.TopCenter"
+            Style="width: 320px;">
+    <MudPaper Class="pa-3" Elevation="3">
+        <MudStack Spacing="2">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.subtitle1">Cash drawer</MudText>
+                <MudIconButton Size="Size.Small" Icon="@Icons.Material.Rounded.Close" OnClick="@(() => _drawerOpen = false)" />
+            </MudStack>
+            <MudText Typo="Typo.h5" Class="sap-amount">₹@DrawerBalance.ToString("N0")</MudText>
+            <MudDivider />
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Today</MudText>
+            <MudStack Spacing="1">
+                <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.caption">Sales</MudText><MudText Typo="Typo.caption" Class="sap-amount">+₹0</MudText></MudStack>
+                <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.caption">Refunds</MudText><MudText Typo="Typo.caption" Class="sap-amount">−₹0</MudText></MudStack>
+                <MudStack Row="true" Justify="Justify.SpaceBetween"><MudText Typo="Typo.caption">Petty / expenses</MudText><MudText Typo="Typo.caption" Class="sap-amount">−₹0</MudText></MudStack>
+            </MudStack>
+            <MudDivider />
+            <MudStack Row="true" Spacing="1">
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Remove">Petty out</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.ReceiptLong">Expense</MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</MudPopover>
+
+@code {
+    [Parameter] public decimal DrawerBalance { get; set; }
+    [Parameter] public string FyLabel { get; set; } = "FY 2026-27";
+
+    private bool _adminPinOpen;
+    private bool _backupOpen;
+    private bool _drawerOpen;
+    private bool _busy;
+
+    private string _adminPinEntry = "";
+    private bool _adminPinError;
+    private string _adminReason = "Refund";
+    private MudTextField<string>? _adminPinField;
+
+    private static readonly DialogOptions _dialogOptions = new()
+    {
+        CloseOnEscapeKey = true,
+        MaxWidth = MaxWidth.ExtraSmall,
+        FullWidth = true
+    };
+
+    private string RoleChipClass => Session.Current == Role.Admin
+        ? "sap-status-chip sap-status-clickable sap-status-admin"
+        : "sap-status-chip sap-status-clickable";
+
+    private string CounterTitle
+    {
+        get
+        {
+            var others = Counters.Others;
+            if (others.Count == 0) return "Counter (no other instances)";
+            var names = string.Join(", ", others.Select(o => $"{o.Counter} on {o.MachineName}"));
+            return $"Other counters active: {names}";
+        }
+    }
+
+    private string LastBackupLabel
+    {
+        get
+        {
+            var t = BackupSvc.LastBackupAt;
+            if (t is null) return "never";
+            var ago = DateTime.Now - t.Value;
+            return ago.TotalDays < 1 ? $"today at {t.Value:HH:mm}"
+                : ago.TotalDays < 2  ? "yesterday"
+                : $"{(int)ago.TotalDays} days ago";
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        Session.Changed += OnChanged;
+        Shell.Changed += OnChanged;
+        Counters.Changed += OnChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Session.Changed -= OnChanged;
+        Shell.Changed -= OnChanged;
+        Counters.Changed -= OnChanged;
+    }
+
+    private void OnRoleClick()
+    {
+        if (Session.Current == Role.Admin)
+        {
+            Session.ExitAdmin();
+            _ = Activity.LogEventAsync("RoleExit", role: "User", reason: "manual");
+            Snackbar.Add("Switched to User.", Severity.Info);
+            return;
+        }
+
+        _adminPinEntry = "";
+        _adminPinError = false;
+        _adminReason = "Refund";
+        _adminPinOpen = true;
+    }
+
+    private void OnAdminPinChanged(string v)
+    {
+        _adminPinEntry = new string((v ?? "").Where(char.IsDigit).Take(4).ToArray());
+        _adminPinError = false;
+    }
+
+    private async Task OnAdminPinKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _adminPinEntry.Length == 4) await TryUnlock();
+    }
+
+    private async Task TryUnlock()
+    {
+        if (Setup.VerifyAdmin(_adminPinEntry))
+        {
+            Session.EnterAdmin();
+            await Activity.LogEventAsync("RoleEnter", role: "Admin", reason: _adminReason);
+            _adminPinOpen = false;
+            _adminPinEntry = "";
+            Snackbar.Add($"Unlocked as Admin · reason: {_adminReason}", Severity.Success);
+            return;
+        }
+        await Activity.LogEventAsync("FailedUnlock", role: "Admin");
+        _adminPinError = true;
+        _adminPinEntry = "";
+        if (_adminPinField is not null) await _adminPinField.FocusAsync();
+    }
+
+    private void CloseAdminDialog()
+    {
+        _adminPinOpen = false;
+        _adminPinEntry = "";
+        _adminPinError = false;
+    }
+
+    private async Task DoExit(bool runBackup)
+    {
+        if (runBackup)
+        {
+            _busy = true;
+            try
+            {
+                var path = await Task.Run(() => BackupSvc.CreateBackup());
+                Snackbar.Add($"Backup saved: {Path.GetFileName(path)}", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Backup failed: {ex.Message}", Severity.Error);
+                _busy = false;
+                return;
+            }
+            finally
+            {
+                _busy = false;
+            }
+        }
+
+        System.Windows.Application.Current?.Shutdown();
+    }
+}

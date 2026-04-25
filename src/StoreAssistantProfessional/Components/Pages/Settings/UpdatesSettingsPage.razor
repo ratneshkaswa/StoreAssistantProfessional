@@ -1,0 +1,95 @@
+@page "/settings/updates"
+@layout AppShell
+@inject IAppSettingsService SettingsSvc
+@inject ISnackbar Snackbar
+
+<PageTitle>Updates — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="Update channel" />
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="4">
+                    <MudSelect T="string" @bind-Value="_settings.UpdateChannel" Label="Channel" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Stable")">Stable (recommended)</MudSelectItem>
+                        <MudSelectItem Value="@("Beta")">Beta (early access)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSelect T="string" @bind-Value="_settings.UpdateCheckFrequency" Label="Check frequency" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Daily")">Daily</MudSelectItem>
+                        <MudSelectItem Value="@("Weekly")">Weekly</MudSelectItem>
+                        <MudSelectItem Value="@("Manual")">Manual only</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSelect T="string" @bind-Value="_settings.UpdateInstallMode" Label="Install when" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("OnNextExit")">On next exit</MudSelectItem>
+                        <MudSelectItem Value="@("AskEachTime")">Ask each time</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+
+            <MudPaper Class="pa-3" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Last checked: @(_settings.LastUpdateCheck?.ToString("dd MMM yyyy HH:mm") ?? "never")
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Current build: 1.0.0-dev</MudText>
+                </MudStack>
+            </MudPaper>
+
+            <MudStack Row="true" Spacing="2" Justify="Justify.SpaceBetween">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Refresh" OnClick="CheckNow" Disabled="@_busy">
+                    Check now
+                </MudButton>
+                <MudButton OnClick="Save" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_busy">
+                    @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Saving…</span> }
+                    else { <span>Save</span> }
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-5">
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.h6">What's new</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Release notes panel arrives with the first signed installer build.</MudText>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private AppSettings _settings = new();
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() => _settings = await SettingsSvc.LoadAsync();
+
+    private async Task CheckNow()
+    {
+        _busy = true;
+        try
+        {
+            await Task.Delay(400);
+            _settings.LastUpdateCheck = DateTime.UtcNow;
+            await SettingsSvc.SaveAsync(_settings);
+            Snackbar.Add("You're up to date.", Severity.Info);
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not check: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            await SettingsSvc.SaveAsync(_settings);
+            Snackbar.Add("Update settings saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not save: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+}

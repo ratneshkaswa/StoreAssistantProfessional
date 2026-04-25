@@ -1,0 +1,78 @@
+@page "/settings/eway"
+@layout AppShell
+@inject IAppSettingsService SettingsSvc
+@inject ISnackbar Snackbar
+
+<PageTitle>E-way / E-invoice — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="E-way bill &amp; E-invoice" />
+
+    <MudAlert Severity="Severity.Info" Dense="true">
+        Captures NIC API credentials. Actual generation needs the live NIC integration — coming in a follow-up update.
+        Saving here stores your settings so the integration can plug in cleanly.
+    </MudAlert>
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">E-way bill</MudText>
+                <MudSwitch T="bool" @bind-Value="_settings.EwayEnabled" Color="Color.Primary">Enabled</MudSwitch>
+            </MudStack>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Required for inter-state B2B sales above ₹50,000. Enables auto-suggest on qualifying bills.
+            </MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6"><MudTextField @bind-Value="_settings.EwayUserName" Label="EWB user name" Variant="Variant.Outlined" MaxLength="60" Disabled="@(!_settings.EwayEnabled)" /></MudItem>
+                <MudItem xs="12" md="6"><MudTextField @bind-Value="_settings.EwayPassword" Label="EWB password" InputType="InputType.Password" Variant="Variant.Outlined" MaxLength="60" Disabled="@(!_settings.EwayEnabled)" /></MudItem>
+                <MudItem xs="12" md="6"><MudTextField @bind-Value="_settings.EwayGstin" Label="GSTIN" Variant="Variant.Outlined" MaxLength="15" Disabled="@(!_settings.EwayEnabled)" /></MudItem>
+            </MudGrid>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">E-invoice (IRN)</MudText>
+                <MudSwitch T="bool" @bind-Value="_settings.EinvoiceEnabled" Color="Color.Primary">Enabled</MudSwitch>
+            </MudStack>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Mandatory for businesses with turnover above the threshold (₹5 Cr from Aug 2023).
+                Generates an Invoice Reference Number (IRN) + signed QR per B2B bill.
+            </MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6"><MudTextField @bind-Value="_settings.EinvoiceClientId" Label="Client ID" Variant="Variant.Outlined" MaxLength="60" Disabled="@(!_settings.EinvoiceEnabled)" /></MudItem>
+                <MudItem xs="12" md="6"><MudTextField @bind-Value="_settings.EinvoiceClientSecret" Label="Client secret" InputType="InputType.Password" Variant="Variant.Outlined" MaxLength="60" Disabled="@(!_settings.EinvoiceEnabled)" /></MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField T="decimal" @bind-Value="_settings.EinvoiceTurnoverThreshold" Label="Turnover threshold ₹" Variant="Variant.Outlined" Min="0" Disabled="@(!_settings.EinvoiceEnabled)" />
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    </MudPaper>
+
+    <MudStack Row="true" Justify="Justify.FlexEnd">
+        <MudButton OnClick="Save" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_busy">
+            @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Saving…</span> }
+            else { <span>Save</span> }
+        </MudButton>
+    </MudStack>
+</MudStack>
+
+@code {
+    private AppSettings _settings = new();
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() => _settings = await SettingsSvc.LoadAsync();
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            await SettingsSvc.SaveAsync(_settings);
+            Snackbar.Add("E-way / e-invoice settings saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not save: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+}

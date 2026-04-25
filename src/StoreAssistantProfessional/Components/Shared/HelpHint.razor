@@ -1,0 +1,7 @@
+<MudTooltip Text="@Text" Placement="Placement.Right" Arrow="true">
+    <MudIcon Icon="@Icons.Material.Rounded.HelpOutline" Color="Color.Secondary" Style="font-size: 14px; cursor: help; vertical-align: middle;" />
+</MudTooltip>
+
+@code {
+    [Parameter] public string Text { get; set; } = "";
+}

@@ -1,0 +1,307 @@
+@page "/billing"
+@layout AppShell
+@implements IDisposable
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ICartService Cart
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject NavigationManager Nav
+
+<PageTitle>Billing — Store Assistant Professional</PageTitle>
+
+<div class="sap-billing-shell">
+    <div class="sap-billing-toolbar">
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Inbox" OnClick="HoldActive" Disabled="@(Cart.Active.Lines.Count == 0)">
+            Hold <span class="ml-1 sap-amount">@Cart.Active.Lines.Count</span>
+        </MudButton>
+        <MudMenu StartIcon="@Icons.Material.Rounded.PlaylistPlay" Label="@($"Held ({Cart.Held.Count})")" Variant="Variant.Outlined" Size="Size.Small">
+            @if (Cart.Held.Count == 0)
+            {
+                <MudText Typo="Typo.caption" Class="px-3 py-2" Color="Color.Secondary">No held bills.</MudText>
+            }
+            else
+            {
+                @foreach (var h in Cart.Held)
+                {
+                    <MudMenuItem OnClick="@(() => Cart.ResumeHeld(h.Id))">
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.body2">@h.Lines.Count item(s) · ₹@h.Total.ToString("N0")</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">held @h.At.ToLocalTime().ToString("HH:mm")</MudText>
+                        </MudStack>
+                    </MudMenuItem>
+                }
+            }
+        </MudMenu>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Rounded.History" OnClick="@(() => Nav.NavigateTo("/bills"))">Recent bills</MudButton>
+        <span class="sap-statusbar-spacer"></span>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">F5 New · F8 Hold · F12 Checkout</MudText>
+    </div>
+
+    <MudDivider />
+
+    <div class="sap-billing-grid">
+        <div class="sap-billing-left">
+            <MudPaper Class="pa-3" Elevation="0">
+                <MudTextField @ref="_searchField"
+                              Value="_searchText"
+                              ValueChanged="OnSearchChanged"
+                              T="string"
+                              Placeholder="Scan barcode or type SKU / product…"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Rounded.Search"
+                              Immediate="true"
+                              AutoFocus="true"
+                              OnKeyDown="OnSearchKeyDown" />
+            </MudPaper>
+
+            @if (_lookupResults.Count > 0)
+            {
+                <MudPaper Class="pa-2" Elevation="1">
+                    @foreach (var p in _lookupResults)
+                    {
+                        <MudPaper Elevation="0" Class="pa-2" Style="cursor: pointer;" @onclick="@(() => AddProduct(p))">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.body2" Style="font-weight: 500;">@p.Name</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @(p.Sku ?? "no sku") · stock @p.StockQty.ToString("0.###")
+                                    </MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.body2" Class="sap-amount">₹@(p.SalePrice > 0 ? p.SalePrice.ToString("N0") : p.Mrp.ToString("N0"))</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                </MudPaper>
+            }
+
+            <MudPaper Class="pa-3" Elevation="0">
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.subtitle2">Quick add</MudText>
+                    <div class="sap-quickgrid">
+                        @foreach (var p in _quickProducts)
+                        {
+                            <MudPaper Class="pa-2 sap-quick-prod" Elevation="0" Style="cursor: pointer;" @onclick="@(() => AddProduct(p))">
+                                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.caption" Style="font-weight: 500; text-align: center;">@p.Name</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="sap-amount">₹@(p.SalePrice > 0 ? p.SalePrice.ToString("N0") : p.Mrp.ToString("N0"))</MudText>
+                                </MudStack>
+                            </MudPaper>
+                        }
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </div>
+
+        <div class="sap-billing-right">
+            <MudPaper Class="pa-3 sap-cart" Elevation="1">
+                <MudStack Spacing="2" Style="height: 100%;">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.h6">🛒 Cart · @Cart.Active.Lines.Count item(s)</MudText>
+                        @if (Cart.Active.Lines.Count > 0)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Rounded.DeleteSweep" Size="Size.Small" Color="Color.Error" OnClick="ClearCart" title="Clear cart" />
+                        }
+                    </MudStack>
+
+                    <div class="sap-cart-lines">
+                        @if (Cart.Active.Lines.Count == 0)
+                        {
+                            <MudStack AlignItems="AlignItems.Center" Class="pa-6">
+                                <MudIcon Icon="@Icons.Material.Rounded.ShoppingCart" Color="Color.Secondary" Style="font-size: 48px;" />
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">Scan or search to add items.</MudText>
+                            </MudStack>
+                        }
+                        else
+                        {
+                            @foreach (var line in Cart.Active.Lines.ToList())
+                            {
+                                <div class="sap-cart-line">
+                                    <div class="sap-cart-line-name" style="cursor: pointer;" @onclick="@(() => OpenEditLine(line.ProductId))" title="Edit line">@line.Description</div>
+                                    <div class="sap-cart-line-qty">
+                                        <MudIconButton Icon="@Icons.Material.Rounded.Remove" Size="Size.Small" OnClick="@(() => Cart.IncrementLine(line.ProductId, -1m))" />
+                                        <span class="sap-amount">@line.Quantity.ToString("0.###")</span>
+                                        <MudIconButton Icon="@Icons.Material.Rounded.Add" Size="Size.Small" OnClick="@(() => Cart.IncrementLine(line.ProductId, 1m))" />
+                                    </div>
+                                    <div class="sap-cart-line-price sap-amount" style="cursor: pointer;" @onclick="@(() => OpenEditLine(line.ProductId))" title="Edit price / discount">₹@line.UnitPrice.ToString("N0")</div>
+                                    <div class="sap-cart-line-total sap-amount">₹@line.LineTotal.ToString("N2")</div>
+                                    <MudIconButton Icon="@Icons.Material.Rounded.Close" Size="Size.Small" Color="Color.Error" OnClick="@(() => Cart.RemoveLine(line.ProductId))" />
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <MudDivider />
+
+                    <MudStack Spacing="0">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body2">Subtotal</MudText>
+                            <MudText Typo="Typo.body2" Class="sap-amount">₹@Cart.Active.Subtotal.ToString("N2")</MudText>
+                        </MudStack>
+                        @if (Cart.Active.DiscountTotal > 0)
+                        {
+                            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">Discount</MudText>
+                                <MudText Typo="Typo.body2" Class="sap-amount">−₹@Cart.Active.DiscountTotal.ToString("N2")</MudText>
+                            </MudStack>
+                        }
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body2">GST</MudText>
+                            <MudText Typo="Typo.body2" Class="sap-amount">₹@Cart.Active.TaxTotal.ToString("N2")</MudText>
+                        </MudStack>
+                        <MudDivider Class="my-1" />
+                        <MudStack Row="true" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.h6">TOTAL</MudText>
+                            <MudText Typo="Typo.h6" Class="sap-amount">₹@Cart.Active.Total.ToString("N2")</MudText>
+                        </MudStack>
+                    </MudStack>
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Size="Size.Large"
+                               FullWidth="true"
+                               StartIcon="@Icons.Material.Rounded.PointOfSale"
+                               OnClick="OpenCheckout"
+                               Disabled="@(Cart.Active.Lines.Count == 0)">
+                        F12  CHECKOUT
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </div>
+    </div>
+</div>
+
+@code {
+    private MudTextField<string>? _searchField;
+    private string _searchText = "";
+    private List<Product> _lookupResults = new();
+    private List<Product> _quickProducts = new();
+
+    protected override void OnInitialized()
+    {
+        Cart.Changed += OnCartChanged;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadQuickAsync();
+    }
+
+    private void OnCartChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Cart.Changed -= OnCartChanged;
+
+    private async Task LoadQuickAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _quickProducts = await db.Products
+            .Include(p => p.TaxRate)
+            .AsNoTracking()
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.Name)
+            .Take(12)
+            .ToListAsync();
+    }
+
+    private async Task OnSearchChanged(string v)
+    {
+        _searchText = v ?? "";
+        if (string.IsNullOrWhiteSpace(_searchText))
+        {
+            _lookupResults.Clear();
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var text = _searchText;
+        _lookupResults = await db.Products
+            .Include(p => p.TaxRate)
+            .AsNoTracking()
+            .Where(p => p.IsActive && (
+                EF.Functions.Like(p.Name, $"%{text}%") ||
+                (p.Sku != null && EF.Functions.Like(p.Sku, $"%{text}%")) ||
+                (p.Barcode != null && EF.Functions.Like(p.Barcode, $"%{text}%"))))
+            .OrderBy(p => p.Name)
+            .Take(10)
+            .ToListAsync();
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _lookupResults.Count > 0)
+        {
+            AddProduct(_lookupResults[0]);
+        }
+        else if (e.Key == "F12" && Cart.Active.Lines.Count > 0)
+        {
+            await OpenCheckout();
+        }
+    }
+
+    private async void AddProduct(Product p)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var fresh = await db.Products.Include(x => x.TaxRate).FirstOrDefaultAsync(x => x.Id == p.Id);
+        if (fresh is null) { Snackbar.Add("Product not found.", Severity.Error); return; }
+
+        Cart.AddLine(fresh, 1m);
+        _searchText = "";
+        _lookupResults.Clear();
+        if (_searchField is not null) await _searchField.FocusAsync();
+    }
+
+    private void ClearCart() => Cart.ResetActive();
+
+    private void HoldActive()
+    {
+        Cart.HoldActive();
+        Snackbar.Add("Bill held.", Severity.Info);
+    }
+
+    private async Task OpenEditLine(int productId)
+    {
+        var parameters = new DialogParameters { ["ProductId"] = productId };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        await Dialogs.ShowAsync<CartLineEditDialog>("Edit line", parameters, options);
+    }
+
+    private async Task OpenCheckout()
+    {
+        if (Cart.Active.Lines.Count == 0) return;
+
+        var parameters = new DialogParameters();
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await Dialogs.ShowAsync<CheckoutDialog>("Checkout", parameters, options);
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled)
+        {
+            Cart.ResetActive();
+            if (_searchField is not null) await _searchField.FocusAsync();
+        }
+    }
+}
+
+<style>
+    .sap-billing-shell { display: flex; flex-direction: column; height: 100%; gap: 8px; }
+    .sap-billing-toolbar { display: flex; align-items: center; gap: 8px; }
+    .sap-billing-grid { display: grid; grid-template-columns: 1fr 360px; gap: 12px; flex: 1; min-height: 0; overflow: hidden; }
+    .sap-billing-left { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; }
+    .sap-billing-right { min-height: 0; }
+    .sap-cart { height: 100%; display: flex; flex-direction: column; }
+    .sap-cart-lines { flex: 1; overflow-y: auto; }
+    .sap-cart-line { display: grid; grid-template-columns: 1fr 110px 80px 90px auto; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.04); }
+    .sap-cart-line-name { font-size: 13px; }
+    .sap-cart-line-qty { display: flex; align-items: center; gap: 2px; }
+    .sap-cart-line-price { font-size: 12px; color: var(--mud-palette-text-secondary); text-align: right; }
+    .sap-cart-line-total { font-size: 13px; font-weight: 500; text-align: right; }
+    .sap-quickgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+    .sap-quick-prod { border: 1px solid rgba(0,0,0,0.08); border-radius: 4px; }
+    .sap-quick-prod:hover { background: rgba(232, 181, 132, 0.08); }
+</style>

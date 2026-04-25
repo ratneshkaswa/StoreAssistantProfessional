@@ -1,0 +1,300 @@
+@page "/exports"
+@layout AppShell
+@using System.IO
+@using System.Text
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ITallyExportService TallySvc
+@inject ISnackbar Snackbar
+
+<PageTitle>Exports — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudText Typo="Typo.h5">📤 Exports</MudText>
+
+    <MudPaper Class="pa-4">
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudText>Period</MudText>
+            <MudDatePicker Date="_from" DateChanged="@(d => _from = d ?? DateTime.Today)" Label="From" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudDatePicker Date="_to" DateChanged="@(d => _to = d ?? DateTime.Today)" Label="To" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => SetMonth(0))">This month</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => SetMonth(-1))">Last month</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => SetFy())">This FY</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 240px;">
+                <MudStack Spacing="2">
+                    <MudText Typo="Typo.h6">Tally XML</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Sales vouchers with party / sales / output CGST / output SGST ledgers + inventory entries.
+                        Compatible with Tally Prime / ERP 9 import.
+                    </MudText>
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Download" OnClick="ExportTally" Disabled="@_busy">
+                            @if (_busy && _busyKind == "tally") { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Exporting…</span> }
+                            else { <span>Export Tally XML</span> }
+                        </MudButton>
+                    </MudStack>
+                    @if (!string.IsNullOrEmpty(_lastTallyPath))
+                    {
+                        <MudPaper Class="pa-2" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                            <MudText Typo="Typo.caption" Style="font-family: Consolas, monospace;">@_lastTallyPath</MudText>
+                        </MudPaper>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08); min-height: 240px;">
+                <MudStack Spacing="2">
+                    <MudText Typo="Typo.h6">GSTR summary (CSV)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Bill-wise CSV grouped for GSTR-1 (B2C/B2B) and a 3B summary (output GST, by slab).
+                    </MudText>
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.FileDownload" OnClick="ExportGstr1" Disabled="@_busy">
+                            GSTR-1 CSV
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Summarize" OnClick="ExportGstr3b" Disabled="@_busy">
+                            3B summary CSV
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Article" OnClick="ExportHsn" Disabled="@_busy">
+                            HSN summary
+                        </MudButton>
+                    </MudStack>
+                    @if (!string.IsNullOrEmpty(_lastGstPath))
+                    {
+                        <MudPaper Class="pa-2" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                            <MudText Typo="Typo.caption" Style="font-family: Consolas, monospace;">@_lastGstPath</MudText>
+                        </MudPaper>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-tertiary), 0 2px 4px rgba(0,0,0,0.08);">
+                <MudStack Spacing="2">
+                    <MudText Typo="Typo.h6">Live preview · selected period</MudText>
+                    @if (_preview is null)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Pick a period above.</MudText>
+                    }
+                    else
+                    {
+                        <MudGrid Spacing="2">
+                            <MudItem xs="6" md="3">
+                                <MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">Bills</MudText><MudText Typo="Typo.h6" Class="sap-amount">@_preview.Count</MudText></MudStack>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">B2C</MudText><MudText Typo="Typo.h6" Class="sap-amount">@_preview.B2c</MudText></MudStack>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">B2B</MudText><MudText Typo="Typo.h6" Class="sap-amount">@_preview.B2b</MudText></MudStack>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">GST collected</MudText><MudText Typo="Typo.h6" Class="sap-amount">₹@_preview.GstCollected.ToString("N0")</MudText></MudStack>
+                            </MudItem>
+                        </MudGrid>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
+@code {
+    private DateTime? _from = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? _to = DateTime.Today;
+    private bool _busy;
+    private string? _busyKind;
+    private string? _lastTallyPath;
+    private string? _lastGstPath;
+    private PreviewSummary? _preview;
+
+    private record PreviewSummary(int Count, int B2c, int B2b, decimal GstCollected);
+
+    protected override async Task OnInitializedAsync() => await Refresh();
+    protected override async Task OnParametersSetAsync() => await Refresh();
+
+    private async Task Refresh()
+    {
+        var (from, to) = Range();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var bills = await db.Bills.AsNoTracking()
+            .Include(b => b.Customer)
+            .Where(b => b.Status == "Posted" && b.At >= from && b.At < to)
+            .ToListAsync();
+        var b2b = bills.Count(b => !string.IsNullOrEmpty(b.Customer?.Gstin));
+        _preview = new PreviewSummary(bills.Count, bills.Count - b2b, b2b, bills.Sum(b => b.TaxTotal));
+    }
+
+    private (DateTime from, DateTime to) Range()
+    {
+        var f = (_from ?? DateTime.Today).Date;
+        var t = (_to ?? DateTime.Today).Date.AddDays(1);
+        return (f, t);
+    }
+
+    private void SetMonth(int delta)
+    {
+        var today = DateTime.Today;
+        var anchor = today.AddMonths(delta);
+        _from = new DateTime(anchor.Year, anchor.Month, 1);
+        _to = _from.Value.AddMonths(1).AddDays(-1);
+        _ = Refresh();
+    }
+
+    private void SetFy()
+    {
+        var today = DateTime.Today;
+        var fyStartThisYear = new DateTime(today.Year, 4, 1);
+        _from = today >= fyStartThisYear ? fyStartThisYear : fyStartThisYear.AddYears(-1);
+        _to = today;
+        _ = Refresh();
+    }
+
+    private async Task ExportTally()
+    {
+        var (from, to) = Range();
+        _busy = true; _busyKind = "tally";
+        try
+        {
+            _lastTallyPath = await TallySvc.ExportSalesAsync(from, to);
+            Snackbar.Add($"Tally XML saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Export failed: {ex.Message}", Severity.Error); }
+        finally { _busy = false; _busyKind = null; }
+    }
+
+    private async Task ExportGstr1()
+    {
+        var (from, to) = Range();
+        _busy = true; _busyKind = "gstr1";
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var bills = await db.Bills.AsNoTracking()
+                .Include(b => b.Items)
+                .Include(b => b.Customer)
+                .Where(b => b.Status == "Posted" && b.At >= from && b.At < to)
+                .OrderBy(b => b.At)
+                .ToListAsync();
+
+            var sb = new StringBuilder();
+            sb.AppendLine("Bill #,Date,Customer,GSTIN,B2C/B2B,Subtotal,Discount,Taxable,GST %,GST,Total");
+            foreach (var b in bills)
+            {
+                var category = string.IsNullOrEmpty(b.Customer?.Gstin) ? "B2C" : "B2B";
+                foreach (var slab in b.Items.GroupBy(i => i.TaxPercent))
+                {
+                    var taxable = slab.Sum(i => (i.UnitPrice * i.Quantity) - i.Discount);
+                    var gst = slab.Sum(i => i.TaxAmount);
+                    sb.AppendLine(string.Join(",",
+                        b.Number,
+                        b.At.ToString("yyyy-MM-dd"),
+                        Csv(b.Customer?.Name ?? "Walk-in"),
+                        Csv(b.Customer?.Gstin ?? ""),
+                        category,
+                        b.Subtotal.ToString("F2"),
+                        b.DiscountTotal.ToString("F2"),
+                        taxable.ToString("F2"),
+                        slab.Key.ToString("0.##"),
+                        gst.ToString("F2"),
+                        b.Total.ToString("F2")));
+                }
+            }
+
+            var path = WriteCsv("gstr1", from, to, sb.ToString());
+            _lastGstPath = path;
+            Snackbar.Add("GSTR-1 CSV saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Export failed: {ex.Message}", Severity.Error); }
+        finally { _busy = false; _busyKind = null; }
+    }
+
+    private async Task ExportGstr3b()
+    {
+        var (from, to) = Range();
+        _busy = true; _busyKind = "gstr3b";
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var items = await db.BillItems.AsNoTracking()
+                .Where(i => i.Bill!.Status == "Posted" && i.Bill.At >= from && i.Bill.At < to)
+                .ToListAsync();
+
+            var sb = new StringBuilder();
+            sb.AppendLine("GST %,Taxable Value,CGST,SGST,Total Tax");
+            foreach (var slab in items.GroupBy(i => i.TaxPercent).OrderBy(g => g.Key))
+            {
+                var taxable = slab.Sum(i => (i.UnitPrice * i.Quantity) - i.Discount);
+                var tax = slab.Sum(i => i.TaxAmount);
+                sb.AppendLine(string.Join(",",
+                    slab.Key.ToString("0.##"),
+                    taxable.ToString("F2"),
+                    (tax / 2).ToString("F2"),
+                    (tax / 2).ToString("F2"),
+                    tax.ToString("F2")));
+            }
+
+            var path = WriteCsv("gstr3b-summary", from, to, sb.ToString());
+            _lastGstPath = path;
+            Snackbar.Add("3B summary saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Export failed: {ex.Message}", Severity.Error); }
+        finally { _busy = false; _busyKind = null; }
+    }
+
+    private async Task ExportHsn()
+    {
+        var (from, to) = Range();
+        _busy = true; _busyKind = "hsn";
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var items = await db.BillItems.AsNoTracking()
+                .Where(i => i.Bill!.Status == "Posted" && i.Bill.At >= from && i.Bill.At < to)
+                .ToListAsync();
+
+            var sb = new StringBuilder();
+            sb.AppendLine("HSN,Quantity,Taxable,GST,Total");
+            foreach (var hsn in items.GroupBy(i => i.HsnCode ?? "—").OrderBy(g => g.Key))
+            {
+                var qty = hsn.Sum(i => i.Quantity);
+                var taxable = hsn.Sum(i => (i.UnitPrice * i.Quantity) - i.Discount);
+                var tax = hsn.Sum(i => i.TaxAmount);
+                sb.AppendLine(string.Join(",", Csv(hsn.Key), qty.ToString("F3"), taxable.ToString("F2"), tax.ToString("F2"), (taxable + tax).ToString("F2")));
+            }
+
+            var path = WriteCsv("hsn-summary", from, to, sb.ToString());
+            _lastGstPath = path;
+            Snackbar.Add("HSN summary saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Export failed: {ex.Message}", Severity.Error); }
+        finally { _busy = false; _busyKind = null; }
+    }
+
+    private static string WriteCsv(string prefix, DateTime from, DateTime to, string content)
+    {
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "StoreAssistantProfessional", "GstExports");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, $"{prefix}-{from:yyyyMMdd}-{to.AddDays(-1):yyyyMMdd}.csv");
+        File.WriteAllText(path, content, Encoding.UTF8);
+        return path;
+    }
+
+    private static string Csv(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        if (s.Contains(',') || s.Contains('"'))
+            return "\"" + s.Replace("\"", "\"\"") + "\"";
+        return s;
+    }
+}

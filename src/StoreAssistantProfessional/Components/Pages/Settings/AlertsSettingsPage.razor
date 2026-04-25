@@ -1,0 +1,91 @@
+@page "/settings/alerts"
+@layout AppShell
+@inject IAppSettingsService SettingsSvc
+@inject ISnackbar Snackbar
+
+<PageTitle>Owner alerts — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="Owner alerts" />
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Auto-send a daily summary to the owner's phone after day-end.
+            </MudText>
+
+            <MudCheckBox T="bool" @bind-Value="_settings.DailySummaryEnabled" Color="Color.Primary">
+                Enable daily summary
+            </MudCheckBox>
+
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_settings.OwnerPhone" Label="Recipient phone (+91…)" Variant="Variant.Outlined" MaxLength="15" />
+                </MudItem>
+                <MudItem xs="6" md="2">
+                    <MudNumericField T="int" @bind-Value="_settings.AlertHour" Label="Hour" Variant="Variant.Outlined" Min="0" Max="23" />
+                </MudItem>
+                <MudItem xs="6" md="2">
+                    <MudNumericField T="int" @bind-Value="_settings.AlertMinute" Label="Minute" Variant="Variant.Outlined" Min="0" Max="59" />
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudSelect T="string" @bind-Value="_settings.AlertChannel" Label="Channel" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("WhatsApp")">WhatsApp</MudSelectItem>
+                        <MudSelectItem Value="@("SMS")">SMS</MudSelectItem>
+                        <MudSelectItem Value="@("Both")">Both</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+
+            <MudPaper Class="pa-3" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Preview</MudText>
+                <MudText Typo="Typo.body2" Style="font-family: Consolas, monospace; white-space: pre-line;">
+🏪 @(_storeName) · @DateTime.Now.ToString("dd MMM")
+Bills: 0   Sales: ₹0
+Refunds: ₹0   Cash diff: ₹0
+Top: —
+Drawer: ₹0
+                </MudText>
+            </MudPaper>
+
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Sending requires WhatsApp Business API or SMS gateway integration — wires in a later round. Saving now stores your preferences.
+            </MudText>
+
+            <MudStack Row="true" Justify="Justify.FlexEnd">
+                <MudButton OnClick="Save" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_busy">
+                    @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Saving…</span> }
+                    else { <span>Save</span> }
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    [Inject] private ISetupService Setup { get; set; } = default!;
+    private AppSettings _settings = new();
+    private bool _busy;
+    private string _storeName = "Acme Store";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await SettingsSvc.LoadAsync();
+        _storeName = Setup.Current?.StoreName ?? "Acme Store";
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            await SettingsSvc.SaveAsync(_settings);
+            Snackbar.Add("Owner alert settings saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not save: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+}

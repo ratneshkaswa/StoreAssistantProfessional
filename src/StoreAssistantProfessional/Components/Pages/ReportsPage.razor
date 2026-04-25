@@ -1,0 +1,332 @@
+@page "/reports"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IAppSettingsService SettingsSvc
+@inject NavigationManager Nav
+
+<PageTitle>Reports — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h5">📊 Reports</MudText>
+        <MudSelect T="string" @bind-Value="_period" Label="Period" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 180px;">
+            <MudSelectItem Value="@("today")">Today</MudSelectItem>
+            <MudSelectItem Value="@("yesterday")">Yesterday</MudSelectItem>
+            <MudSelectItem Value="@("week")">Last 7 days</MudSelectItem>
+            <MudSelectItem Value="@("month")">This month</MudSelectItem>
+            <MudSelectItem Value="@("fy")">This FY</MudSelectItem>
+            <MudSelectItem Value="@("all")">All time</MudSelectItem>
+        </MudSelect>
+    </MudStack>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Sales</MudText>
+                    <MudText Typo="Typo.h5" Class="sap-amount">₹@_sales.ToString("N0")</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Bills</MudText>
+                    <MudText Typo="Typo.h5" Class="sap-amount">@_billCount</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Avg bill</MudText>
+                    <MudText Typo="Typo.h5" Class="sap-amount">₹@(_billCount == 0 ? "0" : (_sales / _billCount).ToString("N0"))</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">GST collected</MudText>
+                    <MudText Typo="Typo.h5" Class="sap-amount">₹@_taxCollected.ToString("N0")</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 300px;">
+                <MudStack Spacing="2">
+                    <MudText Typo="Typo.h6">Top products</MudText>
+                    @if (_topProducts.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">No sales in this period.</MudText>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true">
+                            <thead><tr><th>#</th><th>Product</th><th style="text-align: right;">Qty</th><th style="text-align: right;">Sales</th></tr></thead>
+                            <tbody>
+                                @{ var rank = 1; }
+                                @foreach (var p in _topProducts)
+                                {
+                                    <tr>
+                                        <td>@rank</td>
+                                        <td>@p.Name</td>
+                                        <td style="text-align: right;" class="sap-amount">@p.Qty.ToString("0.###")</td>
+                                        <td style="text-align: right;" class="sap-amount">₹@p.Total.ToString("N0")</td>
+                                    </tr>
+                                    rank++;
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08); min-height: 300px;">
+                <MudStack Spacing="2">
+                    <MudText Typo="Typo.h6">Cashier performance</MudText>
+                    @if (_byCashier.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">No bills tagged to cashiers in this period.</MudText>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true">
+                            <thead><tr><th>Cashier</th><th style="text-align: right;">Bills</th><th style="text-align: right;">Sales</th><th style="text-align: right;">Commission</th></tr></thead>
+                            <tbody>
+                                @foreach (var c in _byCashier)
+                                {
+                                    <tr>
+                                        <td>@c.Name</td>
+                                        <td style="text-align: right;" class="sap-amount">@c.Bills</td>
+                                        <td style="text-align: right;" class="sap-amount">₹@c.Total.ToString("N0")</td>
+                                        <td style="text-align: right;" class="sap-amount">₹@c.Commission.ToString("N0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-tertiary), 0 2px 4px rgba(0,0,0,0.08); min-height: 240px;">
+                <MudStack Spacing="2">
+                    <MudText Typo="Typo.h6">Tender mix</MudText>
+                    @if (_byTender.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">No payments in this period.</MudText>
+                    }
+                    else
+                    {
+                        <MudStack Spacing="1">
+                            @foreach (var t in _byTender)
+                            {
+                                var pct = _tenderTotal > 0 ? (int)Math.Round(t.Total * 100m / _tenderTotal) : 0;
+                                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.body2">@t.Method</MudText>
+                                    <MudStack Spacing="0" AlignItems="AlignItems.End">
+                                        <MudText Typo="Typo.body2" Class="sap-amount">₹@t.Total.ToString("N0") · @pct%</MudText>
+                                    </MudStack>
+                                </MudStack>
+                                <MudProgressLinear Color="Color.Info" Value="@pct" Style="height: 6px;" />
+                            }
+                        </MudStack>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-warning), 0 2px 4px rgba(0,0,0,0.08); min-height: 240px;">
+                <MudStack Spacing="2">
+                    <MudText Typo="Typo.h6">GST summary</MudText>
+                    @if (_gstSlabs.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">No taxable sales in this period.</MudText>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true">
+                            <thead><tr><th>Slab</th><th style="text-align: right;">Taxable ₹</th><th style="text-align: right;">CGST</th><th style="text-align: right;">SGST</th><th style="text-align: right;">Total</th></tr></thead>
+                            <tbody>
+                                @foreach (var s in _gstSlabs)
+                                {
+                                    <tr>
+                                        <td>@s.Slab%</td>
+                                        <td style="text-align: right;" class="sap-amount">₹@s.Taxable.ToString("N0")</td>
+                                        <td style="text-align: right;" class="sap-amount">₹@(s.Tax / 2).ToString("N0")</td>
+                                        <td style="text-align: right;" class="sap-amount">₹@(s.Tax / 2).ToString("N0")</td>
+                                        <td style="text-align: right;" class="sap-amount">₹@s.Tax.ToString("N0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-info), 0 2px 4px rgba(0,0,0,0.08);">
+                <MudStack Spacing="2">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.h6">Inventory snapshot</MudText>
+                        <MudStack Row="true" Spacing="2">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.FactCheck" OnClick="@(() => Nav.NavigateTo("/stocktake"))">Stock take</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.QrCode2" OnClick="@(() => Nav.NavigateTo("/labels"))">Print labels</MudButton>
+                        </MudStack>
+                    </MudStack>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="6" md="3">
+                            <MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">Active products</MudText><MudText Typo="Typo.h6" Class="sap-amount">@_activeProducts</MudText></MudStack>
+                        </MudItem>
+                        <MudItem xs="6" md="3">
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Stock at cost · @_valuationMethodLabel</MudText>
+                                <MudText Typo="Typo.h6" Class="sap-amount">₹@_stockAtCost.ToString("N0")</MudText>
+                            </MudStack>
+                        </MudItem>
+                        <MudItem xs="6" md="3">
+                            <MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">Stock at sale</MudText><MudText Typo="Typo.h6" Class="sap-amount">₹@_stockAtSale.ToString("N0")</MudText></MudStack>
+                        </MudItem>
+                        <MudItem xs="6" md="3">
+                            <MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">Low stock</MudText><MudText Typo="Typo.h6" Class="sap-amount">@_lowStock</MudText></MudStack>
+                        </MudItem>
+                    </MudGrid>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
+@code {
+    private string _period = "today";
+
+    private decimal _sales;
+    private int _billCount;
+    private decimal _taxCollected;
+
+    private record TopProduct(string Name, decimal Qty, decimal Total);
+    private record CashierRow(string Name, int Bills, decimal Total, decimal Commission);
+    private record TenderRow(string Method, decimal Total);
+    private record GstSlabRow(decimal Slab, decimal Taxable, decimal Tax);
+
+    private List<TopProduct> _topProducts = new();
+    private List<CashierRow> _byCashier = new();
+    private List<TenderRow> _byTender = new();
+    private decimal _tenderTotal;
+    private List<GstSlabRow> _gstSlabs = new();
+
+    private int _activeProducts;
+    private decimal _stockAtCost;
+    private decimal _stockAtSale;
+    private int _lowStock;
+    private string _valuationMethodLabel = "last purchase";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var (from, to) = PeriodRange();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var bills = await db.Bills.AsNoTracking()
+            .Include(b => b.Items)
+            .Include(b => b.Payments)
+            .Include(b => b.Staff)
+            .Where(b => b.Status == "Posted" && b.At >= from && b.At < to)
+            .ToListAsync();
+
+        _sales = bills.Sum(b => b.Total);
+        _billCount = bills.Count;
+        _taxCollected = bills.Sum(b => b.TaxTotal);
+
+        _topProducts = bills.SelectMany(b => b.Items)
+            .GroupBy(i => new { i.ProductId, i.Description })
+            .Select(g => new TopProduct(g.Key.Description, g.Sum(x => x.Quantity), g.Sum(x => x.LineTotal)))
+            .OrderByDescending(x => x.Total)
+            .Take(10)
+            .ToList();
+
+        _byCashier = bills.Where(b => b.StaffId.HasValue)
+            .GroupBy(b => b.Staff!)
+            .Select(g => new CashierRow(
+                $"{g.Key.Code:D2} · {g.Key.Name}",
+                g.Count(),
+                g.Sum(b => b.Total),
+                g.Sum(b => b.Total * g.Key.CommissionPercent / 100m)))
+            .OrderByDescending(x => x.Total)
+            .ToList();
+
+        _byTender = bills.SelectMany(b => b.Payments)
+            .GroupBy(p => p.Method)
+            .Select(g => new TenderRow(g.Key, g.Sum(x => x.Amount)))
+            .OrderByDescending(x => x.Total)
+            .ToList();
+        _tenderTotal = _byTender.Sum(t => t.Total);
+
+        _gstSlabs = bills.SelectMany(b => b.Items)
+            .Where(i => i.TaxPercent > 0)
+            .GroupBy(i => i.TaxPercent)
+            .Select(g => new GstSlabRow(g.Key, g.Sum(x => (x.UnitPrice * x.Quantity) - x.Discount), g.Sum(x => x.TaxAmount)))
+            .OrderBy(x => x.Slab)
+            .ToList();
+
+        var products = await db.Products.AsNoTracking().Where(p => p.IsActive).ToListAsync();
+        _activeProducts = products.Count;
+        _stockAtSale = products.Sum(p => p.StockQty * p.SalePrice);
+        _lowStock = products.Count(p => p.ReorderLevel.HasValue && p.StockQty <= p.ReorderLevel.Value);
+
+        var settings = await SettingsSvc.LoadAsync();
+        if (settings.InventoryValuationMethod == "Average")
+        {
+            _valuationMethodLabel = "weighted average";
+            var inwardItems = await db.InwardParcelItems.AsNoTracking()
+                .Where(i => i.InwardParcel!.InwardEntry!.Status == "Received")
+                .ToListAsync();
+            _stockAtCost = 0m;
+            foreach (var p in products)
+            {
+                var rows = inwardItems.Where(i => i.ProductId == p.Id && i.Quantity > 0).ToList();
+                var totalQty = rows.Sum(i => i.Quantity);
+                var avg = totalQty > 0 ? rows.Sum(i => i.UnitCost * i.Quantity) / totalQty : p.Cost;
+                _stockAtCost += p.StockQty * avg;
+            }
+        }
+        else
+        {
+            _valuationMethodLabel = "last purchase";
+            _stockAtCost = products.Sum(p => p.StockQty * p.Cost);
+        }
+    }
+
+    private (DateTime from, DateTime to) PeriodRange()
+    {
+        var today = DateTime.UtcNow.Date;
+        return _period switch
+        {
+            "today"     => (today, today.AddDays(1)),
+            "yesterday" => (today.AddDays(-1), today),
+            "week"      => (today.AddDays(-7), today.AddDays(1)),
+            "month"     => (new DateTime(today.Year, today.Month, 1), today.AddDays(1)),
+            "fy"        => (FyStart(today), today.AddDays(1)),
+            _           => (DateTime.MinValue, DateTime.MaxValue)
+        };
+    }
+
+    private DateTime FyStart(DateTime today)
+    {
+        var fyStartThisYear = new DateTime(today.Year, 4, 1);
+        return today >= fyStartThisYear ? fyStartThisYear : fyStartThisYear.AddYears(-1);
+    }
+}

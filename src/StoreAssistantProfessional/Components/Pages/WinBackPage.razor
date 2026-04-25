@@ -1,0 +1,161 @@
+@page "/winback"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>Win-back — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h5">📣 Customer win-back</MudText>
+        <MudSelect T="int" @bind-Value="_days" Label="Haven't visited" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 180px;">
+            <MudSelectItem Value="@(60)">60+ days</MudSelectItem>
+            <MudSelectItem Value="@(90)">90+ days</MudSelectItem>
+            <MudSelectItem Value="@(180)">180+ days</MudSelectItem>
+        </MudSelect>
+    </MudStack>
+
+    <MudPaper Class="pa-3">
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.subtitle2">Message template</MudText>
+            <MudTextField @bind-Value="_template" Variant="Variant.Outlined" Lines="3"
+                          HelperText="@($"Tokens: {{customer}} · {{store}} · {{lastVisit}} · {{days}}")" />
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                "Send WhatsApp" opens a wa.me link in your browser with the message pre-filled — pick a contact and tap send.
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    @if (Filtered.Count == 0)
+    {
+        <MudPaper Class="pa-8" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Rounded.SentimentSatisfied" Color="Color.Secondary" Style="font-size: 64px;" />
+                <MudText Typo="Typo.body1" Color="Color.Secondary">No dormant customers in this window.</MudText>
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <MudPaper>
+            <MudSimpleTable Hover="true" Dense="true">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Phone</th>
+                        <th>Last visit</th>
+                        <th style="text-align: right;">Days ago</th>
+                        <th style="text-align: right;">Lifetime</th>
+                        <th style="width: 220px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Filtered)
+                    {
+                        <tr>
+                            <td>@r.Customer.Name</td>
+                            <td>@(r.Customer.Phone ?? "—")</td>
+                            <td>@r.LastVisit?.ToLocalTime().ToString("dd MMM yyyy")</td>
+                            <td style="text-align: right;" class="sap-amount">@r.DaysAgo</td>
+                            <td style="text-align: right;" class="sap-amount">₹@r.Lifetime.ToString("N0")</td>
+                            <td>
+                                <MudStack Row="true" Spacing="1">
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Chat"
+                                               OnClick="@(() => SendWhatsApp(r))"
+                                               Disabled="@(string.IsNullOrEmpty(r.Customer.Phone))">
+                                        WhatsApp
+                                    </MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Rounded.ContentCopy" OnClick="@(() => CopyMessage(r))">
+                                        Copy
+                                    </MudButton>
+                                </MudStack>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+</MudStack>
+
+@code {
+    [Inject] private ISetupService Setup { get; set; } = default!;
+
+    private record Row(Customer Customer, DateTime? LastVisit, int DaysAgo, decimal Lifetime);
+
+    private List<Row> _all = new();
+    private int _days = 60;
+    private string _template = "Hi {customer}, we miss you at {store}! Your last visit was {lastVisit} ({days} days ago). Drop in for our latest arrivals.";
+    private string _storeName = "our store";
+
+    private List<Row> Filtered => _all.Where(r => r.DaysAgo >= _days).OrderByDescending(r => r.Lifetime).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _storeName = Setup.Current?.StoreName ?? "our store";
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var customers = await db.Customers.AsNoTracking().Where(c => c.IsActive).ToListAsync();
+        var bills = await db.Bills.AsNoTracking()
+            .Where(b => b.Status == "Posted" && b.CustomerId.HasValue)
+            .Select(b => new { b.CustomerId, b.At, b.Total })
+            .ToListAsync();
+
+        var byCust = bills.GroupBy(b => b.CustomerId!.Value).ToDictionary(g => g.Key);
+
+        var rows = new List<Row>();
+        foreach (var c in customers)
+        {
+            if (!byCust.TryGetValue(c.Id, out var entries)) continue;
+            var last = entries.Max(b => b.At);
+            var lifetime = entries.Sum(b => b.Total);
+            var daysAgo = (int)(DateTime.UtcNow - last).TotalDays;
+            rows.Add(new Row(c, last, daysAgo, lifetime));
+        }
+        _all = rows;
+    }
+
+    private string BuildMessage(Row r)
+    {
+        return _template
+            .Replace("{customer}", r.Customer.Name)
+            .Replace("{store}", _storeName)
+            .Replace("{lastVisit}", r.LastVisit?.ToLocalTime().ToString("dd MMM yyyy") ?? "—")
+            .Replace("{days}", r.DaysAgo.ToString());
+    }
+
+    private async Task SendWhatsApp(Row r)
+    {
+        if (string.IsNullOrEmpty(r.Customer.Phone)) return;
+        var phone = new string(r.Customer.Phone.Where(char.IsDigit).ToArray());
+        if (phone.Length == 10) phone = "91" + phone;
+        var msg = Uri.EscapeDataString(BuildMessage(r));
+        var url = $"https://wa.me/{phone}?text={msg}";
+        try
+        {
+            await JS.InvokeVoidAsync("open", url, "_blank");
+            Snackbar.Add($"Opening WhatsApp for {r.Customer.Name}.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not open: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CopyMessage(Row r)
+    {
+        var msg = BuildMessage(r);
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", msg);
+            Snackbar.Add("Message copied.", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Clipboard not available.", Severity.Warning);
+        }
+    }
+}

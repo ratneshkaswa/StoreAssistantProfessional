@@ -1,0 +1,364 @@
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ICartService Cart
+@inject IAppSettingsService SettingsSvc
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">Checkout</MudText>
+                <MudText Typo="Typo.h5" Class="sap-amount">₹@EffectiveTotal.ToString("N2")</MudText>
+            </MudStack>
+
+            <MudSelect T="string" @bind-Value="_billKind" Label="Bill type" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem Value="@("TaxInvoice")">Tax invoice (default)</MudSelectItem>
+                <MudSelectItem Value="@("CashReceipt")">Cash receipt</MudSelectItem>
+                <MudSelectItem Value="@("Quote")">Quotation (no stock movement)</MudSelectItem>
+                <MudSelectItem Value="@("Proforma")">Proforma (no stock movement)</MudSelectItem>
+                <MudSelectItem Value="@("DeliveryChallan")">Delivery challan</MudSelectItem>
+            </MudSelect>
+
+            @if (_isComposition)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Rounded.Info">
+                    Composition scheme is on — this bill will not collect GST.
+                </MudAlert>
+            }
+
+            <MudAutocomplete T="Customer"
+                             Value="_customer"
+                             ValueChanged="OnCustomerChanged"
+                             SearchFunc="SearchCustomersAsync"
+                             ToStringFunc="@(c => c == null ? "" : $"{c.Name} · {c.Phone ?? "no phone"}")"
+                             Label="Customer (optional · phone or name)"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             ResetValueOnEmptyText="true" />
+
+            <MudSelect T="int?"
+                       Value="_staffId"
+                       ValueChanged="OnStaffChanged"
+                       Label="Billed by"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Clearable="true">
+                <MudSelectItem Value="@((int?)null)">— not assigned —</MudSelectItem>
+                @foreach (var s in _staff)
+                {
+                    <MudSelectItem Value="@((int?)s.Id)">@s.Code.ToString("D2") · @s.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudDivider />
+
+            @if (TenderRequired)
+            {
+                <MudText Typo="Typo.subtitle2">Tender</MudText>
+
+                <MudGrid Spacing="2">
+                    @foreach (var t in _tenders)
+                    {
+                        var key = t.Method;
+                        <MudItem xs="12" md="6">
+                            <MudNumericField T="decimal"
+                                             Value="t.Amount"
+                                             ValueChanged="@(v => { t.Amount = Math.Max(0m, v); StateHasChanged(); })"
+                                             Label="@($"{t.Method} ₹")"
+                                             Variant="Variant.Outlined"
+                                             Margin="Margin.Dense"
+                                             Min="0" />
+                        </MudItem>
+                    }
+                    <MudItem xs="12">
+                        <MudStack Row="true" Spacing="1">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => SetExact("Cash"))">Cash exact</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => SetExact("UPI"))">UPI exact</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => SetExact("Card"))">Card exact</MudButton>
+                        </MudStack>
+                    </MudItem>
+                </MudGrid>
+
+                <MudPaper Class="pa-2" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <MudText Typo="Typo.body2">Tendered</MudText>
+                        <MudText Typo="Typo.body2" Class="sap-amount">₹@TenderedTotal.ToString("N2")</MudText>
+                    </MudStack>
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <MudText Typo="Typo.body2">Total</MudText>
+                        <MudText Typo="Typo.body2" Class="sap-amount">₹@EffectiveTotal.ToString("N2")</MudText>
+                    </MudStack>
+                    <MudDivider Class="my-1" />
+                    <MudStack Row="true" Justify="Justify.SpaceBetween">
+                        <MudText Typo="Typo.body2" Style="font-weight: 500;">@(BalanceLabel)</MudText>
+                        <MudText Typo="Typo.body2" Class="sap-amount" Color="@BalanceColor">₹@BalanceDisplay</MudText>
+                    </MudStack>
+                </MudPaper>
+            }
+            else
+            {
+                <MudPaper Class="pa-2" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @(_billKind == "DeliveryChallan"
+                            ? "Delivery challan moves stock without payment. Issue an invoice later."
+                            : "Quotes and proforma documents are non-binding — no payment recorded, no stock movement.")
+                    </MudText>
+                </MudPaper>
+            }
+
+            <MudTextField @bind-Value="_notes" Label="Notes (optional)" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="Confirm"
+                   Disabled="@(_busy || !CanConfirm)">
+            @if (_busy)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Posting…</span>
+            }
+            else
+            {
+                <span>F12  POST &amp; PRINT @KindLabel(_billKind).ToUpper()</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    private sealed class Tender { public string Method { get; set; } = ""; public decimal Amount { get; set; } }
+
+    private readonly List<Tender> _tenders = new()
+    {
+        new Tender { Method = "Cash" },
+        new Tender { Method = "UPI" },
+        new Tender { Method = "Card" },
+        new Tender { Method = "Credit" },
+    };
+
+    private List<Staff> _staff = new();
+    private Customer? _customer;
+    private int? _staffId;
+    private string _notes = "";
+    private bool _busy;
+    private string _billKind = "TaxInvoice";
+    private bool _isComposition;
+    private Firm? _firm;
+
+    private decimal TenderedTotal => _tenders.Sum(t => t.Amount);
+    private decimal EffectiveTotal => _isComposition
+        ? Cart.Active.Subtotal - Cart.Active.DiscountTotal
+        : Cart.Active.Total;
+    private decimal Balance => TenderedTotal - EffectiveTotal;
+
+    private string BalanceLabel => Balance >= 0 ? "Change" : "Short";
+    private string BalanceDisplay => Math.Abs(Balance).ToString("N2");
+    private Color BalanceColor => Balance < 0 ? Color.Error : (Balance > 0 ? Color.Success : Color.Default);
+
+    private bool TenderRequired => _billKind != "Quote" && _billKind != "Proforma" && _billKind != "DeliveryChallan";
+    private bool CanConfirm => Cart.Active.Lines.Count > 0
+        && (!TenderRequired || Math.Round(TenderedTotal, 2) >= Math.Round(EffectiveTotal, 2));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _staff = await db.Staff.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.Code).ToListAsync();
+        if (Cart.Active.CustomerId.HasValue)
+            _customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == Cart.Active.CustomerId);
+        _staffId = Cart.Active.StaffId;
+        _notes = Cart.Active.Notes ?? "";
+        _firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
+        _isComposition = _firm?.IsCompositionScheme ?? false;
+    }
+
+    private async Task<IEnumerable<Customer>> SearchCustomersAsync(string text, CancellationToken ct)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var q = db.Customers.AsNoTracking().Where(c => c.IsActive);
+        if (!string.IsNullOrWhiteSpace(text))
+            q = q.Where(c =>
+                EF.Functions.Like(c.Name, $"%{text}%") ||
+                (c.Phone != null && EF.Functions.Like(c.Phone, $"%{text}%")));
+        return await q.OrderBy(c => c.Name).Take(20).ToListAsync(ct);
+    }
+
+    private void OnCustomerChanged(Customer? c)
+    {
+        _customer = c;
+        Cart.SetCustomer(c?.Id);
+    }
+
+    private void OnStaffChanged(int? id)
+    {
+        _staffId = id;
+        Cart.SetStaff(id);
+    }
+
+    private void SetExact(string method)
+    {
+        foreach (var t in _tenders) t.Amount = 0m;
+        var tender = _tenders.FirstOrDefault(x => x.Method == method);
+        if (tender is not null) tender.Amount = Cart.Active.Total;
+    }
+
+    private void Cancel() => Dialog.Cancel();
+
+    private async Task Confirm()
+    {
+        if (!CanConfirm) return;
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            var number = await NextBillNumberAsync(db, _billKind);
+            var movesStock = _billKind != "Quote" && _billKind != "Proforma";
+
+            var totalDiscount = Cart.Active.DiscountTotal;
+            var taxTotal = _isComposition ? 0m : Cart.Active.TaxTotal;
+            var grand = _isComposition
+                ? Cart.Active.Subtotal - Cart.Active.DiscountTotal
+                : Cart.Active.Total;
+
+            var bill = new Bill
+            {
+                Number = number,
+                Kind = _billKind,
+                IsComposition = _isComposition,
+                At = DateTime.UtcNow,
+                Status = "Posted",
+                CustomerId = Cart.Active.CustomerId,
+                StaffId = Cart.Active.StaffId,
+                Subtotal = Cart.Active.Subtotal,
+                DiscountTotal = totalDiscount,
+                TaxTotal = taxTotal,
+                Total = grand,
+                TenderedTotal = TenderRequired ? TenderedTotal : 0m,
+                ChangeAmount = TenderRequired ? Math.Max(0m, TenderedTotal - grand) : 0m,
+                Notes = string.IsNullOrWhiteSpace(_notes) ? null : _notes,
+                PostedAt = DateTime.UtcNow
+            };
+
+            foreach (var line in Cart.Active.Lines)
+            {
+                var taxPct = _isComposition ? 0m : line.TaxPercent;
+                var net = (line.UnitPrice * line.Quantity) - line.Discount;
+                var taxAmt = decimal.Round(net * taxPct / 100m, 2);
+                var lineTotal = decimal.Round(net + taxAmt, 2);
+
+                bill.Items.Add(new BillItem
+                {
+                    ProductId = line.ProductId,
+                    Description = line.Description,
+                    Sku = line.Sku,
+                    Barcode = line.Barcode,
+                    HsnCode = line.HsnCode,
+                    Quantity = line.Quantity,
+                    UnitPrice = line.UnitPrice,
+                    Discount = line.Discount,
+                    TaxRateId = _isComposition ? null : line.TaxRateId,
+                    TaxPercent = taxPct,
+                    TaxAmount = taxAmt,
+                    LineTotal = lineTotal
+                });
+
+                if (movesStock)
+                {
+                    var product = await db.Products.FirstOrDefaultAsync(p => p.Id == line.ProductId);
+                    if (product is not null)
+                    {
+                        product.StockQty -= line.Quantity;
+                        product.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+            }
+
+            if (TenderRequired)
+            {
+                foreach (var t in _tenders.Where(x => x.Amount > 0))
+                {
+                    bill.Payments.Add(new BillPayment
+                    {
+                        Method = t.Method,
+                        Amount = t.Amount
+                    });
+                }
+
+                if (bill.CustomerId is int cid)
+                {
+                    var cust = await db.Customers.FirstOrDefaultAsync(c => c.Id == cid);
+                    if (cust is not null)
+                    {
+                        var creditAmount = bill.Payments.Where(p => p.Method == "Credit").Sum(p => p.Amount);
+                        if (creditAmount > 0)
+                        {
+                            cust.Balance += creditAmount;
+                            cust.UpdatedAt = DateTime.UtcNow;
+                        }
+                    }
+                }
+            }
+
+            db.Bills.Add(bill);
+            await db.SaveChangesAsync();
+
+            Snackbar.Add($"{KindLabel(_billKind)} {number} posted · ₹{bill.Total:N2}", Severity.Success);
+
+            try { await PrintReceiptAsync(bill); }
+            catch { /* print is best-effort */ }
+
+            Dialog.Close(DialogResult.Ok(bill.Id));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not post: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+
+    private static async Task<string> NextBillNumberAsync(AppDbContext db, string kind)
+    {
+        var firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
+        var basePrefix = firm?.InvoicePrefix ?? "INV";
+        var pad = firm?.InvoiceNumberPadding ?? "0000";
+        var prefix = kind switch
+        {
+            "Quote" => "QT",
+            "Proforma" => "PF",
+            "DeliveryChallan" => "DC",
+            "CashReceipt" => "CR",
+            _ => basePrefix
+        };
+        var n = await db.Bills.CountAsync(b => b.Kind == kind) + 1;
+        var formatted = n.ToString(pad);
+        return $"{prefix}-{formatted}";
+    }
+
+    private static string KindLabel(string kind) => kind switch
+    {
+        "Quote" => "Quote",
+        "Proforma" => "Proforma",
+        "DeliveryChallan" => "Delivery challan",
+        "CashReceipt" => "Cash receipt",
+        _ => "Bill"
+    };
+
+    private async Task PrintReceiptAsync(Bill bill)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
+        var settings = await SettingsSvc.LoadAsync();
+        var html = ReceiptHtmlBuilder.Build(bill, firm, settings);
+        await JS.InvokeVoidAsync("eval",
+            "(function(html){var w=window.open('','_blank','width=420,height=640');if(w){w.document.open();w.document.write(html);w.document.close();w.focus();w.print();}})(" +
+            System.Text.Json.JsonSerializer.Serialize(html) + ")");
+    }
+}

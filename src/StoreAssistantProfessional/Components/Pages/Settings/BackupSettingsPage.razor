@@ -1,0 +1,151 @@
+@page "/settings/backup"
+@layout AppShell
+@inject IAppSettingsService SettingsSvc
+@inject IBackupService BackupSvc
+@inject ISnackbar Snackbar
+
+<PageTitle>Backup — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="Cloud backup" />
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">Destinations</MudText>
+
+            <MudStack Spacing="2">
+                <MudPaper Class="pa-3" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudStack Spacing="0">
+                            <MudCheckBox T="bool" @bind-Value="_settings.BackupLocal" Color="Color.Primary">
+                                <MudStack Spacing="0" Class="ml-2">
+                                    <MudText Typo="Typo.subtitle2">Local folder</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-family: Consolas, monospace;">@BackupSvc.BackupDirectory</MudText>
+                                </MudStack>
+                            </MudCheckBox>
+                        </MudStack>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">always on</MudChip>
+                    </MudStack>
+                </MudPaper>
+
+                <MudPaper Class="pa-3" Elevation="0">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudStack Spacing="0">
+                            <MudCheckBox T="bool" @bind-Value="_settings.BackupGoogleDrive" Color="Color.Primary" Disabled="true">
+                                <MudStack Spacing="0" Class="ml-2">
+                                    <MudText Typo="Typo.subtitle2">Google Drive</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">/StoreAssistantBackups/</MudText>
+                                </MudStack>
+                            </MudCheckBox>
+                        </MudStack>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="true">Connect</MudButton>
+                    </MudStack>
+                </MudPaper>
+
+                <MudPaper Class="pa-3" Elevation="0">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudStack Spacing="0">
+                            <MudCheckBox T="bool" @bind-Value="_settings.BackupOneDrive" Color="Color.Primary" Disabled="true">
+                                <MudStack Spacing="0" Class="ml-2">
+                                    <MudText Typo="Typo.subtitle2">OneDrive</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">/StoreAssistantBackups/</MudText>
+                                </MudStack>
+                            </MudCheckBox>
+                        </MudStack>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="true">Connect</MudButton>
+                    </MudStack>
+                </MudPaper>
+
+                <MudPaper Class="pa-3" Elevation="0">
+                    <MudStack Spacing="2">
+                        <MudCheckBox T="bool" @bind-Value="_settings.BackupEmail" Color="Color.Primary" Disabled="true">
+                            <MudText Typo="Typo.subtitle2" Class="ml-2">Email (encrypted zip · max 25 MB)</MudText>
+                        </MudCheckBox>
+                        <MudTextField @bind-Value="_settings.BackupEmailAddress" Label="Email address" Variant="Variant.Outlined" MaxLength="200" Disabled="true" />
+                    </MudStack>
+                </MudPaper>
+            </MudStack>
+
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Cloud destinations require OAuth wiring — coming in a later round. Local backup is fully functional today.
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">Schedule</MudText>
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="3">
+                    <MudSelect T="string" @bind-Value="_settings.BackupSchedule" Label="Frequency" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Daily")">Daily</MudSelectItem>
+                        <MudSelectItem Value="@("Weekly")">Weekly</MudSelectItem>
+                        <MudSelectItem Value="@("Manual")">Manual only</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" md="2">
+                    <MudNumericField T="int" @bind-Value="_settings.BackupHour" Label="Hour" Variant="Variant.Outlined" Min="0" Max="23" />
+                </MudItem>
+                <MudItem xs="6" md="2">
+                    <MudNumericField T="int" @bind-Value="_settings.BackupMinute" Label="Minute" Variant="Variant.Outlined" Min="0" Max="59" />
+                </MudItem>
+                <MudItem xs="12" md="5">
+                    <MudNumericField T="int" @bind-Value="_settings.BackupRetentionCount" Label="Keep last (backups)" Variant="Variant.Outlined" Min="1" Max="365" />
+                </MudItem>
+            </MudGrid>
+
+            <MudPaper Class="pa-2" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                <MudText Typo="Typo.caption">
+                    Last backup: @(_lastBackup?.ToString("dd MMM yyyy HH:mm") ?? "never")
+                </MudText>
+            </MudPaper>
+
+            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.PlayArrow" OnClick="RunNow" Disabled="@_busy">
+                    Run backup now
+                </MudButton>
+                <MudButton OnClick="Save" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_busy">
+                    @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Saving…</span> }
+                    else { <span>Save</span> }
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private AppSettings _settings = new();
+    private bool _busy;
+    private DateTime? _lastBackup;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await SettingsSvc.LoadAsync();
+        _lastBackup = BackupSvc.LastBackupAt;
+    }
+
+    private async Task RunNow()
+    {
+        _busy = true;
+        try
+        {
+            var path = await Task.Run(() => BackupSvc.CreateBackup());
+            _lastBackup = BackupSvc.LastBackupAt;
+            Snackbar.Add($"Backup saved: {Path.GetFileName(path)}", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Backup failed: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            await SettingsSvc.SaveAsync(_settings);
+            Snackbar.Add("Backup settings saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not save: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+}

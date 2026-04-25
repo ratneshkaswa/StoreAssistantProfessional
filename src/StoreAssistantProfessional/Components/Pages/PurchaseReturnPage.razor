@@ -1,0 +1,299 @@
+@page "/returns"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Purchase returns — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudText Typo="Typo.h5">↩️ Purchase returns</MudText>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-3" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 600px;">
+                <MudStack Spacing="2">
+                    <MudText Typo="Typo.h6">Source</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Pick a received inward to return goods from. Vendor balance reduces and stock decreases.
+                    </MudText>
+
+                    <MudTextField @bind-Value="_search"
+                                  Placeholder="Search inward # or vendor…"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Rounded.Search"
+                                  Margin="Margin.Dense"
+                                  Immediate="true" />
+
+                    <MudDivider />
+
+                    @if (FilteredEntries.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                            <MudIcon Icon="@Icons.Material.Rounded.Inbox" Color="Color.Secondary" Style="font-size: 48px;" />
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                No received inward entries to return from yet.
+                            </MudText>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudStack Spacing="1" Style="max-height: 480px; overflow-y: auto;">
+                            @foreach (var e in FilteredEntries)
+                            {
+                                var isSel = _selected?.Id == e.Id;
+                                <MudPaper Elevation="0"
+                                          Class="pa-2"
+                                          Style="@(isSel ? "border-left: 3px solid var(--mud-palette-primary); cursor: pointer;" : "cursor: pointer;")"
+                                          @onclick="@(() => SelectInward(e))">
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.body2" Style="font-weight: 500;">@e.InwardNumber · @e.EntryDate.ToString("dd MMM")</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @string.Join(", ", e.Parcels.Select(p => p.Vendor?.Name).Where(n => !string.IsNullOrEmpty(n)).Distinct())
+                                            · @e.Parcels.Sum(p => p.Items.Count) items
+                                        </MudText>
+                                    </MudStack>
+                                </MudPaper>
+                            }
+                        </MudStack>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08); min-height: 600px;">
+                @if (_selected is null)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Class="pa-8">
+                        <MudIcon Icon="@Icons.Material.Rounded.Undo" Color="Color.Secondary" Style="font-size: 64px;" />
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                            Pick an inward on the left to start a return.
+                        </MudText>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudStack Spacing="3">
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.h6">Return from @_selected.InwardNumber</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Received on @_selected.EntryDate.ToString("dd MMM yyyy")
+                            </MudText>
+                        </MudStack>
+
+                        @foreach (var parcel in _selected.Parcels)
+                        {
+                            <MudPaper Class="pa-3" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                                <MudStack Spacing="2">
+                                    <MudText Typo="Typo.subtitle2">@(parcel.Vendor?.Name ?? "Unknown vendor")</MudText>
+
+                                    <MudSimpleTable Dense="true" Style="background: white;">
+                                        <thead>
+                                            <tr>
+                                                <th></th>
+                                                <th>Item</th>
+                                                <th style="width: 100px; text-align: right;">Received</th>
+                                                <th style="width: 100px; text-align: right;">Return</th>
+                                                <th style="width: 110px; text-align: right;">Unit ₹</th>
+                                                <th style="width: 110px; text-align: right;">Line ₹</th>
+                                                <th style="width: 150px;">Reason</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in parcel.Items)
+                                            {
+                                                var line = LineFor(item);
+                                                <tr>
+                                                    <td>
+                                                        <MudCheckBox T="bool" Value="line.Selected"
+                                                                     ValueChanged="@(v => { line.Selected = v; if (v && line.Qty == 0) line.Qty = item.Quantity - item.DamagedQuantity; })"
+                                                                     Color="Color.Primary" />
+                                                    </td>
+                                                    <td>@(item.Product?.Name ?? "?")</td>
+                                                    <td style="text-align: right;" class="sap-amount">@item.Quantity.ToString("0.###")</td>
+                                                    <td>
+                                                        <MudNumericField T="decimal" Value="line.Qty"
+                                                                         ValueChanged="@(v => line.Qty = Math.Min(v, item.Quantity))"
+                                                                         Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                                         Min="0" Max="@item.Quantity"
+                                                                         Disabled="@(!line.Selected)" />
+                                                    </td>
+                                                    <td style="text-align: right;" class="sap-amount">₹@item.UnitCost.ToString("N2")</td>
+                                                    <td style="text-align: right;" class="sap-amount">₹@(line.Selected ? (line.Qty * item.UnitCost).ToString("N2") : "0.00")</td>
+                                                    <td>
+                                                        <MudSelect T="string" Value="line.Reason" ValueChanged="@(v => line.Reason = v)"
+                                                                   Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@(!line.Selected)">
+                                                            <MudSelectItem Value="@("Defective")">Defective</MudSelectItem>
+                                                            <MudSelectItem Value="@("Wrong-item")">Wrong item</MudSelectItem>
+                                                            <MudSelectItem Value="@("Excess")">Excess</MudSelectItem>
+                                                            <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+                                                        </MudSelect>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </MudSimpleTable>
+                                </MudStack>
+                            </MudPaper>
+                        }
+
+                        <MudTextField @bind-Value="_notes" Label="Notes" Variant="Variant.Outlined" MaxLength="500" Lines="2" />
+
+                        <MudPaper Class="pa-3" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    @SelectedCount item(s) selected · stock will reduce · vendor balance will reduce
+                                </MudText>
+                                <MudText Typo="Typo.h6" Class="sap-amount">Total ₹@ReturnTotal.ToString("N2")</MudText>
+                            </MudStack>
+                        </MudPaper>
+
+                        <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+                            <MudButton Variant="Variant.Text" OnClick="@(() => _selected = null)">Cancel</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PostReturn" Disabled="@(_busy || SelectedCount == 0)">
+                                @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Posting…</span> }
+                                else { <span>Post return</span> }
+                            </MudButton>
+                        </MudStack>
+                    </MudStack>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
+@code {
+    private List<InwardEntry> _entries = new();
+    private InwardEntry? _selected;
+    private string _search = "";
+    private string _notes = "";
+    private bool _busy;
+
+    private class Line
+    {
+        public bool Selected { get; set; }
+        public decimal Qty { get; set; }
+        public string Reason { get; set; } = "Defective";
+    }
+    private readonly Dictionary<int, Line> _lines = new();
+
+    private List<InwardEntry> FilteredEntries =>
+        _entries.Where(e =>
+            string.IsNullOrWhiteSpace(_search) ||
+            e.InwardNumber.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            e.Parcels.Any(p => (p.Vendor?.Name ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase)))
+        .OrderByDescending(e => e.EntryDate)
+        .ToList();
+
+    private int SelectedCount => _selected?.Parcels.SelectMany(p => p.Items).Count(i => LineFor(i).Selected && LineFor(i).Qty > 0) ?? 0;
+
+    private decimal ReturnTotal =>
+        _selected?.Parcels.SelectMany(p => p.Items)
+            .Where(i => LineFor(i).Selected)
+            .Sum(i => LineFor(i).Qty * i.UnitCost) ?? 0m;
+
+    private Line LineFor(InwardParcelItem item)
+    {
+        if (!_lines.TryGetValue(item.Id, out var l))
+        {
+            l = new Line();
+            _lines[item.Id] = l;
+        }
+        return l;
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _entries = await db.InwardEntries
+            .Include(e => e.Parcels).ThenInclude(p => p.Vendor)
+            .Include(e => e.Parcels).ThenInclude(p => p.Items).ThenInclude(i => i.Product)
+            .Where(e => e.Status == "Received")
+            .AsNoTracking()
+            .OrderByDescending(e => e.EntryDate)
+            .ToListAsync();
+    }
+
+    private void SelectInward(InwardEntry e)
+    {
+        _selected = e;
+        _lines.Clear();
+        _notes = "";
+    }
+
+    private async Task PostReturn()
+    {
+        if (_selected is null || SelectedCount == 0) return;
+        _busy = true;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            var firstVendorId = _selected.Parcels.Select(p => p.VendorId).FirstOrDefault();
+
+            var returnNumber = $"PR-{(await db.PurchaseReturns.CountAsync()) + 1:D3}";
+
+            var pr = new PurchaseReturn
+            {
+                ReturnNumber = returnNumber,
+                At = DateTime.UtcNow,
+                VendorId = firstVendorId,
+                SourceInwardEntryId = _selected.Id,
+                Notes = _notes,
+                Status = "Posted"
+            };
+
+            foreach (var parcel in _selected.Parcels)
+            {
+                foreach (var item in parcel.Items)
+                {
+                    var l = LineFor(item);
+                    if (!l.Selected || l.Qty <= 0) continue;
+                    var lineTotal = l.Qty * item.UnitCost;
+                    pr.Items.Add(new PurchaseReturnItem
+                    {
+                        ProductId = item.ProductId,
+                        Quantity = l.Qty,
+                        UnitCost = item.UnitCost,
+                        LineTotal = lineTotal,
+                        Reason = l.Reason
+                    });
+
+                    var product = await db.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                    if (product is not null)
+                    {
+                        product.StockQty -= l.Qty;
+                        product.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    var vendor = await db.Vendors.FirstOrDefaultAsync(v => v.Id == parcel.VendorId);
+                    if (vendor is not null)
+                    {
+                        vendor.Balance -= lineTotal;
+                        vendor.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+            }
+
+            pr.Total = pr.Items.Sum(i => i.LineTotal);
+            db.PurchaseReturns.Add(pr);
+            await db.SaveChangesAsync();
+
+            Snackbar.Add($"{returnNumber} posted · ₹{pr.Total:N2} credited.", Severity.Success);
+            _selected = null;
+            _lines.Clear();
+            _notes = "";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not post: {ex.Message}", Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+}

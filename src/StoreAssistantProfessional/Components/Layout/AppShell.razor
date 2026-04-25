@@ -1,0 +1,101 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@using StoreAssistantProfessional.Components.Shell
+@using Microsoft.JSInterop
+@inject IShellState Shell
+@inject IActivityService Activity
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<div class="sap-shell">
+    @if (Shell.TrainingMode)
+    {
+        <div class="sap-training-banner">
+            <MudIcon Icon="@Icons.Material.Rounded.School" Class="mr-2" />
+            <span>TRAINING MODE — bills don't save, stock doesn't move</span>
+            <MudButton Size="Size.Small" Variant="Variant.Text" Class="ml-4" OnClick="@(() => Shell.ToggleTraining())">Exit training</MudButton>
+        </div>
+    }
+
+    <div class="sap-shell-grid">
+        <div class="sap-shell-topbar">
+            <TopBar />
+        </div>
+
+        <div class="sap-shell-rail">
+            <NavRail LowStockCount="0" />
+        </div>
+
+        <main class="sap-shell-content">
+            @Body
+        </main>
+
+        <div class="sap-shell-statusbar">
+            <StatusBar />
+        </div>
+    </div>
+
+    @if (Activity.IsIdle)
+    {
+        <div class="sap-idle-overlay" @onclick="WakeUp" @onkeydown="WakeUp" tabindex="0">
+            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                <MudText Style="font-size: 96px; font-weight: 200; letter-spacing: -2px;">@DateTime.Now.ToString("HH:mm")</MudText>
+                <MudText Typo="Typo.h5" Style="font-family: Georgia, serif; opacity: 0.8;">@(_storeName ?? "Store Assistant Professional")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-4">Tap anywhere or press any key to resume</MudText>
+            </MudStack>
+        </div>
+    }
+</div>
+
+@code {
+    [Inject] private ISetupService Setup { get; set; } = default!;
+
+    private DotNetObjectReference<AppShell>? _dotNetRef;
+    private string? _storeName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Shell.Changed += OnChanged;
+        Activity.IdleChanged += OnIdleChanged;
+        Activity.AutoDropped += OnAutoDropped;
+        _storeName = Setup.Current?.StoreName;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            try { await JS.InvokeVoidAsync("sapActivity.register", _dotNetRef); }
+            catch { /* JS may not be loaded yet on first paint; ignore */ }
+        }
+    }
+
+    [JSInvokable]
+    public void NotifyActivity()
+    {
+        Activity.RegisterActivity();
+    }
+
+    private void WakeUp()
+    {
+        Activity.RegisterActivity();
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+    private void OnIdleChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnAutoDropped() => InvokeAsync(() =>
+    {
+        Snackbar.Add("Admin role timed out for inactivity. Switched back to User.", Severity.Info);
+        StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        Shell.Changed -= OnChanged;
+        Activity.IdleChanged -= OnIdleChanged;
+        Activity.AutoDropped -= OnAutoDropped;
+        _dotNetRef?.Dispose();
+    }
+}

@@ -1,0 +1,91 @@
+@page "/settings/permissions"
+@layout AppShell
+@inject IAppSettingsService SettingsSvc
+@inject ISnackbar Snackbar
+
+<PageTitle>Permissions — Settings</PageTitle>
+
+<MudStack Spacing="3">
+    <SettingsBackBar Title="Permission matrix" />
+
+    <MudPaper Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Decide which actions a regular User can perform without switching to Admin.
+                Anything left unchecked will require unlocking Admin from the status bar (with reason logged).
+            </MudText>
+
+            <MudSimpleTable Dense="true">
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th style="text-align: center; width: 100px;">User</th>
+                        <th style="text-align: center; width: 100px;">Admin</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.body2">@row.Label</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@row.Description</MudText>
+                                </MudStack>
+                            </td>
+                            <td style="text-align: center;">
+                                <MudCheckBox T="bool" Value="row.Get(_settings)"
+                                             ValueChanged="@(v => row.Set(_settings, v))"
+                                             Color="Color.Primary"
+                                             Disabled="@row.AlwaysAdmin" />
+                            </td>
+                            <td style="text-align: center;"><MudIcon Icon="@Icons.Material.Rounded.Check" Color="Color.Success" Style="font-size: 18px;" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+
+            <MudStack Row="true" Justify="Justify.FlexEnd">
+                <MudButton OnClick="Save" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_busy">
+                    @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> <span>Saving…</span> }
+                    else { <span>Save</span> }
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private AppSettings _settings = new();
+    private bool _busy;
+
+    private record Row(string Label, string Description, Func<AppSettings, bool> Get, Action<AppSettings, bool> Set, bool AlwaysAdmin = false);
+
+    private readonly List<Row> _rows = new()
+    {
+        new("Give discounts",          "Apply line- or bill-level discount.",                (s) => s.UserCanGiveDiscount,    (s, v) => s.UserCanGiveDiscount = v),
+        new("Refund a bill",           "Process a refund / return.",                          (s) => s.UserCanRefund,          (s, v) => s.UserCanRefund = v),
+        new("Void a bill",             "Mark a posted bill as voided.",                       (s) => s.UserCanVoidBill,        (s, v) => s.UserCanVoidBill = v),
+        new("Edit a saved bill",       "Modify a posted bill (other than voiding).",          (s) => s.UserCanEditSavedBill,   (s, v) => s.UserCanEditSavedBill = v),
+        new("Adjust stock",            "Stock take adjustments / write-offs.",                (s) => s.UserCanAdjustStock,     (s, v) => s.UserCanAdjustStock = v),
+        new("Edit settings",           "Change firm / cash / goal / alert settings.",         (s) => s.UserCanEditSettings,    (s, v) => s.UserCanEditSettings = v),
+        new("Open cash drawer",        "Trigger drawer open without a sale.",                 (s) => s.UserCanOpenDrawer,      (s, v) => s.UserCanOpenDrawer = v),
+        new("Run reports",             "Open the Reports page.",                              (s) => s.UserCanRunReports,      (s, v) => s.UserCanRunReports = v),
+        new("Export data",             "Tally / GST / HSN exports.",                          (s) => s.UserCanExport,          (s, v) => s.UserCanExport = v),
+        new("Reset / wipe data",       "Always Admin only — cannot be granted.",              (s) => false,                    (s, v) => { },                            AlwaysAdmin: true),
+    };
+
+    protected override async Task OnInitializedAsync() => _settings = await SettingsSvc.LoadAsync();
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            await SettingsSvc.SaveAsync(_settings);
+            Snackbar.Add("Permissions saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not save: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+}

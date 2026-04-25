@@ -1,0 +1,203 @@
+@page "/cheques"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Cheques — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h5">📒 Cheque register</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="StartNew">New cheque</MudButton>
+    </MudStack>
+
+    <MudPaper Class="pa-3">
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+            <MudSelect T="string" @bind-Value="_dirFilter" Label="Direction" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 140px;">
+                <MudSelectItem Value="@("all")">All</MudSelectItem>
+                <MudSelectItem Value="@("Issued")">Issued</MudSelectItem>
+                <MudSelectItem Value="@("Received")">Received</MudSelectItem>
+            </MudSelect>
+            <MudSelect T="string" @bind-Value="_statusFilter" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 140px;">
+                <MudSelectItem Value="@("all")">All</MudSelectItem>
+                <MudSelectItem Value="@("Pending")">Pending</MudSelectItem>
+                <MudSelectItem Value="@("Cleared")">Cleared</MudSelectItem>
+                <MudSelectItem Value="@("Bounced")">Bounced</MudSelectItem>
+            </MudSelect>
+            <span class="sap-statusbar-spacer"></span>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="sap-amount">
+                @Filtered.Count cheque(s) · ₹@Filtered.Sum(c => c.Amount).ToString("N0")
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    @if (Filtered.Count == 0)
+    {
+        <MudPaper Class="pa-8" Elevation="0" Style="background: var(--mud-palette-background-grey);">
+            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Rounded.Description" Color="Color.Secondary" Style="font-size: 64px;" />
+                <MudText Typo="Typo.body1" Color="Color.Secondary">@(_cheques.Count == 0 ? "No cheques recorded yet." : "No matches.")</MudText>
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <MudPaper>
+            <MudSimpleTable Hover="true" Dense="true">
+                <thead>
+                    <tr><th>Direction</th><th>#</th><th>Date</th><th>Party</th><th>Bank</th><th style="text-align: right;">Amount</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in Filtered)
+                    {
+                        <tr>
+                            <td>
+                                @if (c.Direction == "Issued")
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">issued</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">received</MudChip>
+                                }
+                            </td>
+                            <td>@c.Number</td>
+                            <td>@c.IssuedAt.ToLocalTime().ToString("dd MMM")</td>
+                            <td>@c.Party</td>
+                            <td>@(c.BankName ?? "—")</td>
+                            <td style="text-align: right;" class="sap-amount">₹@c.Amount.ToString("N0")</td>
+                            <td>
+                                @if (c.Status == "Cleared")
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">cleared</MudChip>
+                                }
+                                else if (c.Status == "Bounced")
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">bounced</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">@DaysAgo(c.IssuedAt) d pending</MudChip>
+                                }
+                            </td>
+                            <td>
+                                @if (c.Status == "Pending")
+                                {
+                                    <MudStack Row="true" Spacing="1">
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Rounded.Check" Color="Color.Success" title="Mark cleared" OnClick="@(() => MarkStatus(c.Id, "Cleared"))" />
+                                        <MudIconButton Size="Size.Small" Icon="@Icons.Material.Rounded.Close" Color="Color.Error" title="Mark bounced" OnClick="@(() => MarkStatus(c.Id, "Bounced"))" />
+                                    </MudStack>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+</MudStack>
+
+<MudDialog @bind-Visible="_dialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">New cheque</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudGrid Spacing="2">
+                <MudItem xs="6">
+                    <MudSelect T="string" @bind-Value="_form.Direction" Label="Direction" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Issued")">Issued (we paid)</MudSelectItem>
+                        <MudSelectItem Value="@("Received")">Received (customer paid us)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6"><MudTextField @bind-Value="_form.Number" Label="Cheque # *" Variant="Variant.Outlined" MaxLength="50" /></MudItem>
+                <MudItem xs="6"><MudDatePicker Date="_form.IssuedAt" DateChanged="@(d => _form.IssuedAt = d ?? DateTime.UtcNow)" Label="Date" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="6"><MudNumericField T="decimal" @bind-Value="_form.Amount" Label="Amount ₹ *" Variant="Variant.Outlined" Min="0" /></MudItem>
+                <MudItem xs="12"><MudTextField @bind-Value="_form.Party" Label="Party *" Variant="Variant.Outlined" MaxLength="200" /></MudItem>
+                <MudItem xs="12"><MudTextField @bind-Value="_form.BankName" Label="Bank" Variant="Variant.Outlined" MaxLength="200" /></MudItem>
+                <MudItem xs="12"><MudTextField @bind-Value="_form.Notes" Label="Notes" Variant="Variant.Outlined" MaxLength="500" Lines="2" /></MudItem>
+            </MudGrid>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _dialogOpen = false)">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save"
+                   Disabled="@(_busy || string.IsNullOrWhiteSpace(_form.Number) || string.IsNullOrWhiteSpace(_form.Party) || _form.Amount <= 0)">
+            Save
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<Cheque> _cheques = new();
+    private string _dirFilter = "all";
+    private string _statusFilter = "all";
+    private Cheque _form = new();
+    private bool _dialogOpen;
+    private bool _busy;
+
+    private static readonly DialogOptions _dialogOptions = new()
+    {
+        CloseOnEscapeKey = true,
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true
+    };
+
+    private List<Cheque> Filtered =>
+        _cheques.Where(c =>
+            (_dirFilter == "all" || c.Direction == _dirFilter) &&
+            (_statusFilter == "all" || c.Status == _statusFilter))
+        .OrderByDescending(c => c.IssuedAt)
+        .ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _cheques = await db.Cheques.AsNoTracking().OrderByDescending(c => c.IssuedAt).ToListAsync();
+    }
+
+    private void StartNew()
+    {
+        _form = new Cheque { Direction = "Issued", IssuedAt = DateTime.UtcNow, Status = "Pending" };
+        _dialogOpen = true;
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Number) || string.IsNullOrWhiteSpace(_form.Party) || _form.Amount <= 0) return;
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.Cheques.Add(_form);
+            await db.SaveChangesAsync();
+            Snackbar.Add("Cheque saved.", Severity.Success);
+            _dialogOpen = false;
+            await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not save: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    private async Task MarkStatus(int id, string status)
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var c = await db.Cheques.FirstOrDefaultAsync(x => x.Id == id);
+            if (c is null) return;
+            c.Status = status;
+            if (status == "Cleared") c.ClearedAt = DateTime.UtcNow;
+            else if (status == "Bounced") c.BouncedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            Snackbar.Add($"Cheque marked {status.ToLower()}.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add($"Could not update: {ex.Message}", Severity.Error); }
+    }
+
+    private static int DaysAgo(DateTime at) => (int)Math.Floor((DateTime.UtcNow - at).TotalDays);
+}

@@ -1,0 +1,201 @@
+@page "/labels"
+@layout AppShell
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>Labels — Store Assistant Professional</PageTitle>
+
+<MudStack Spacing="3">
+    <MudText Typo="Typo.h5">🏷 Tag &amp; barcode labels</MudText>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 540px;">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6">Print job</MudText>
+
+                    <MudAutocomplete T="Product"
+                                     Value="_product"
+                                     ValueChanged="OnProductChanged"
+                                     SearchFunc="SearchProductsAsync"
+                                     ToStringFunc="@(p => p == null ? "" : $"{p.Name} · {p.Sku ?? "no sku"}")"
+                                     Label="Product"
+                                     Variant="Variant.Outlined"
+                                     ResetValueOnEmptyText="true"
+                                     ShowProgressIndicator="true" />
+
+                    <MudGrid Spacing="3">
+                        <MudItem xs="6"><MudNumericField T="int" @bind-Value="_quantity" Label="Quantity" Variant="Variant.Outlined" Min="1" Max="500" /></MudItem>
+                        <MudItem xs="6">
+                            <MudSelect T="string" @bind-Value="_size" Label="Tag size" Variant="Variant.Outlined">
+                                <MudSelectItem Value="@("50x30")">50 × 30 mm</MudSelectItem>
+                                <MudSelectItem Value="@("40x25")">40 × 25 mm</MudSelectItem>
+                                <MudSelectItem Value="@("70x40")">70 × 40 mm</MudSelectItem>
+                                <MudSelectItem Value="@("a4-30")">A4 sheet · 30 per page</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_showMrp" Color="Color.Primary">Print MRP</MudCheckBox></MudItem>
+                        <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_showSalePrice" Color="Color.Primary">Print sale price</MudCheckBox></MudItem>
+                        <MudItem xs="12"><MudCheckBox T="bool" @bind-Value="_showCategory" Color="Color.Primary">Print category</MudCheckBox></MudItem>
+                    </MudGrid>
+
+                    <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Rounded.Refresh" OnClick="@(() => StateHasChanged())">Update preview</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Print" OnClick="Print" Disabled="@(_product is null || _quantity <= 0)">
+                            Print @(_quantity > 0 ? _quantity.ToString() : "") label@(_quantity == 1 ? "" : "s")
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08); min-height: 540px;">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6">Preview</MudText>
+
+                    @if (_product is null)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                            <MudIcon Icon="@Icons.Material.Rounded.QrCode2" Color="Color.Secondary" Style="font-size: 64px;" />
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Pick a product to preview the tag.</MudText>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <div class="@SampleClass()">
+                            <div class="sap-label-store">@(_storeName ?? "Acme Store")</div>
+                            <div class="sap-label-barcode">@BarcodeBars(_product.Barcode ?? _product.Sku ?? _product.Name)</div>
+                            <div class="sap-label-code">@(_product.Barcode ?? _product.Sku ?? "—")</div>
+                            <div class="sap-label-name">@_product.Name</div>
+                            @if (_showCategory && !string.IsNullOrEmpty(_product.Category))
+                            {
+                                <div class="sap-label-cat">@_product.Category</div>
+                            }
+                            @if (_showMrp && _product.Mrp > 0)
+                            {
+                                <div class="sap-label-mrp">MRP ₹@_product.Mrp.ToString("N0")</div>
+                            }
+                            @if (_showSalePrice && _product.SalePrice > 0)
+                            {
+                                <div class="sap-label-sale">₹@_product.SalePrice.ToString("N0")</div>
+                            }
+                        </div>
+
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @_quantity label(s) will be printed at @_size.
+                        </MudText>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
+@code {
+    [Inject] private ISetupService Setup { get; set; } = default!;
+
+    private Product? _product;
+    private int _quantity = 24;
+    private string _size = "50x30";
+    private bool _showMrp = true;
+    private bool _showSalePrice = false;
+    private bool _showCategory = false;
+    private string? _storeName;
+
+    protected override void OnInitialized()
+    {
+        _storeName = Setup.Current?.StoreName;
+    }
+
+    private async Task<IEnumerable<Product>> SearchProductsAsync(string text, CancellationToken ct)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var q = db.Products.AsNoTracking().Where(p => p.IsActive);
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            q = q.Where(p =>
+                EF.Functions.Like(p.Name, $"%{text}%") ||
+                (p.Sku != null && EF.Functions.Like(p.Sku, $"%{text}%")) ||
+                (p.Barcode != null && EF.Functions.Like(p.Barcode, $"%{text}%")));
+        }
+        return await q.OrderBy(p => p.Name).Take(20).ToListAsync(ct);
+    }
+
+    private void OnProductChanged(Product? p) => _product = p;
+
+    private string SampleClass() => _size switch
+    {
+        "40x25" => "sap-label sap-label-40",
+        "70x40" => "sap-label sap-label-70",
+        "a4-30" => "sap-label sap-label-a4",
+        _       => "sap-label sap-label-50",
+    };
+
+    private static string BarcodeBars(string code)
+    {
+        var bars = "";
+        foreach (var ch in code.Take(13))
+        {
+            var w = (ch % 4) + 1;
+            bars += new string('|', w) + " ";
+        }
+        return string.IsNullOrEmpty(bars) ? "||| || ||||" : bars;
+    }
+
+    private async Task Print()
+    {
+        if (_product is null) return;
+        var html = BuildLabelHtml();
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                "(function(html){var w=window.open('','_blank','width=600,height=400');if(w){w.document.open();w.document.write(html);w.document.close();w.focus();w.print();}})(" +
+                System.Text.Json.JsonSerializer.Serialize(html) + ")");
+            Snackbar.Add($"Sent {_quantity} label(s) to printer.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not print: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string BuildLabelHtml()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<!doctype html><html><head><meta charset='utf-8'><title>Labels</title><style>");
+        sb.Append("body{margin:0;padding:8px;font-family:Segoe UI,Arial,sans-serif;}");
+        sb.Append(".lbl{display:inline-block;border:1px solid #ddd;padding:6px 8px;margin:4px;width:")
+          .Append(_size switch { "40x25" => "180px", "70x40" => "260px", "a4-30" => "180px", _ => "200px" })
+          .Append(";vertical-align:top;}");
+        sb.Append(".store{font-weight:600;font-size:11px;}");
+        sb.Append(".bar{font-family:Consolas,monospace;letter-spacing:-1px;font-size:18px;}");
+        sb.Append(".code{font-family:Consolas,monospace;font-size:10px;}");
+        sb.Append(".name{font-weight:500;font-size:12px;}");
+        sb.Append(".cat{font-size:10px;color:#666;}");
+        sb.Append(".mrp{font-size:11px;color:#444;}");
+        sb.Append(".sale{font-weight:700;font-size:14px;}");
+        sb.Append("@media print{button{display:none}}");
+        sb.Append("</style></head><body>");
+        for (var i = 0; i < _quantity; i++)
+        {
+            sb.Append("<div class='lbl'>");
+            sb.Append("<div class='store'>").Append(System.Net.WebUtility.HtmlEncode(_storeName ?? "")).Append("</div>");
+            sb.Append("<div class='bar'>").Append(System.Net.WebUtility.HtmlEncode(BarcodeBars(_product!.Barcode ?? _product.Sku ?? _product.Name))).Append("</div>");
+            sb.Append("<div class='code'>").Append(System.Net.WebUtility.HtmlEncode(_product.Barcode ?? _product.Sku ?? "")).Append("</div>");
+            sb.Append("<div class='name'>").Append(System.Net.WebUtility.HtmlEncode(_product.Name)).Append("</div>");
+            if (_showCategory && !string.IsNullOrEmpty(_product.Category))
+                sb.Append("<div class='cat'>").Append(System.Net.WebUtility.HtmlEncode(_product.Category)).Append("</div>");
+            if (_showMrp && _product.Mrp > 0)
+                sb.Append("<div class='mrp'>MRP ₹").Append(_product.Mrp.ToString("N0")).Append("</div>");
+            if (_showSalePrice && _product.SalePrice > 0)
+                sb.Append("<div class='sale'>₹").Append(_product.SalePrice.ToString("N0")).Append("</div>");
+            sb.Append("</div>");
+        }
+        sb.Append("</body></html>");
+        return sb.ToString();
+    }
+}
