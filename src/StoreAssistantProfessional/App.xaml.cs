@@ -22,7 +22,14 @@ public partial class App : Application
         {
             var services = new ServiceCollection();
             services.AddWpfBlazorWebView();
-            services.AddMudServices();
+            services.AddMudServices(config =>
+            {
+                // Rapid Ctrl+S spam shouldn't stack identical "Firm saved." snackbars,
+                // and a save-then-validate-fail loop shouldn't pile error toasts on top
+                // of each other. Suppress duplicate (same-message+severity) within the
+                // currently-visible queue.
+                config.SnackbarConfiguration.PreventDuplicates = true;
+            });
             services.AddSingleton<ISessionService, SessionService>();
             services.AddSingleton<ISetupService, SetupService>();
 

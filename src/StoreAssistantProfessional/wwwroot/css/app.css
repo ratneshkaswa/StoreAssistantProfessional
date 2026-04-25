@@ -6,7 +6,11 @@ html, body {
     overflow-x: hidden;
 }
 
-/* Kill all animations, transitions, and ripples app-wide */
+/* Kill all animations, transitions, and ripples app-wide. The OS-level
+   `prefers-reduced-motion` setting is implicitly honoured by this blanket;
+   selective re-enable rules elsewhere wrap themselves in
+   `prefers-reduced-motion: no-preference` so users with motion-sensitivity
+   keep the still version. */
 *, *::before, *::after {
     animation: none !important;
     transition: none !important;
@@ -114,19 +118,25 @@ html, body {
 }
 
 /* Re-enable transitions inside first-run; the global animation-killer makes the
-   muted-warm theme feel cheap on the first impression page. */
-.sap-firstrun-root .mud-input-control,
-.sap-firstrun-root .mud-input-control *,
-.sap-firstrun-root .mud-button-root,
-.sap-firstrun-root .mud-button-root *,
-.sap-firstrun-root .mud-icon-button {
-    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
+   muted-warm theme feel cheap on the first impression page. Wrapped in a
+   `prefers-reduced-motion: no-preference` query so users who set the OS-level
+   reduced-motion flag still get the still version. */
+@media (prefers-reduced-motion: no-preference) {
+    .sap-firstrun-root .mud-input-control,
+    .sap-firstrun-root .mud-input-control *,
+    .sap-firstrun-root .mud-button-root,
+    .sap-firstrun-root .mud-button-root *,
+    .sap-firstrun-root .mud-icon-button {
+        transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
+    }
 }
 
 /* Tooltip popovers — fade in/out smoothly inside first-run. */
-.mud-tooltip-popover,
-.mud-tooltip-arrow {
-    transition: opacity 150ms ease !important;
+@media (prefers-reduced-motion: no-preference) {
+    .mud-tooltip-popover,
+    .mud-tooltip-arrow {
+        transition: opacity 150ms ease !important;
+    }
 }
 
 .sap-firstrun-root { width: 100%; }
@@ -311,12 +321,14 @@ html, body {
    .is-wide modifier. */
 .sap-step-root { width: 100%; }
 
-.sap-step-root .mud-input-control,
-.sap-step-root .mud-input-control *,
-.sap-step-root .mud-button-root,
-.sap-step-root .mud-button-root *,
-.sap-step-root .mud-icon-button {
-    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
+@media (prefers-reduced-motion: no-preference) {
+    .sap-step-root .mud-input-control,
+    .sap-step-root .mud-input-control *,
+    .sap-step-root .mud-button-root,
+    .sap-step-root .mud-button-root *,
+    .sap-step-root .mud-icon-button {
+        transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
+    }
 }
 
 .sap-step-hero {
@@ -417,7 +429,7 @@ html, body {
 .sap-step-root.is-no-hero .sap-step-form-col { background: var(--mud-palette-background); }
 
 .sap-step-slim {
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.10);
     padding-bottom: 12px;
     margin-bottom: 4px;
 }
@@ -427,10 +439,19 @@ html, body {
     display: block;
     margin-bottom: 6px;
 }
+/* Long firm names (up to MaxFirmNameLength=200) get truncated with ellipsis
+   so the slim header doesn't wrap onto three lines. The flex parent
+   (.sap-step-slim-grid) gives the heading the available row width minus the
+   progress strip — `min-width: 0` lets flex children actually shrink below
+   their content's intrinsic size, which is what makes ellipsis work. */
 .sap-step-slim-heading {
     font-family: Georgia, 'Times New Roman', serif !important;
     font-weight: 400 !important;
-    line-height: 1.2;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 .sap-step-slim-row {
     width: 100%;
@@ -454,9 +475,14 @@ html, body {
 }
 
 /* Unified card style — single primary accent across all sections, replacing
-   the rainbow inline styles from the first pass. */
+   the rainbow inline styles from the first pass. The drop shadow is layered
+   so the card has a subtle vertical lift in addition to the inset accent on
+   the left, instead of a single soft blur that disappears against the page. */
 .sap-step-card {
-    box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08) !important;
+    box-shadow:
+        inset 4px 0 0 var(--mud-palette-primary),
+        0 1px 2px rgba(0,0,0,0.06),
+        0 2px 6px rgba(0,0,0,0.04) !important;
 }
 
 .sap-step-blocker {
@@ -469,7 +495,7 @@ html, body {
 .sap-step-blocker-ready {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;   /* Matches MudStack Spacing="2" used elsewhere for icon+text rows */
     min-height: 28px;
 }
 .sap-step-blocker-live.is-warn .sap-step-blocker-icon,
@@ -480,7 +506,9 @@ html, body {
 .sap-step-blocker-ready .sap-step-blocker-text {
     color: var(--sap-success-fg) !important;
 }
-.sap-step-blocker-icon { font-size: 18px !important; }
+/* Icon font-size matched to body2 line-height (~14px) so the icon's optical
+   weight aligns with the adjacent caption rather than out-shouting it. */
+.sap-step-blocker-icon { font-size: 16px !important; }
 .sap-step-blocker-text { font-weight: 500 !important; }
 
 .sap-step-root .mud-input-outlined.mud-focused .mud-input-outlined-border {
@@ -492,26 +520,42 @@ html, body {
     outline-offset: 2px;
 }
 
-/* Firm onboarding page — hero-less, full-width form split into two columns. */
+/* Firm onboarding page — hero-less, full-width form split into two columns.
+   The previous build had `gap: 12px` AND children carrying `mt-3` (also 12px)
+   which compounded into 24px gaps; flex-gap is the single source of vertical
+   rhythm now (children must NOT add their own top margin). */
 .sap-firm-page {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 16px;
     width: 100%;
 }
 
-/* Firm name plate — shown on the Firm onboarding step in lieu of a required
-   "Firm name" input, since the user has already typed it during PIN setup. */
+/* Firm name plate — banner above the form. Tinted gradient accent and serif
+   typography establish a "this is your firm" anchor without dominating the
+   page heading.
+
+   Visual choices reconciled with .sap-step-card:
+   - 4px inset accent (matches cards' 4px shadow-as-border, was 3px)
+   - 4px border-radius (matches MudPaper / cards / list rows, was 6px)
+   - Symmetric 14px vertical padding (was 12/14 asymmetric)
+   - 315deg gradient angle (matches hero, was 135deg flipped)
+   - 0.30 / 0.15 alpha stops (was 0.18 / 0.10, almost invisible)
+
+   Bounded width — on wide monitors the plate's serif heading otherwise floats
+   alone in 1320px of cream gradient. Cap at the form's natural reading width
+   so it stays visually grouped with the cards below. */
 .sap-firm-plate {
-    padding: 12px 16px 14px;
-    background: linear-gradient(135deg,
-                                rgba(245, 212, 181, 0.18),
-                                rgba(232, 181, 132, 0.10));
-    border-radius: 6px;
-    border-left: 3px solid var(--mud-palette-primary);
+    padding: 14px 16px;
+    background: linear-gradient(315deg,
+                                rgba(245, 212, 181, 0.30),
+                                rgba(232, 181, 132, 0.15));
+    border-radius: 4px;
+    box-shadow: inset 4px 0 0 var(--mud-palette-primary);
+    max-width: 920px;
 }
 .sap-firm-plate-label {
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;   /* ~12 % of the 12px overline — feels deliberate, not loose */
     opacity: 0.7;
 }
 .sap-firm-plate-row {
@@ -520,12 +564,73 @@ html, body {
 .sap-firm-plate-name {
     font-family: Georgia, 'Times New Roman', serif !important;
     font-weight: 400 !important;
-    line-height: 1.2;
+    line-height: 1.3;        /* Was 1.2; long firm names wrapped uncomfortably. */
     color: var(--mud-palette-text-primary);
+    /* Single-line truncation for long firm names. min-width:0 so the flex
+       parent allows shrinking below intrinsic content size. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 .sap-firm-plate-hint {
     margin-top: 4px;
     opacity: 0.7;
+}
+
+/* Empty-name plate state — replaces the bare "—" with a more directive
+   placeholder that says "click to add a name". */
+.sap-firm-plate-name.is-empty {
+    font-style: italic;
+    opacity: 0.65;
+}
+
+/* Reserve a constant row height for conditional inline messages (e.g. the
+   "Composition scheme requires a GSTIN" warning under the checkbox) so the
+   row doesn't jump when the message appears or disappears. */
+.sap-firm-cell-warning {
+    min-height: 20px;
+    line-height: 1.4;
+}
+
+/* Sticky action bar at the bottom of the form so Save / Continue stay
+   reachable without scrolling on tall pages. The translucent backdrop +
+   blur lets form content underneath remain visible during scroll. */
+.sap-firm-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    padding: 12px 8px;
+    margin: 0 -8px;
+}
+
+/* HelpHint icon styling. Hover cursor signals "context-tip" semantics; class
+   replaces the previous hard-coded 14px inline style so accessibility zoom
+   and any future theming pick it up. */
+.sap-help-hint-icon {
+    font-size: 0.875rem;       /* 14px at default root */
+    cursor: help;
+    vertical-align: middle;
+}
+
+/* Forced-colors mode (Windows High Contrast) — gradients / soft shadows
+   disappear in this mode by spec. Restore the plate's visible boundary with
+   a system-color border so the section still reads as distinct. */
+@media (forced-colors: active) {
+    .sap-firm-plate {
+        background: Canvas;
+        border: 2px solid CanvasText;
+        box-shadow: none;
+    }
+    .sap-step-card {
+        background: Canvas;
+        border: 1px solid CanvasText;
+        box-shadow: none !important;
+    }
 }
 
 /* ========== Onboarding ========== */

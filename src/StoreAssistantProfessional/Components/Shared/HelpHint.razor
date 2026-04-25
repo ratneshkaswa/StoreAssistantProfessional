@@ -1,5 +1,10 @@
+@* Sets `cursor: help` so hover signals "context-tip", not "click". The icon
+   styling is in app.css (.sap-help-hint-icon) so accessibility zoom and any
+   future theming pick it up — the previous inline style was a hard 14px. *@
 <MudTooltip Text="@Text" Placement="Placement.Right" Arrow="true">
-    <MudIcon Icon="@Icons.Material.Rounded.HelpOutline" Color="Color.Secondary" Style="font-size: 14px; cursor: help; vertical-align: middle;" />
+    <MudIcon Icon="@Icons.Material.Rounded.HelpOutline"
+             Color="Color.Secondary"
+             Class="sap-help-hint-icon" />
 </MudTooltip>
 
 @code {
