@@ -326,13 +326,70 @@
 
     private static async Task<string> NextBillNumberAsync(AppDbContext db, string kind)
     {
-        var firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
-        var basePrefix = firm?.InvoicePrefix ?? "INV";
-        var pad = firm?.InvoiceNumberPadding ?? "0000";
-        var prefix = Firm.BillKindPrefixes.TryGetValue(kind, out var fixedPrefix) ? fixedPrefix : basePrefix;
-        var n = await db.Bills.CountAsync(b => b.Kind == kind) + 1;
-        var formatted = n.ToString(pad);
-        return $"{prefix}-{formatted}";
+        // Quote / Proforma / DeliveryChallan / CashReceipt: fixed prefix,
+        // counted by kind. The user's Start # / NextInvoiceNumber configuration
+        // doesn't apply to these — they're system-numbered.
+        if (Firm.BillKindPrefixes.TryGetValue(kind, out var fixedPrefix))
+        {
+            var firmForPad = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
+            var sysPad = NormalizePadding(firmForPad?.InvoiceNumberPadding);
+            var sysN = await db.Bills.CountAsync(b => b.Kind == kind) + 1;
+            return $"{fixedPrefix}-{sysN.ToString(sysPad)}";
+        }
+
+        // TaxInvoice (and any future user-numbered kind): read+increment
+        // Firm.NextInvoiceNumber under tracking so SaveChangesAsync at the end
+        // of Confirm() commits the bill insert and the counter bump in the
+        // same transaction. Honours ResetInvoiceOnFyRollover by wrapping the
+        // counter back to InvoiceStartNumber when the most recent TaxInvoice
+        // was issued in a prior FY.
+        //
+        // Concurrency: two simultaneous Confirms (rare on a single-window
+        // POS, but possible via background tasks) can both read the same
+        // NextInvoiceNumber and the second's insert fails on Bills.Number's
+        // UNIQUE index. The outer catch surfaces the error and the user
+        // retries — acceptable trade-off for the rarity.
+        var firm = await db.Firms.FirstOrDefaultAsync()
+            ?? throw new InvalidOperationException("Firm is not configured. Complete onboarding first.");
+
+        var prefix = string.IsNullOrWhiteSpace(firm.InvoicePrefix) ? "INV" : firm.InvoicePrefix;
+        var pad = NormalizePadding(firm.InvoiceNumberPadding);
+
+        if (firm.ResetInvoiceOnFyRollover)
+        {
+            // FY range is computed in local time (the user's calendar);
+            // Bill.At is stored UTC. Convert the FY start to UTC for the
+            // comparison so an IST midnight rollover doesn't get charged
+            // to the wrong FY by the timezone offset.
+            var fyStartLocal = DateTime.SpecifyKind(
+                FinancialYear.Range(firm, DateTime.Now).start, DateTimeKind.Local);
+            var fyStartUtc = fyStartLocal.ToUniversalTime();
+
+            var mostRecent = await db.Bills
+                .Where(b => b.Kind == "TaxInvoice")
+                .OrderByDescending(b => b.At)
+                .Select(b => (DateTime?)b.At)
+                .FirstOrDefaultAsync();
+
+            if (mostRecent is null || mostRecent < fyStartUtc)
+                firm.NextInvoiceNumber = firm.InvoiceStartNumber <= 0 ? 1 : firm.InvoiceStartNumber;
+        }
+
+        var current = firm.NextInvoiceNumber <= 0 ? 1 : firm.NextInvoiceNumber;
+        firm.NextInvoiceNumber = current + 1;
+        return $"{prefix}-{current.ToString(pad)}";
+    }
+
+    // Defensive — `int.ToString(format)` interprets unknown specifiers as
+    // literals, so a stale row with `padding = "abc"` would produce bills
+    // numbered `INV-abc`. FirmVm restricts via dropdown so this rarely fires,
+    // but the cost of the check is one loop over 0–6 chars.
+    private static string NormalizePadding(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return "0000";
+        foreach (var c in raw)
+            if (c != '0') return "0000";
+        return raw;
     }
 
     private static string KindLabel(string kind) => kind switch
