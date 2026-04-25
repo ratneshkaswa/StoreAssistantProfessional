@@ -1,0 +1,101 @@
+@using StoreAssistantProfessional.Services
+
+@*
+   Two-column shell for onboarding pages — mirrors the FirstRun page so the
+   user feels they're still in the same flow after PINs. Hero on the left
+   (gradient + step icon + serif heading + progress strip + ghost decoration);
+   form on the right with a blocker line at top and the page's content below.
+*@
+<div class="sap-step-root @(WideForm ? "is-wide" : "")">
+    <h1 class="sap-visually-hidden">@HeroHeading — Setting up your shop</h1>
+    <MudGrid Spacing="0">
+        <MudItem xs="12" sm="@HeroSm" md="@HeroMd" Class="d-none d-sm-block">
+            <MudPaper Elevation="0" Square="true" Class="pa-8 sap-step-hero">
+                @if (!string.IsNullOrEmpty(DecoIcon))
+                {
+                    <MudIcon Icon="@DecoIcon" UserAttributes="@_ariaHidden" Class="sap-step-hero-deco" />
+                }
+                <MudStack AlignItems="AlignItems.Center" Spacing="4" Class="sap-step-hero-stack">
+                    <MudText Typo="Typo.overline" Align="Align.Center" Class="sap-step-hero-overline">
+                        STORE ASSISTANT PROFESSIONAL
+                    </MudText>
+
+                    @if (!string.IsNullOrEmpty(HeroIcon))
+                    {
+                        <MudIcon Icon="@HeroIcon" UserAttributes="@_ariaHidden" Class="sap-step-hero-icon" />
+                    }
+
+                    <MudText Typo="Typo.caption" Align="Align.Center" Class="sap-step-hero-caption">
+                        STEP @(((int)Current) + 1) OF 4
+                    </MudText>
+
+                    <MudText Typo="Typo.h4" Align="Align.Center" Class="sap-step-hero-heading">
+                        @HeroHeading
+                    </MudText>
+
+                    @if (!string.IsNullOrEmpty(NextHint))
+                    {
+                        <MudText Typo="Typo.body2" Align="Align.Center" Class="sap-step-hero-next">
+                            @NextHint
+                        </MudText>
+                    }
+
+                    <OnboardingProgress Current="Current" />
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="@FormSm" md="@FormMd" Class="sap-step-form-col">
+            <MudContainer MaxWidth="MaxWidth.False" Class="sap-step-form" role="form" aria-label="@HeroHeading">
+                <MudStack Spacing="3">
+                    @* Single-line "blocker / ready" indicator — the same EditNote ↔ CheckCircle
+                       pattern as FirstRun, so users get one place to look for "what's missing". *@
+                    <div class="sap-step-blocker">
+                        <div role="status" aria-live="polite" aria-atomic="true"
+                             class="sap-step-blocker-live @(BlockingReason is null ? "" : "is-warn")">
+                            @if (BlockingReason is not null)
+                            {
+                                <MudIcon Icon="@Icons.Material.Rounded.EditNote"
+                                         UserAttributes="@_ariaHidden"
+                                         Class="sap-step-blocker-icon" />
+                                <MudText Typo="Typo.body2" Class="sap-step-blocker-text">@BlockingReason</MudText>
+                            }
+                        </div>
+                        @if (BlockingReason is null && !string.IsNullOrEmpty(ReadyMessage))
+                        {
+                            <div class="sap-step-blocker-ready">
+                                <MudIcon Icon="@Icons.Material.Rounded.CheckCircle"
+                                         UserAttributes="@_ariaHidden"
+                                         Class="sap-step-blocker-icon" />
+                                <MudText Typo="Typo.body2" Class="sap-step-blocker-text">@ReadyMessage</MudText>
+                            </div>
+                        }
+                    </div>
+
+                    @ChildContent
+                </MudStack>
+            </MudContainer>
+        </MudItem>
+    </MudGrid>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public OnboardingStep Current { get; set; }
+    [Parameter] public string HeroIcon { get; set; } = "";
+    [Parameter] public string DecoIcon { get; set; } = "";
+    [Parameter] public string HeroHeading { get; set; } = "";
+    [Parameter] public string NextHint { get; set; } = "";
+    [Parameter] public string? BlockingReason { get; set; }
+    [Parameter] public string ReadyMessage { get; set; } = "Ready to continue.";
+    [Parameter] public bool WideForm { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private static readonly Dictionary<string, object> _ariaHidden = new() { ["aria-hidden"] = "true" };
+
+    // Single-form pages get a 50/50 split; master/detail pages get 33/67 so the
+    // two stacked cards inside the form column don't feel cramped.
+    private int HeroSm => 6;
+    private int HeroMd => WideForm ? 4 : 6;
+    private int FormSm => 6;
+    private int FormMd => WideForm ? 8 : 6;
+}

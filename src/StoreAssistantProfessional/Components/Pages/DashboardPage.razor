@@ -9,7 +9,7 @@
 <PageTitle>Dashboard — Store Assistant Professional</PageTitle>
 
 <MudStack Spacing="4">
-    <MudText Typo="Typo.h5">Welcome back, @(_firmName ?? Setup.Current?.StoreName ?? "your store")</MudText>
+    <MudText Typo="Typo.h5">Welcome back, @(_firmName ?? Setup.Current?.FirmName ?? "your firm")</MudText>
 
     @if (_settings.ShowEomWrapUp && _eom is not null)
     {

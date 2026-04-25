@@ -329,14 +329,7 @@
         var firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
         var basePrefix = firm?.InvoicePrefix ?? "INV";
         var pad = firm?.InvoiceNumberPadding ?? "0000";
-        var prefix = kind switch
-        {
-            "Quote" => "QT",
-            "Proforma" => "PF",
-            "DeliveryChallan" => "DC",
-            "CashReceipt" => "CR",
-            _ => basePrefix
-        };
+        var prefix = Firm.BillKindPrefixes.TryGetValue(kind, out var fixedPrefix) ? fixedPrefix : basePrefix;
         var n = await db.Bills.CountAsync(b => b.Kind == kind) + 1;
         var formatted = n.ToString(pad);
         return $"{prefix}-{formatted}";

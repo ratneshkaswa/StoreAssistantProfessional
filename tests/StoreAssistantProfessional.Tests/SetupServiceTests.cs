@@ -59,7 +59,7 @@ public class SetupServiceTests
     }
 
     [Fact]
-    public void Save_RejectsShortStoreName()
+    public void Save_RejectsShortFirmName()
     {
         using var dir = new TempDir();
         var session = new SessionService();

@@ -9,19 +9,17 @@
 
 <PageTitle>Products — Setup</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
-    <MudStack Spacing="4">
-        <MudStack Spacing="1">
-            <MudText Typo="Typo.h5">Setting up your shop · 3 of 4</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">
-                Add at least one product. You can edit prices, MRP, opening stock, and more later from Settings.
-            </MudText>
-            <OnboardingProgress Current="OnboardingStep.Products" />
-        </MudStack>
-
-        <MudGrid Spacing="3">
-            <MudItem xs="12" md="5">
-                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 540px;">
+<OnboardingShell Current="OnboardingStep.Products"
+                 HeroIcon="@Icons.Material.Rounded.Inventory2"
+                 DecoIcon="@Icons.Material.Rounded.Inventory2"
+                 HeroHeading="List your products"
+                 NextHint="Next: vendors and suppliers."
+                 BlockingReason="@BlockingReason"
+                 ReadyMessage="Catalogue started — click Next."
+                 WideForm="true">
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-4 sap-step-card" Style="min-height: 540px;">
                     <MudStack Spacing="3">
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                             <MudText Typo="Typo.h6">Products (@_products.Count)</MudText>
@@ -94,7 +92,7 @@
             </MudItem>
 
             <MudItem xs="12" md="7">
-                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08); min-height: 540px;">
+                <MudPaper Class="pa-4 sap-step-card" Style="min-height: 540px;">
                     <MudStack Spacing="3">
                         <MudText Typo="Typo.h6">@(_isNew ? "➕ Add product" : $"Edit · {_form.Name}")</MudText>
 
@@ -202,16 +200,15 @@
             </MudItem>
         </MudGrid>
 
-        <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
-            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Tax)))">‹ Back</MudButton>
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       Size="Size.Large"
-                       OnClick="GoNext"
-                       Disabled="@(_products.Count == 0)">Next ›</MudButton>
-        </MudStack>
+    <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+        <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Tax)))">‹ Back</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Size="Size.Large"
+                   OnClick="GoNext"
+                   Disabled="@(_products.Count == 0)">Next ›</MudButton>
     </MudStack>
-</MudContainer>
+</OnboardingShell>
 
 @code {
     private List<Product> _products = new();
@@ -224,6 +221,17 @@
     private bool _saving;
     private bool _loading = true;
     private string _search = "";
+
+    private string? BlockingReason
+    {
+        get
+        {
+            if (_loading) return null;
+            if (_taxes.Count == 0) return "Add a tax rate first (step 2).";
+            if (_products.Count == 0) return "Add at least one product to continue.";
+            return null;
+        }
+    }
 
     private bool SalePriceValid =>
         _form.SalePrice is > 0 &&

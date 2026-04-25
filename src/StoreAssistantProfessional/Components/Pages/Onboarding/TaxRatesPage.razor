@@ -9,19 +9,17 @@
 
 <PageTitle>Taxes — Setup</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
-    <MudStack Spacing="4">
-        <MudStack Spacing="1">
-            <MudText Typo="Typo.h5">Setting up your shop · 2 of 4</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">
-                Add at least one tax rate. Common GST slabs in India: 5%, 12%, 18%.
-            </MudText>
-            <OnboardingProgress Current="OnboardingStep.Tax" />
-        </MudStack>
-
-        <MudGrid Spacing="3">
-            <MudItem xs="12" md="5">
-                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 480px;">
+<OnboardingShell Current="OnboardingStep.Tax"
+                 HeroIcon="@Icons.Material.Rounded.ReceiptLong"
+                 DecoIcon="@Icons.Material.Rounded.ReceiptLong"
+                 HeroHeading="Set your tax rates"
+                 NextHint="Next: list your products."
+                 BlockingReason="@BlockingReason"
+                 ReadyMessage="Tax rates set — click Next."
+                 WideForm="true">
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-4 sap-step-card" Style="min-height: 480px;">
                     <MudStack Spacing="3">
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                             <MudText Typo="Typo.h6">Tax rates (@_taxes.Count)</MudText>
@@ -98,7 +96,7 @@
             </MudItem>
 
             <MudItem xs="12" md="7">
-                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08); min-height: 480px;">
+                <MudPaper Class="pa-4 sap-step-card" Style="min-height: 480px;">
                     <MudStack Spacing="3">
                         <MudText Typo="Typo.h6">@(_isNew ? "➕ Add tax rate" : $"Edit · {_form.Name}")</MudText>
 
@@ -209,16 +207,15 @@
             </MudItem>
         </MudGrid>
 
-        <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
-            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Firm)))">‹ Back</MudButton>
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       Size="Size.Large"
-                       OnClick="GoNext"
-                       Disabled="@(_taxes.Count == 0)">Next ›</MudButton>
-        </MudStack>
+    <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+        <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Firm)))">‹ Back</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Size="Size.Large"
+                   OnClick="GoNext"
+                   Disabled="@(_taxes.Count == 0)">Next ›</MudButton>
     </MudStack>
-</MudContainer>
+</OnboardingShell>
 
 @code {
     private List<TaxRate> _taxes = new();
@@ -239,6 +236,16 @@
         new("GST 28%", "GST 28%", 28m, "Taxable"),
         new("Exempt 0%", "Exempt", 0m, "Exempt"),
     ];
+
+    private string? BlockingReason
+    {
+        get
+        {
+            if (_loading) return null;
+            if (_taxes.Count == 0) return "Add at least one tax rate to continue.";
+            return null;
+        }
+    }
 
     private bool RateValid => _form.Rate >= 0 && _form.Rate <= 50 && CategoryRateConsistent;
     private bool CategoryRateConsistent =>

@@ -300,6 +300,152 @@ html, body {
     outline-offset: 2px;
 }
 
+/* ========== Onboarding shell — same warm two-column shape as the first-run page,
+   so the user feels they're still in the same flow after PINs. The hero column
+   anchors each step; the form column is intentionally narrower for single-form
+   pages (Firm) and wider for master/detail pages (Tax/Product/Vendor) via the
+   .is-wide modifier. */
+.sap-step-root { width: 100%; }
+
+.sap-step-root .mud-input-control,
+.sap-step-root .mud-input-control *,
+.sap-step-root .mud-button-root,
+.sap-step-root .mud-button-root *,
+.sap-step-root .mud-icon-button {
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
+}
+
+.sap-step-hero {
+    background: linear-gradient(315deg,
+                                var(--sap-hero-grad-start) 0%,
+                                var(--sap-hero-grad-mid) 45%,
+                                var(--sap-hero-grad-end) 100%);
+    color: var(--sap-hero-text);
+    min-height: 320px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center;
+}
+
+@media (min-width: 600px) {
+    .sap-step-hero {
+        min-height: 100vh;
+    }
+    .sap-step-form-col {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: safe center;
+    }
+}
+
+.sap-step-hero-deco {
+    position: absolute;
+    bottom: -60px;
+    right: -60px;
+    font-size: 320px !important;
+    opacity: 0.06;
+    pointer-events: none;
+}
+@media (max-height: 720px) {
+    .sap-step-hero-deco { display: none; }
+}
+
+.sap-step-hero-stack {
+    position: relative;
+    z-index: 1;
+    max-width: 460px;
+    padding: 0 24px;
+}
+
+.sap-step-hero-overline {
+    letter-spacing: 3px;
+    opacity: 0.85;
+}
+
+.sap-step-hero-icon {
+    font-size: 88px !important;
+    opacity: 0.9;
+}
+@media (max-height: 720px) {
+    .sap-step-hero-icon { font-size: 56px !important; }
+}
+
+.sap-step-hero-heading {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: 400;
+    line-height: 1.2;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    font-size: clamp(1.6rem, 1.4vw + 1rem, 2.4rem) !important;
+}
+
+.sap-step-hero-caption {
+    opacity: 0.75;
+    letter-spacing: 1px;
+}
+
+.sap-step-hero-next {
+    opacity: 0.85;
+    line-height: 1.5;
+}
+
+.sap-step-form-col {
+    background: var(--mud-palette-background);
+}
+
+.sap-step-form {
+    padding: 24px 16px !important;
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+/* Master/detail pages need more horizontal room than a single-form page. */
+.sap-step-root.is-wide .sap-step-form { max-width: 1080px; }
+
+/* Unified card style — single primary accent across all sections, replacing
+   the rainbow inline styles from the first pass. */
+.sap-step-card {
+    box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08) !important;
+}
+
+.sap-step-blocker {
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+.sap-step-blocker-live,
+.sap-step-blocker-ready {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+}
+.sap-step-blocker-live.is-warn .sap-step-blocker-icon,
+.sap-step-blocker-live.is-warn .sap-step-blocker-text {
+    color: var(--sap-warning-fg) !important;
+}
+.sap-step-blocker-ready .sap-step-blocker-icon,
+.sap-step-blocker-ready .sap-step-blocker-text {
+    color: var(--sap-success-fg) !important;
+}
+.sap-step-blocker-icon { font-size: 18px !important; }
+.sap-step-blocker-text { font-weight: 500 !important; }
+
+.sap-step-root .mud-input-outlined.mud-focused .mud-input-outlined-border {
+    border-width: 2px !important;
+}
+.sap-step-root .mud-button-root:focus-visible,
+.sap-step-root .mud-icon-button:focus-visible {
+    outline: 2px solid var(--mud-palette-primary) !important;
+    outline-offset: 2px;
+}
+
 /* ========== Onboarding ========== */
 .sap-list-row {
     padding: 8px 12px;
@@ -543,7 +689,7 @@ html, body {
 .sap-label-50  { width: 200px; }
 .sap-label-70  { width: 260px; }
 .sap-label-a4  { width: 180px; }
-.sap-label-store { font-size: 11px; font-weight: 600; }
+.sap-label-firm { font-size: 11px; font-weight: 600; }
 .sap-label-barcode { font-family: Consolas, monospace; letter-spacing: -1px; font-size: 18px; }
 .sap-label-code { font-family: Consolas, monospace; font-size: 10px; color: #666; }
 .sap-label-name { font-weight: 500; font-size: 12px; }

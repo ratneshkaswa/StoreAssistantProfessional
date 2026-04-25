@@ -6,7 +6,21 @@ public class Firm
 {
     public const int SingletonId = 1;
 
-    public static readonly string[] ReservedInvoicePrefixes = ["QT", "PF", "DC", "CR"];
+    // Single source of truth for system-assigned bill-kind prefixes. The user's
+    // configurable InvoicePrefix is for `Bill.Kind == "TaxInvoice"`; every other
+    // kind takes the fixed prefix below. Adding a new Bill.Kind means adding it
+    // here, and the user's prefix-picker will block the new code automatically.
+    public static readonly IReadOnlyDictionary<string, string> BillKindPrefixes =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Quote"] = "QT",
+            ["Proforma"] = "PF",
+            ["DeliveryChallan"] = "DC",
+            ["CashReceipt"] = "CR",
+        };
+
+    public static readonly IReadOnlyCollection<string> ReservedInvoicePrefixes =
+        BillKindPrefixes.Values.ToArray();
 
     [Key]
     public int Id { get; set; } = SingletonId;

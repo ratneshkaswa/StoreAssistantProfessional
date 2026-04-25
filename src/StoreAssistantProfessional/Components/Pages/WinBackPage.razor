@@ -22,7 +22,7 @@
         <MudStack Spacing="2">
             <MudText Typo="Typo.subtitle2">Message template</MudText>
             <MudTextField @bind-Value="_template" Variant="Variant.Outlined" Lines="3"
-                          HelperText="@($"Tokens: {{customer}} · {{store}} · {{lastVisit}} · {{days}}")" />
+                          HelperText="@($"Tokens: {{customer}} · {{firm}} · {{lastVisit}} · {{days}}")" />
             <MudText Typo="Typo.caption" Color="Color.Secondary">
                 "Send WhatsApp" opens a wa.me link in your browser with the message pre-filled — pick a contact and tap send.
             </MudText>
@@ -88,14 +88,14 @@
 
     private List<Row> _all = new();
     private int _days = 60;
-    private string _template = "Hi {customer}, we miss you at {store}! Your last visit was {lastVisit} ({days} days ago). Drop in for our latest arrivals.";
-    private string _storeName = "our store";
+    private string _template = "Hi {customer}, we miss you at {firm}! Your last visit was {lastVisit} ({days} days ago). Drop in for our latest arrivals.";
+    private string _firmName = "our firm";
 
     private List<Row> Filtered => _all.Where(r => r.DaysAgo >= _days).OrderByDescending(r => r.Lifetime).ToList();
 
     protected override async Task OnInitializedAsync()
     {
-        _storeName = Setup.Current?.StoreName ?? "our store";
+        _firmName = Setup.Current?.FirmName ?? "our firm";
 
         await using var db = await DbFactory.CreateDbContextAsync();
         var customers = await db.Customers.AsNoTracking().Where(c => c.IsActive).ToListAsync();
@@ -122,7 +122,7 @@
     {
         return _template
             .Replace("{customer}", r.Customer.Name)
-            .Replace("{store}", _storeName)
+            .Replace("{firm}", _firmName)
             .Replace("{lastVisit}", r.LastVisit?.ToLocalTime().ToString("dd MMM yyyy") ?? "—")
             .Replace("{days}", r.DaysAgo.ToString());
     }

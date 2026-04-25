@@ -102,13 +102,13 @@ else
                             }
                         </div>
 
-                        <MudPaper Elevation="1" Class="pa-4 sap-firstrun-card sap-firstrun-card-store">
+                        <MudPaper Elevation="1" Class="pa-4 sap-firstrun-card sap-firstrun-card-firm">
                             <MudStack Spacing="3">
-                                <MudText Typo="Typo.h6">Name your store</MudText>
-                                <MudTextField Value="_storeName"
-                                              ValueChanged="SetStoreName"
+                                <MudText Typo="Typo.h6">Name your firm</MudText>
+                                <MudTextField Value="_firmName"
+                                              ValueChanged="SetFirmName"
                                               T="string"
-                                              Label="Store name"
+                                              Label="Firm name"
                                               Variant="Variant.Outlined"
                                               Margin="Margin.Dense"
                                               MaxLength="100"
@@ -117,11 +117,11 @@ else
                                               Disabled="@FieldsLocked"
                                               HelperText="Shown on receipts and across the app."
                                               Adornment="Adornment.End"
-                                              AdornmentIcon="@(StoreNameValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
-                                              AdornmentColor="@(StoreNameValid ? Color.Success : Color.Default)"
-                                              UserAttributes="@StoreNameAttrs"
-                                              OnBlur="OnStoreNameBlur"
-                                              OnKeyDown="OnStoreNameKeyDown" />
+                                              AdornmentIcon="@(FirmNameValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                                              AdornmentColor="@(FirmNameValid ? Color.Success : Color.Default)"
+                                              UserAttributes="@FirmNameAttrs"
+                                              OnBlur="OnFirmNameBlur"
+                                              OnKeyDown="OnFirmNameKeyDown" />
                             </MudStack>
                         </MudPaper>
 
@@ -256,7 +256,7 @@ else
 }
 
 @code {
-    private string _storeName = "";
+    private string _firmName = "";
     private string _adminPin = "";
     private string _adminPinConfirm = "";
     private string _masterPin = "";
@@ -275,7 +275,7 @@ else
     private MudTextField<string>? _masterPinConfirmField;
 
     private Dictionary<string, object> AriaHidden = null!;
-    private Dictionary<string, object> StoreNameAttrs = null!;
+    private Dictionary<string, object> FirmNameAttrs = null!;
     private Dictionary<string, object> PinAttrs = null!;
     private Dictionary<string, object> BlockerAriaAttrs = null!;
     private Dictionary<string, object> ShowPinsAttrs = null!;
@@ -285,7 +285,7 @@ else
     protected override void OnInitialized()
     {
         AriaHidden = new Dictionary<string, object> { ["aria-hidden"] = "true" };
-        StoreNameAttrs = new Dictionary<string, object>
+        FirmNameAttrs = new Dictionary<string, object>
         {
             ["spellcheck"] = "false",
             ["autocomplete"] = "off",
@@ -311,8 +311,8 @@ else
     {
         get
         {
-            if (!StoreNameValid) return "Namaste";
-            return $"Namaste, {TruncateGraphemes(_storeName.Trim(), 12)}";
+            if (!FirmNameValid) return "Namaste";
+            return $"Namaste, {TruncateGraphemes(_firmName.Trim(), 12)}";
         }
     }
 
@@ -343,7 +343,7 @@ else
         _masterPin.Length == 6 && _adminPin.Length == 4 &&
         _masterPin.Contains(_adminPin, StringComparison.Ordinal);
 
-    private bool StoreNameValid => _storeName.Trim().Length >= SetupService.MinStoreNameLength;
+    private bool FirmNameValid => _firmName.Trim().Length >= SetupService.MinFirmNameLength;
     private bool AdminPinValid => _adminPin.Length == 4 && !PinRules.IsWeak(_adminPin);
     private bool AdminConfirmValid => _adminPinConfirm.Length == 4 && _adminPinConfirm == _adminPin;
     private bool MasterPinValid => _masterPin.Length == 6 && !PinRules.IsWeak(_masterPin) && !MasterContainsAdmin;
@@ -358,7 +358,7 @@ else
 
     private bool CanSubmit =>
         !FieldsLocked &&
-        StoreNameValid &&
+        FirmNameValid &&
         AdminPinValid &&
         _adminPinConfirm == _adminPin &&
         MasterPinValid &&
@@ -370,10 +370,10 @@ else
         {
             if (Setup.Status == SetupStatus.Inaccessible)
                 return "Local app data is not accessible — setup cannot be saved.";
-            if (!StoreNameValid)
-                return _storeName.Length == 0
-                    ? "Start by naming your store."
-                    : "Store name must be at least 2 characters.";
+            if (!FirmNameValid)
+                return _firmName.Length == 0
+                    ? "Start by naming your firm."
+                    : "Firm name must be at least 2 characters.";
             if (_adminPin.Length < 4) return "Set a 4-digit Admin PIN.";
             if (PinRules.IsWeak(_adminPin)) return "Admin PIN is too predictable — try something less obvious.";
             if (_adminPinConfirm.Length < 4) return "Re-enter the Admin PIN to confirm it.";
@@ -387,9 +387,9 @@ else
         }
     }
 
-    private void SetStoreName(string v)
+    private void SetFirmName(string v)
     {
-        _storeName = v ?? "";
+        _firmName = v ?? "";
     }
 
     private async Task SetAdminPin(string v)
@@ -470,15 +470,15 @@ else
 
     private void TogglePins() => _showPins = !_showPins;
 
-    private void OnStoreNameBlur()
+    private void OnFirmNameBlur()
     {
-        _storeName = _storeName.Trim();
+        _firmName = _firmName.Trim();
     }
 
-    private async Task OnStoreNameKeyDown(KeyboardEventArgs e)
+    private async Task OnFirmNameKeyDown(KeyboardEventArgs e)
     {
         if (e.Key != "Enter") return;
-        if (StoreNameValid && _adminPinField is not null)
+        if (FirmNameValid && _adminPinField is not null)
             await _adminPinField.FocusAsync();
     }
 
@@ -504,7 +504,7 @@ else
         {
             // Snapshot field values so a thread-pool Task.Run can't read mutated state
             // if anything (test, late event) changes them during PBKDF2.
-            var name = _storeName.Trim();
+            var name = _firmName.Trim();
             var admin = _adminPin;
             var master = _masterPin;
 

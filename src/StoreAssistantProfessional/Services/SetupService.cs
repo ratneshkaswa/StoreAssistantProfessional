@@ -20,7 +20,7 @@ public interface ISetupService
     SetupStatus Status { get; }
     bool IsComplete { get; }
     SetupData? Current { get; }
-    void Save(string storeName, string adminPin, string masterPin);
+    void Save(string firmName, string adminPin, string masterPin);
     bool VerifyAdmin(string? pin);
     bool VerifyMaster(string? pin);
 }
@@ -29,8 +29,8 @@ public sealed class SetupService : ISetupService
 {
     public const int AdminPinLength = 4;
     public const int MasterPinLength = 6;
-    public const int MinStoreNameLength = 2;
-    public const int MaxStoreNameLength = 100;
+    public const int MinFirmNameLength = 2;
+    public const int MaxFirmNameLength = 100;
     public const int CurrentSchemaVersion = 1;
 
     private const int SaltBytes = 16;
@@ -110,16 +110,16 @@ public sealed class SetupService : ISetupService
         get { lock (_lock) return _cached; }
     }
 
-    public void Save(string storeName, string adminPin, string masterPin)
+    public void Save(string firmName, string adminPin, string masterPin)
     {
         if (_path is null || _tmpPath is null || _bakPath is null)
             throw new IOException("Setup storage is not accessible on this machine.");
 
-        var name = (storeName ?? "").Trim();
-        if (name.Length is < MinStoreNameLength or > MaxStoreNameLength)
+        var name = (firmName ?? "").Trim();
+        if (name.Length is < MinFirmNameLength or > MaxFirmNameLength)
             throw new ArgumentException(
-                $"Store name must be {MinStoreNameLength}–{MaxStoreNameLength} characters.",
-                nameof(storeName));
+                $"Firm name must be {MinFirmNameLength}–{MaxFirmNameLength} characters.",
+                nameof(firmName));
 
         ValidatePin(adminPin, AdminPinLength, "Admin", nameof(adminPin));
         ValidatePin(masterPin, MasterPinLength, "Master", nameof(masterPin));
@@ -289,7 +289,7 @@ public sealed class SetupService : ISetupService
     {
         if (data is null) return false;
         if (data.SchemaVersion != CurrentSchemaVersion) return false;
-        if (string.IsNullOrWhiteSpace(data.StoreName)) return false;
+        if (string.IsNullOrWhiteSpace(data.FirmName)) return false;
         return TryDecodeBytes(data.AdminPinHash, HashBytes) &&
                TryDecodeBytes(data.AdminPinSalt, SaltBytes) &&
                TryDecodeBytes(data.MasterPinHash, HashBytes) &&
@@ -309,7 +309,8 @@ public sealed class SetupService : ISetupService
 }
 
 public sealed record SetupData(
-    [property: JsonPropertyName("storeName")] string StoreName,
+    // JSON name kept as "storeName" to read v1 setup.json files unchanged.
+    [property: JsonPropertyName("storeName")] string FirmName,
     [property: JsonPropertyName("adminPinHash")] string AdminPinHash,
     [property: JsonPropertyName("adminPinSalt")] string AdminPinSalt,
     [property: JsonPropertyName("masterPinHash")] string MasterPinHash,

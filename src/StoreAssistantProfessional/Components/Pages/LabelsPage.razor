@@ -67,7 +67,7 @@
                     else
                     {
                         <div class="@SampleClass()">
-                            <div class="sap-label-store">@(_storeName ?? "Acme Store")</div>
+                            <div class="sap-label-firm">@(_firmName ?? "Acme Firm")</div>
                             <div class="sap-label-barcode">@BarcodeBars(_product.Barcode ?? _product.Sku ?? _product.Name)</div>
                             <div class="sap-label-code">@(_product.Barcode ?? _product.Sku ?? "—")</div>
                             <div class="sap-label-name">@_product.Name</div>
@@ -104,11 +104,11 @@
     private bool _showMrp = true;
     private bool _showSalePrice = false;
     private bool _showCategory = false;
-    private string? _storeName;
+    private string? _firmName;
 
     protected override void OnInitialized()
     {
-        _storeName = Setup.Current?.StoreName;
+        _firmName = Setup.Current?.FirmName;
     }
 
     private async Task<IEnumerable<Product>> SearchProductsAsync(string text, CancellationToken ct)
@@ -169,7 +169,7 @@
         sb.Append(".lbl{display:inline-block;border:1px solid #ddd;padding:6px 8px;margin:4px;width:")
           .Append(_size switch { "40x25" => "180px", "70x40" => "260px", "a4-30" => "180px", _ => "200px" })
           .Append(";vertical-align:top;}");
-        sb.Append(".store{font-weight:600;font-size:11px;}");
+        sb.Append(".firm{font-weight:600;font-size:11px;}");
         sb.Append(".bar{font-family:Consolas,monospace;letter-spacing:-1px;font-size:18px;}");
         sb.Append(".code{font-family:Consolas,monospace;font-size:10px;}");
         sb.Append(".name{font-weight:500;font-size:12px;}");
@@ -181,7 +181,7 @@
         for (var i = 0; i < _quantity; i++)
         {
             sb.Append("<div class='lbl'>");
-            sb.Append("<div class='store'>").Append(System.Net.WebUtility.HtmlEncode(_storeName ?? "")).Append("</div>");
+            sb.Append("<div class='firm'>").Append(System.Net.WebUtility.HtmlEncode(_firmName ?? "")).Append("</div>");
             sb.Append("<div class='bar'>").Append(System.Net.WebUtility.HtmlEncode(BarcodeBars(_product!.Barcode ?? _product.Sku ?? _product.Name))).Append("</div>");
             sb.Append("<div class='code'>").Append(System.Net.WebUtility.HtmlEncode(_product.Barcode ?? _product.Sku ?? "")).Append("</div>");
             sb.Append("<div class='name'>").Append(System.Net.WebUtility.HtmlEncode(_product.Name)).Append("</div>");

@@ -8,25 +8,22 @@
 
 <PageTitle>Firm details — Setup</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="pa-6">
-    <MudStack Spacing="4">
-        <MudStack Spacing="1">
-            <MudText Typo="Typo.h5">Setting up your shop · 1 of 4</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">
-                This desktop is bound to one firm. Fill the details below to continue.
-            </MudText>
-            <OnboardingProgress Current="OnboardingStep.Firm" />
+<OnboardingShell Current="OnboardingStep.Firm"
+                 HeroIcon="@Icons.Material.Rounded.Storefront"
+                 DecoIcon="@Icons.Material.Rounded.Storefront"
+                 HeroHeading="Tell us about your firm"
+                 NextHint="Next: tax rates and slabs."
+                 BlockingReason="@BlockingReason"
+                 ReadyMessage="Ready for taxes — click Next.">
+    @if (_loading)
+    {
+        <MudStack AlignItems="AlignItems.Center" Class="pa-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
         </MudStack>
-
-        @if (_loading)
-        {
-            <MudStack AlignItems="AlignItems.Center" Class="pa-8">
-                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-            </MudStack>
-        }
-        else
-        {
-        <MudPaper Elevation="1" Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08);">
+    }
+    else
+    {
+        <MudPaper Elevation="1" Class="pa-5 sap-step-card">
             <MudStack Spacing="3">
                 <MudText Typo="Typo.h6">Identity</MudText>
                 <MudGrid Spacing="3">
@@ -84,7 +81,7 @@
             </MudStack>
         </MudPaper>
 
-        <MudPaper Elevation="1" Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudPaper Elevation="1" Class="pa-5 sap-step-card">
             <MudStack Spacing="3">
                 <MudText Typo="Typo.h6">Financial year</MudText>
                 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
@@ -113,7 +110,7 @@
             </MudStack>
         </MudPaper>
 
-        <MudPaper Elevation="1" Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-tertiary), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudPaper Elevation="1" Class="pa-5 sap-step-card">
             <MudStack Spacing="3">
                 <MudText Typo="Typo.h6">Contact &amp; address</MudText>
                 <MudGrid Spacing="3">
@@ -154,7 +151,7 @@
             </MudStack>
         </MudPaper>
 
-        <MudPaper Elevation="1" Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-info), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudPaper Elevation="1" Class="pa-5 sap-step-card">
             <MudStack Spacing="3">
                 <MudText Typo="Typo.h6">Bank (for receipts)</MudText>
                 <MudGrid Spacing="3">
@@ -173,7 +170,7 @@
             </MudStack>
         </MudPaper>
 
-        <MudPaper Elevation="1" Class="pa-5" Style="box-shadow: inset 4px 0 0 var(--mud-palette-warning), 0 2px 4px rgba(0,0,0,0.08);">
+        <MudPaper Elevation="1" Class="pa-5 sap-step-card">
             <MudStack Spacing="3">
                 <MudText Typo="Typo.h6">Invoice settings</MudText>
                 <MudGrid Spacing="3">
@@ -221,9 +218,8 @@
                 Next ›
             </MudButton>
         </MudStack>
-        }
-    </MudStack>
-</MudContainer>
+    }
+</OnboardingShell>
 
 @code {
     private FirmVm _firm = new();
@@ -237,6 +233,25 @@
         "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"
     ];
+
+    private string? BlockingReason
+    {
+        get
+        {
+            if (_loading) return null;
+            if (string.IsNullOrWhiteSpace(_firm.Name)) return "Enter your firm name.";
+            if (!IndianFormats.IsGstin(_firm.Gstin)) return "Fix the GSTIN format.";
+            if (!IndianFormats.IsPan(_firm.Pan)) return "Fix the PAN format.";
+            if (!IndianFormats.IsIndianPhone(_firm.Phone)) return "Fix the phone number.";
+            if (!IndianFormats.IsIndianPhone(_firm.AltPhone)) return "Fix the alt phone number.";
+            if (!IndianFormats.IsEmail(_firm.Email)) return "Fix the email format.";
+            if (!IndianFormats.IsPincode(_firm.Pincode)) return "Fix the pincode.";
+            if (!IndianFormats.IsIfsc(_firm.IfscCode)) return "Fix the IFSC code.";
+            if (!IndianFormats.IsInvoicePrefix(_firm.InvoicePrefix)) return "Invoice prefix: letters and digits only.";
+            if (!_savedAtLeastOnce) return "Click Save firm to continue.";
+            return null;
+        }
+    }
 
     private bool IsValid =>
         !string.IsNullOrWhiteSpace(_firm.Name) &&

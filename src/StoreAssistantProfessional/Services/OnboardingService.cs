@@ -30,7 +30,8 @@ public sealed class OnboardingService : IOnboardingService
     public async Task<OnboardingStep> CurrentStepAsync()
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
-        if (!await db.Firms.AnyAsync(f => !string.IsNullOrEmpty(f.Name))) return OnboardingStep.Firm;
+        // `Trim` keeps a whitespace-only Name from passing as a real firm.
+        if (!await db.Firms.AnyAsync(f => f.Name != null && f.Name.Trim() != "")) return OnboardingStep.Firm;
         if (!await db.TaxRates.AnyAsync(t => t.IsActive)) return OnboardingStep.Tax;
         if (!await db.Products.AnyAsync(p => p.IsActive)) return OnboardingStep.Products;
         if (!await db.Vendors.AnyAsync(v => v.IsActive)) return OnboardingStep.Vendor;

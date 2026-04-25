@@ -40,7 +40,7 @@
             <MudPaper Class="pa-3" Elevation="0" Style="background: var(--mud-palette-background-grey);">
                 <MudText Typo="Typo.caption" Color="Color.Secondary">Preview</MudText>
                 <MudText Typo="Typo.body2" Style="font-family: Consolas, monospace; white-space: pre-line;">
-🏪 @(_storeName) · @DateTime.Now.ToString("dd MMM")
+🏪 @(_firmName) · @DateTime.Now.ToString("dd MMM")
 Bills: 0   Sales: ₹0
 Refunds: ₹0   Cash diff: ₹0
 Top: —
@@ -66,12 +66,12 @@ Drawer: ₹0
     [Inject] private ISetupService Setup { get; set; } = default!;
     private AppSettings _settings = new();
     private bool _busy;
-    private string _storeName = "Acme Store";
+    private string _firmName = "Acme Firm";
 
     protected override async Task OnInitializedAsync()
     {
         _settings = await SettingsSvc.LoadAsync();
-        _storeName = Setup.Current?.StoreName ?? "Acme Store";
+        _firmName = Setup.Current?.FirmName ?? "Acme Firm";
     }
 
     private async Task Save()

@@ -9,17 +9,17 @@
 
 <PageTitle>Vendors — Setup</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="pa-6">
-    <MudStack Spacing="4">
-        <MudStack Spacing="1">
-            <MudText Typo="Typo.h5">Setting up your shop · 4 of 4</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">Add at least one vendor to continue.</MudText>
-            <OnboardingProgress Current="OnboardingStep.Vendor" />
-        </MudStack>
-
-        <MudGrid Spacing="3">
-            <MudItem xs="12" md="5">
-                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08); min-height: 520px;">
+<OnboardingShell Current="OnboardingStep.Vendor"
+                 HeroIcon="@Icons.Material.Rounded.Handshake"
+                 DecoIcon="@Icons.Material.Rounded.Handshake"
+                 HeroHeading="Add your suppliers"
+                 NextHint="Last step — almost done!"
+                 BlockingReason="@BlockingReason"
+                 ReadyMessage="Ready to finish — click Finish ✓."
+                 WideForm="true">
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-4 sap-step-card" Style="min-height: 520px;">
                     <MudStack Spacing="3">
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                             <MudText Typo="Typo.h6">Vendors (@_vendors.Count)</MudText>
@@ -83,7 +83,7 @@
             </MudItem>
 
             <MudItem xs="12" md="7">
-                <MudPaper Class="pa-4" Style="box-shadow: inset 4px 0 0 var(--mud-palette-secondary), 0 2px 4px rgba(0,0,0,0.08); min-height: 520px;">
+                <MudPaper Class="pa-4 sap-step-card" Style="min-height: 520px;">
                     <MudStack Spacing="3">
                         <MudText Typo="Typo.h6">@(_isNew ? "➕ Add vendor" : $"Edit · {_form.Name}")</MudText>
 
@@ -189,16 +189,15 @@
             </MudItem>
         </MudGrid>
 
-        <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
-            <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Products)))">‹ Back</MudButton>
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       Size="Size.Large"
-                       OnClick="Finish"
-                       Disabled="@(_vendors.Count == 0)">Finish ✓</MudButton>
-        </MudStack>
+    <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+        <MudButton Variant="Variant.Outlined" OnClick="@(() => Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Products)))">‹ Back</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Size="Size.Large"
+                   OnClick="Finish"
+                   Disabled="@(_vendors.Count == 0)">Finish ✓</MudButton>
     </MudStack>
-</MudContainer>
+</OnboardingShell>
 
 @code {
     private List<Vendor> _vendors = new();
@@ -210,6 +209,16 @@
     private bool _saving;
     private bool _loading = true;
     private string _search = "";
+
+    private string? BlockingReason
+    {
+        get
+        {
+            if (_loading) return null;
+            if (_vendors.Count == 0) return "Add at least one vendor to continue.";
+            return null;
+        }
+    }
 
     private bool IsValid =>
         !string.IsNullOrWhiteSpace(_form.Name) &&
