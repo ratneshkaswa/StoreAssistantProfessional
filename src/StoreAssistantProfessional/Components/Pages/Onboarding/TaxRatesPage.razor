@@ -12,39 +12,20 @@
 
 <PageTitle>Taxes — Setup</PageTitle>
 
-<OnboardingShell Current="OnboardingStep.Tax"
-                 HeroIcon="@Icons.Material.Rounded.ReceiptLong"
-                 DecoIcon="@Icons.Material.Rounded.ReceiptLong"
-                 HeroHeading="Set your tax rates"
-                 NextHint="Next: list your products."
-                 BlockingReason="@BlockingReason"
-                 ReadyMessage="Tax rates set — click Next."
-                 HideHero="true">
+<OnboardingShell Current="OnboardingStep.Tax" Bare="true">
 
-    @* Composition scheme toggle — moved here from the Firm step because it's
-       a tax-classification choice, not a firm-identity field. Persists to
-       Firm.IsCompositionScheme on toggle (immediate, no separate save).
-       Cross-validation: composition requires GST registration; the toggle
-       is disabled with a helper message when the firm is not GST-registered. *@
+    @* Composition scheme toggle — firm-level setting that lives here because
+       it drives tax behaviour. Disabled when the firm isn't GST-registered. *@
     <MudPaper Class="pa-3 mb-3" Outlined="true">
-        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                <MudSwitch T="bool"
-                           Value="_isCompositionScheme"
-                           ValueChanged="OnCompositionToggled"
-                           Color="Color.Primary"
-                           Disabled="@(!_firmHasGst || _savingComposition)">
-                    Firm is on Composition scheme
-                </MudSwitch>
-                <HelpHint Text="Composition firms issue 'Bill of Supply' (no tax broken out on receipts) and have a turnover cap. Toggle on only if registered." />
-            </MudStack>
-            @if (!_firmHasGst)
-            {
-                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                    Composition requires GST registration (set on the Firm step).
-                </MudText>
-            }
-            else if (_savingComposition)
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+            <MudSwitch T="bool"
+                       Value="_isCompositionScheme"
+                       ValueChanged="OnCompositionToggled"
+                       Color="Color.Primary"
+                       Disabled="@(!_firmHasGst || _savingComposition)">
+                Composition scheme
+            </MudSwitch>
+            @if (_savingComposition)
             {
                 <MudProgressCircular Size="Size.Small" Indeterminate="true" />
             }

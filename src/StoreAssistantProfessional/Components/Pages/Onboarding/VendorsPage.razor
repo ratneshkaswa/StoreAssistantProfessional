@@ -12,16 +12,9 @@
 
 <PageTitle>Vendors — Setup</PageTitle>
 
-<OnboardingShell Current="OnboardingStep.Vendor"
-                 HeroIcon="@Icons.Material.Rounded.Handshake"
-                 DecoIcon="@Icons.Material.Rounded.Handshake"
-                 HeroHeading="Add your suppliers"
-                 NextHint="Last step — almost done!"
-                 BlockingReason="@BlockingReason"
-                 ReadyMessage="Ready to finish — click Finish ✓."
-                 HideHero="true">
+<OnboardingShell Current="OnboardingStep.Vendor" Bare="true">
     <MudGrid Spacing="3">
-        <MudItem xs="12" md="5">
+        <MudItem xs="12" md="6">
             <MudPaper Class="pa-4 sap-step-card" Style="min-height: 520px;">
                     <MudStack Spacing="3">
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
@@ -92,7 +85,7 @@
                 </MudPaper>
             </MudItem>
 
-            <MudItem xs="12" md="7">
+            <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4 sap-step-card" Style="min-height: 520px;">
                     <MudStack Spacing="3">
                         <MudText Typo="Typo.h6">@(_isNew ? "➕ Add vendor" : $"Edit · {_form.Name}")</MudText>

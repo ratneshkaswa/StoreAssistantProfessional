@@ -6,9 +6,21 @@
    (gradient + step icon + serif heading + progress strip + ghost decoration);
    form on the right with a blocker line at top and the page's content below.
 *@
-<div class="sap-step-root @(HideHero ? "is-no-hero" : WideForm ? "is-wide" : "")">
+<div class="sap-step-root @(Bare ? "is-bare" : HideHero ? "is-no-hero" : WideForm ? "is-wide" : "")">
     <h1 class="sap-visually-hidden">Setting up your shop — step @(((int)Current) + 1) of 4</h1>
-    @if (HideHero)
+    @if (Bare)
+    {
+        @* Bare mode: just render the page's content. No slim header, no blocker
+           live region, no progress strip, no hero. Used by all four onboarding
+           pages so they look the same as the post-onboarding settings pages —
+           plain forms, no setup chrome. *@
+        <div class="sap-step-form-col">
+            <MudContainer MaxWidth="MaxWidth.False" Class="sap-step-form" aria-label="@HeroHeading">
+                @ChildContent
+            </MudContainer>
+        </div>
+    }
+    else if (HideHero)
     {
         @* Compact mode — no hero column. The form takes full width with a
            slim top header that still surfaces step / progress / next-hint. *@
@@ -146,6 +158,7 @@
     [Parameter] public string ReadyMessage { get; set; } = "Ready to continue.";
     [Parameter] public bool WideForm { get; set; }
     [Parameter] public bool HideHero { get; set; }
+    [Parameter] public bool Bare { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private static readonly Dictionary<string, object> _ariaHidden = new() { ["aria-hidden"] = "true" };

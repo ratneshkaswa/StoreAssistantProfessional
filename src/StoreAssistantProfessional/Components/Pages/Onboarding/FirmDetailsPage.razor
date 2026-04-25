@@ -1,10 +1,8 @@
 @page "/onboarding/firm"
-@using System.Text.Json
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.Logging
 @using StoreAssistantProfessional.Components.Shared
-@implements IAsyncDisposable
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject ISetupService Setup
 @inject IOnboardingService Onboarding
@@ -13,411 +11,262 @@
 @inject IDialogService DialogService
 @inject ILogger<FirmDetailsPage> Logger
 
-<PageTitle>@PageTitleText</PageTitle>
+<PageTitle>Firm</PageTitle>
 
+@* NavigationLock keeps the user from navigating away with unsaved changes —
+   functional, no visible chrome. *@
 <NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigation" />
 
-<OnboardingShell Current="OnboardingStep.Firm"
-                 HeroIcon="@Icons.Material.Rounded.Storefront"
-                 DecoIcon="@Icons.Material.Rounded.Storefront"
-                 HeroHeading="@HeroHeading"
-                 NextHint="Next: tax rates."
-                 BlockingReason="@BlockingReason"
-                 ReadyMessage="@ReadyMessage"
-                 HideHero="true">
-
+<OnboardingShell Current="OnboardingStep.Firm" Bare="true">
     @if (_loading)
     {
-        <div role="status" aria-live="polite" aria-atomic="true">
-            <MudStack AlignItems="AlignItems.Center" Class="pa-8">
-                <MudProgressCircular Color="Color.Primary" Indeterminate="true" aria-label="Loading firm details" />
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Loading firm details…</MudText>
-            </MudStack>
-        </div>
+        <MudStack AlignItems="AlignItems.Center" Class="pa-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </MudStack>
     }
     else if (_loadError is not null)
     {
         <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
-            Could not load firm details. @_loadError
+            @_loadError
             <MudButton Class="ml-2" Size="Size.Small" Variant="Variant.Text" OnClick="ReloadAsync">Retry</MudButton>
         </MudAlert>
     }
     else
     {
-        <div @onkeydown="OnPageKeyDown" class="sap-firm-page">
+        <div @onkeydown="OnPageKeyDown">
+            <MudStack Spacing="3">
 
-            <div class="sap-firm-plate">
-                <MudText Typo="Typo.overline" Class="sap-firm-plate-label">Firm</MudText>
-                @if (_isRenamingFirm)
-                {
-                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mt-1">
-                        <MudTextField @ref="_nameField"
-                                      @bind-Value="_firm.Name"
-                                      Label="Firm name"
-                                      Placeholder="@(_firmNameOriginal ?? "")"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      MaxLength="200"
-                                      Immediate="true"
-                                      Error="@IsRenamedNameInvalid"
-                                      ErrorText="@RenamedNameError"
-                                      UserAttributes="@_firmNameAttrs"
-                                      OnKeyDown="OnRenameKeyDown" />
-                        <MudButton Size="Size.Small" Variant="Variant.Text"
-                                   OnClick="CancelRenaming">Cancel</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
-                                   OnClick="DoneRenaming"
-                                   Disabled="@IsRenamedNameInvalid">Done</MudButton>
-                    </MudStack>
-                }
-                else
-                {
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="sap-firm-plate-row">
-                        @{
-                            var hasName = !string.IsNullOrWhiteSpace(_firm.Name);
-                        }
-                        <h2 class="@(hasName ? "sap-firm-plate-name" : "sap-firm-plate-name is-empty")"
-                            aria-label="@(hasName ? null : "Firm name not yet set")"
-                            style="margin: 0; font-size: 1.5rem;">
-                            @(hasName ? _firm.Name : "Click the pencil to name your firm")
-                        </h2>
-                        <MudTooltip Text="@PencilTooltip" Placement="Placement.Right">
-                            <MudIconButton @ref="_pencilButton"
-                                           Size="Size.Small" Icon="@Icons.Material.Rounded.Edit"
-                                           OnClick="StartRenaming"
-                                           aria-label="@PencilTooltip" />
-                        </MudTooltip>
-                    </MudStack>
-                    @if (_showSeedHint)
-                    {
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="sap-firm-plate-hint">
-                            From your initial setup. Click the pencil to rename.
-                        </MudText>
-                    }
-                }
-            </div>
-
-            <MudGrid Spacing="3">
-                @* Left column · Identity + Bank *@
-                <MudItem xs="12" md="6">
-                    @{
-                        var identityLocked = _locked || _saving;
-                    }
-                    <MudPaper Elevation="1" Class="pa-4 sap-step-card">
-                        <MudStack Spacing="3">
-                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                                    <MudIcon Icon="@Icons.Material.Rounded.Storefront" Color="Color.Primary" Size="Size.Small" />
-                                    <MudText Typo="Typo.h6">1 · Identity</MudText>
-                                </MudStack>
-                                @if (_locked)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">Locked</MudChip>
-                                }
-                            </MudStack>
-
-                            @* GST registration toggle. When OFF, the GSTIN field is
-                               hidden entirely and Normalize() blanks any previously-
-                               entered value on save so we don't keep ghost data the
-                               user can't see. PAN stays visible regardless because
-                               PAN is required by Income Tax for any business entity,
-                               not specifically GST registrants. *@
-                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                <MudPaper Class="pa-4">
+                    <MudStack Spacing="3">
+                        <MudText Typo="Typo.h6">Identity</MudText>
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_firm.Name"
+                                              Label="Firm name"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              MaxLength="200"
+                                              Immediate="true"
+                                              Error="@(_attempted && (string.IsNullOrWhiteSpace(_firm.Name) || _firm.Name.Trim().Length < 2))"
+                                              ErrorText="At least 2 characters."
+                                              UserAttributes="@_firmNameAttrs"
+                                              Disabled="@_saving" />
+                            </MudItem>
+                            <MudItem xs="12">
                                 <MudSwitch T="bool" @bind-Value="_firm.HasGstRegistration"
                                            Color="Color.Primary"
-                                           Disabled="@identityLocked">
+                                           Disabled="@(_locked || _saving)">
                                     GST registered
                                 </MudSwitch>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                    Turn on if your firm has a GSTIN.
-                                </MudText>
-                            </MudStack>
-
-                            <MudGrid Spacing="3">
-                                @if (_firm.HasGstRegistration)
-                                {
-                                    <MudItem xs="12" md="6">
-                                        <MudTextField Value="_firm.Gstin"
-                                                      ValueChanged="OnGstinChanged"
-                                                      T="string"
-                                                      Label="GSTIN"
-                                                      Variant="Variant.Outlined"
-                                                      Margin="Margin.Dense"
-                                                      MaxLength="15"
-                                                      Immediate="true"
-                                                      Error="@(_attempted && (string.IsNullOrWhiteSpace(_firm.Gstin) || !IndianFormats.IsGstin(_firm.Gstin) || !_firm.IsPanGstinConsistent))"
-                                                      ErrorText="@GstinError"
-                                                      HelperText="15 chars. State + PAN auto-fill from this."
-                                                      UserAttributes="@_acOff"
-                                                      Disabled="@identityLocked" />
-                                    </MudItem>
-                                    <MudItem xs="12" md="6">
-                                        <MudTextField Value="_firm.Pan"
-                                                      ValueChanged="OnPanChanged"
-                                                      T="string"
-                                                      Label="PAN"
-                                                      Variant="Variant.Outlined"
-                                                      Margin="Margin.Dense"
-                                                      MaxLength="10"
-                                                      Immediate="true"
-                                                      Error="@(_attempted && (!IndianFormats.IsPan(_firm.Pan) || !_firm.IsPanGstinConsistent))"
-                                                      ErrorText="@PanError"
-                                                      HelperText="Format: AAAAA9999A. Must match GSTIN positions 3–12."
-                                                      UserAttributes="@_acOff"
-                                                      Disabled="@identityLocked" />
-                                    </MudItem>
-                                }
-                                else
-                                {
-                                    <MudItem xs="12">
-                                        <MudTextField Value="_firm.Pan"
-                                                      ValueChanged="OnPanChanged"
-                                                      T="string"
-                                                      Label="PAN"
-                                                      Variant="Variant.Outlined"
-                                                      Margin="Margin.Dense"
-                                                      MaxLength="10"
-                                                      Immediate="true"
-                                                      Error="@(_attempted && !IndianFormats.IsPan(_firm.Pan))"
-                                                      ErrorText="Format: AAAAA9999A."
-                                                      HelperText="Permanent Account Number — issued by Income Tax, optional but recommended on receipts."
-                                                      UserAttributes="@_acOff"
-                                                      Disabled="@identityLocked" />
-                                    </MudItem>
-                                }
-                                <MudItem xs="12">
-                                    <MudAutocomplete T="(string Code, string Name)?"
-                                                     Value="_selectedState"
-                                                     ValueChanged="OnStateSelected"
-                                                     SearchFunc="SearchStatesAsync"
-                                                     ToStringFunc="@(s => s is null ? "" : $"{s.Value.Name} · {s.Value.Code}")"
-                                                     Label="State"
-                                                     Variant="Variant.Outlined"
-                                                     Margin="Margin.Dense"
-                                                     Clearable="true"
-                                                     Disabled="@identityLocked"
-                                                     ResetValueOnEmptyText="true"
-                                                     HelperText="Search by state name or code (e.g. 'Maharashtra' or '27')." />
-                                </MudItem>
-                                <MudItem xs="12">
-                                    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
-                                        <MudText Typo="Typo.body2">FY starts on</MudText>
-                                        <MudSelect T="int" Value="_firm.FyStartDay" ValueChanged="OnFyDayChanged"
-                                                   Label="Day"
-                                                   Variant="Variant.Outlined" Margin="Margin.Dense"
-                                                   Style="min-width: 5.6rem;"
-                                                   Disabled="@identityLocked">
-                                            @for (var d = 1; d <= DaysInFyMonth; d++)
-                                            {
-                                                var dd = d;
-                                                <MudSelectItem Value="dd">@dd</MudSelectItem>
-                                            }
-                                        </MudSelect>
-                                        <MudSelect T="int" Value="_firm.FyStartMonth" ValueChanged="OnFyMonthChanged"
-                                                   Label="Month"
-                                                   Variant="Variant.Outlined" Margin="Margin.Dense"
-                                                   Style="min-width: 9.4rem;"
-                                                   Disabled="@identityLocked">
-                                            @for (var m = 1; m <= 12; m++)
-                                            {
-                                                var mm = m;
-                                                <MudSelectItem Value="mm">@_monthNames[mm - 1]</MudSelectItem>
-                                            }
-                                        </MudSelect>
-                                    </MudStack>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                        @CurrentFyLabel
-                                    </MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                        Standard India FY = 1 April. Change only if your books follow a different cycle.
-                                    </MudText>
-                                </MudItem>
-                            </MudGrid>
-                        </MudStack>
-                    </MudPaper>
-
-                    <MudPaper Elevation="1" Class="pa-4 sap-step-card sap-firm-card-stacked">
-                        <MudStack Spacing="3">
-                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@Icons.Material.Rounded.AccountBalance" Color="Color.Primary" Size="Size.Small" />
-                                <MudText Typo="Typo.h6">3 · Bank</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">· for receipts</MudText>
-                            </MudStack>
-                            <MudGrid Spacing="3">
+                            </MudItem>
+                            @if (_firm.HasGstRegistration)
+                            {
                                 <MudItem xs="12" md="6">
-                                    <MudTextField @bind-Value="_firm.BankName" Label="Bank name"
-                                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200"
-                                                  UserAttributes="@_attrSpellCheckOff"
-                                                  Disabled="@_saving" />
-                                </MudItem>
-                                <MudItem xs="12" md="6">
-                                    <MudTextField @bind-Value="_firm.AccountHolderName" Label="Account holder name"
-                                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="100"
-                                                  UserAttributes="@_attrSpellCheckOff"
-                                                  Disabled="@_saving" />
-                                </MudItem>
-                                <MudItem xs="12" md="6">
-                                    <MudTextField @bind-Value="_firm.AccountNumber" Label="Account number"
-                                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="20"
-                                                  UserAttributes="@_acOff"
-                                                  Error="@(_attempted && BankInfoIncomplete && string.IsNullOrWhiteSpace(_firm.AccountNumber))"
-                                                  ErrorText="Required when other bank fields are filled."
-                                                  Disabled="@_saving" />
-                                </MudItem>
-                                <MudItem xs="12" md="6">
-                                    <MudTextField Value="_firm.IfscCode"
-                                                  ValueChanged="OnIfscChanged"
+                                    <MudTextField Value="_firm.Gstin"
+                                                  ValueChanged="OnGstinChanged"
                                                   T="string"
-                                                  Label="IFSC" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="11"
+                                                  Label="GSTIN"
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense"
+                                                  MaxLength="15"
                                                   Immediate="true"
-                                                  Error="@((_attempted && !IndianFormats.IsIfsc(_firm.IfscCode)) || (_attempted && BankInfoIncomplete && string.IsNullOrWhiteSpace(_firm.IfscCode)))"
-                                                  ErrorText="@IfscError"
-                                                  HelperText="Format: 4 letters + 0 + 6 alphanumeric."
-                                                  Disabled="@_saving" />
-                                </MudItem>
-                                <MudItem xs="12" md="6">
-                                    <MudTextField @bind-Value="_firm.BranchName" Label="Branch name"
-                                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200"
-                                                  UserAttributes="@_attrSpellCheckOff"
-                                                  Disabled="@_saving" />
-                                </MudItem>
-                                <MudItem xs="12" md="6">
-                                    <MudTextField @bind-Value="_firm.UpiId" Label="UPI ID"
-                                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="100"
+                                                  Error="@(_attempted && (string.IsNullOrWhiteSpace(_firm.Gstin) || !IndianFormats.IsGstin(_firm.Gstin) || !_firm.IsPanGstinConsistent))"
+                                                  ErrorText="@GstinError"
                                                   UserAttributes="@_acOff"
-                                                  Disabled="@_saving" />
-                                </MudItem>
-                            </MudGrid>
-                        </MudStack>
-                    </MudPaper>
-                </MudItem>
-
-                @* Right column · Contact + (no Invoice card — numbering is fixed) *@
-                <MudItem xs="12" md="6">
-                    <MudPaper Elevation="1" Class="pa-4 sap-step-card">
-                        <MudStack Spacing="3">
-                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                                <MudIcon Icon="@Icons.Material.Rounded.Phone" Color="Color.Primary" Size="Size.Small" />
-                                <MudText Typo="Typo.h6">2 · Contact &amp; address</MudText>
-                            </MudStack>
-                            <MudGrid Spacing="3">
-                                <MudItem xs="12" md="6">
-                                    <MudTextField @bind-Value="_firm.Phone"
-                                                  Label="Phone" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="20"
-                                                  Immediate="true" InputType="InputType.Telephone"
-                                                  Error="@(_attempted && !IndianFormats.IsIndianPhone(_firm.Phone))"
-                                                  ErrorText="10-digit mobile, optionally with +91."
-                                                  UserAttributes="@_acTel"
-                                                  Disabled="@_saving" />
+                                                  Disabled="@(_locked || _saving)" />
                                 </MudItem>
                                 <MudItem xs="12" md="6">
-                                    <MudTextField @bind-Value="_firm.Email"
-                                                  Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200"
-                                                  Immediate="true" InputType="InputType.Email"
-                                                  Error="@(_attempted && !IndianFormats.IsEmail(_firm.Email))"
-                                                  ErrorText="Invalid email format."
-                                                  UserAttributes="@_acEmail"
-                                                  Disabled="@_saving" />
-                                </MudItem>
-                                <MudItem xs="12">
-                                    <MudTextField @bind-Value="_firm.AddressLine1" Label="Address"
-                                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="300"
-                                                  HelperText="Building / street / area / landmark"
-                                                  UserAttributes="@_acAddress1Spellcheck"
-                                                  Disabled="@_saving" />
-                                </MudItem>
-                                <MudItem xs="12" md="8">
-                                    <MudTextField @bind-Value="_firm.City" Label="City" Variant="Variant.Outlined"
-                                                  Margin="Margin.Dense" MaxLength="100"
-                                                  UserAttributes="@_acCitySpellcheck"
-                                                  Disabled="@_saving" />
-                                </MudItem>
-                                <MudItem xs="12" md="4">
-                                    <MudTextField @bind-Value="_firm.Pincode"
-                                                  Label="Pincode" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="6"
+                                    <MudTextField Value="_firm.Pan"
+                                                  ValueChanged="OnPanChanged"
+                                                  T="string"
+                                                  Label="PAN"
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense"
+                                                  MaxLength="10"
                                                   Immediate="true"
-                                                  Error="@(_attempted && !IndianFormats.IsPincode(_firm.Pincode))"
-                                                  ErrorText="6 digits, can't start with 0."
-                                                  UserAttributes="@_acPostalNumeric"
-                                                  Disabled="@_saving" />
+                                                  Error="@(_attempted && (!IndianFormats.IsPan(_firm.Pan) || !_firm.IsPanGstinConsistent))"
+                                                  ErrorText="@PanError"
+                                                  UserAttributes="@_acOff"
+                                                  Disabled="@(_locked || _saving)" />
                                 </MudItem>
-                            </MudGrid>
-                        </MudStack>
-                    </MudPaper>
-
-                    @* Invoice numbering is fixed — DD-MMM-YY-NNN with a daily
-                       counter — so there's no card here. Surface the format
-                       so the user knows what their bill numbers will look
-                       like without configuration knobs. *@
-                    <MudPaper Elevation="0" Outlined="true" Class="pa-3 sap-firm-card-stacked">
-                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                            <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Color="Color.Default" Size="Size.Small" />
-                            <MudStack Spacing="0">
-                                <MudText Typo="Typo.body2">Invoice numbering: <strong>@SampleInvoiceFormat</strong></MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                    Date + daily counter. No configuration — every install uses the same format.
-                                </MudText>
-                            </MudStack>
-                        </MudStack>
-                    </MudPaper>
-                </MudItem>
-            </MudGrid>
-
-            <div class="sap-firm-actions">
-                <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd" AlignItems="AlignItems.Center">
-                    <MudStack Spacing="0" Class="mr-auto">
-                        @if (_isDirty)
-                        {
-                            <MudText Typo="Typo.caption" Color="Color.Warning">
-                                <MudIcon Icon="@Icons.Material.Rounded.EditNote" Size="Size.Small" Class="mr-1" />Unsaved changes
-                            </MudText>
-                        }
-                        else if (LastSavedLabel is not null)
-                        {
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                <MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Color="Color.Success" Size="Size.Small" Class="mr-1" />@LastSavedLabel
-                            </MudText>
-                        }
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">
-                            Ctrl+S to save · Ctrl+↩ to save &amp; continue
-                        </MudText>
+                            }
+                            else
+                            {
+                                <MudItem xs="12">
+                                    <MudTextField Value="_firm.Pan"
+                                                  ValueChanged="OnPanChanged"
+                                                  T="string"
+                                                  Label="PAN"
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense"
+                                                  MaxLength="10"
+                                                  Immediate="true"
+                                                  Error="@(_attempted && !IndianFormats.IsPan(_firm.Pan))"
+                                                  ErrorText="Format: AAAAA9999A."
+                                                  UserAttributes="@_acOff"
+                                                  Disabled="@(_locked || _saving)" />
+                                </MudItem>
+                            }
+                            <MudItem xs="12">
+                                <MudAutocomplete T="(string Code, string Name)?"
+                                                 Value="_selectedState"
+                                                 ValueChanged="OnStateSelected"
+                                                 SearchFunc="SearchStatesAsync"
+                                                 ToStringFunc="@(s => s is null ? "" : $"{s.Value.Name} · {s.Value.Code}")"
+                                                 Label="State"
+                                                 Variant="Variant.Outlined"
+                                                 Margin="Margin.Dense"
+                                                 Clearable="true"
+                                                 Disabled="@(_locked || _saving)"
+                                                 ResetValueOnEmptyText="true" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                                    <MudText Typo="Typo.body2">FY starts on</MudText>
+                                    <MudSelect T="int" Value="_firm.FyStartDay" ValueChanged="OnFyDayChanged"
+                                               Label="Day"
+                                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                                               Style="min-width: 5.6rem;"
+                                               Disabled="@(_locked || _saving)">
+                                        @for (var d = 1; d <= DaysInFyMonth; d++)
+                                        {
+                                            var dd = d;
+                                            <MudSelectItem Value="dd">@dd</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    <MudSelect T="int" Value="_firm.FyStartMonth" ValueChanged="OnFyMonthChanged"
+                                               Label="Month"
+                                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                                               Style="min-width: 9.4rem;"
+                                               Disabled="@(_locked || _saving)">
+                                        @for (var m = 1; m <= 12; m++)
+                                        {
+                                            var mm = m;
+                                            <MudSelectItem Value="mm">@_monthNames[mm - 1]</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@CurrentFyLabel</MudText>
+                                </MudStack>
+                            </MudItem>
+                        </MudGrid>
                     </MudStack>
+                </MudPaper>
+
+                <MudPaper Class="pa-4">
+                    <MudStack Spacing="3">
+                        <MudText Typo="Typo.h6">Contact &amp; address</MudText>
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_firm.Phone"
+                                              Label="Phone" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="20"
+                                              Immediate="true" InputType="InputType.Telephone"
+                                              Error="@(_attempted && !IndianFormats.IsIndianPhone(_firm.Phone))"
+                                              ErrorText="10-digit mobile, optionally with +91."
+                                              UserAttributes="@_acTel"
+                                              Disabled="@_saving" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_firm.Email"
+                                              Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200"
+                                              Immediate="true" InputType="InputType.Email"
+                                              Error="@(_attempted && !IndianFormats.IsEmail(_firm.Email))"
+                                              ErrorText="Invalid email format."
+                                              UserAttributes="@_acEmail"
+                                              Disabled="@_saving" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_firm.AddressLine1" Label="Address"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="300"
+                                              UserAttributes="@_acAddress1Spellcheck"
+                                              Disabled="@_saving" />
+                            </MudItem>
+                            <MudItem xs="12" md="8">
+                                <MudTextField @bind-Value="_firm.City" Label="City" Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" MaxLength="100"
+                                              UserAttributes="@_acCitySpellcheck"
+                                              Disabled="@_saving" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_firm.Pincode"
+                                              Label="Pincode" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="6"
+                                              Immediate="true"
+                                              Error="@(_attempted && !IndianFormats.IsPincode(_firm.Pincode))"
+                                              ErrorText="6 digits, can't start with 0."
+                                              UserAttributes="@_acPostalNumeric"
+                                              Disabled="@_saving" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudStack>
+                </MudPaper>
+
+                <MudPaper Class="pa-4">
+                    <MudStack Spacing="3">
+                        <MudText Typo="Typo.h6">Bank</MudText>
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_firm.BankName" Label="Bank name"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200"
+                                              UserAttributes="@_attrSpellCheckOff"
+                                              Disabled="@_saving" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_firm.AccountHolderName" Label="Account holder name"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="100"
+                                              UserAttributes="@_attrSpellCheckOff"
+                                              Disabled="@_saving" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_firm.AccountNumber" Label="Account number"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="20"
+                                              UserAttributes="@_acOff"
+                                              Error="@(_attempted && BankInfoIncomplete && string.IsNullOrWhiteSpace(_firm.AccountNumber))"
+                                              ErrorText="Required when other bank fields are filled."
+                                              Disabled="@_saving" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField Value="_firm.IfscCode"
+                                              ValueChanged="OnIfscChanged"
+                                              T="string"
+                                              Label="IFSC" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="11"
+                                              Immediate="true"
+                                              Error="@((_attempted && !IndianFormats.IsIfsc(_firm.IfscCode)) || (_attempted && BankInfoIncomplete && string.IsNullOrWhiteSpace(_firm.IfscCode)))"
+                                              ErrorText="@IfscError"
+                                              Disabled="@_saving" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_firm.BranchName" Label="Branch name"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200"
+                                              UserAttributes="@_attrSpellCheckOff"
+                                              Disabled="@_saving" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_firm.UpiId" Label="UPI ID"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="100"
+                                              UserAttributes="@_acOff"
+                                              Disabled="@_saving" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudStack>
+                </MudPaper>
+
+                <MudStack Row="true" Justify="Justify.FlexEnd">
                     <MudButton OnClick="SaveAsync"
-                               Variant="Variant.Outlined"
-                               Color="Color.Primary"
-                               Size="Size.Large"
-                               StartIcon="@Icons.Material.Rounded.Save"
-                               Style="min-width: 160px;"
-                               Disabled="@(_saving || !_firm.IsValid || !_isDirty)">
-                        @if (_saving && !_continueAfterSave)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                            <span>Saving…</span>
-                        }
-                        else
-                        {
-                            <span>@SaveLabel</span>
-                        }
-                    </MudButton>
-                    <MudButton OnClick="SaveAndContinueAsync"
                                Variant="Variant.Filled"
                                Color="Color.Primary"
                                Size="Size.Large"
-                               EndIcon="@Icons.Material.Rounded.ArrowForward"
-                               Style="min-width: 200px;"
-                               Disabled="@(!CanContinue)">
-                        @if (_saving && _continueAfterSave)
+                               Disabled="@(_saving || !_firm.IsValid)">
+                        @if (_saving)
                         {
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
                             <span>Saving…</span>
                         }
                         else
                         {
-                            <span>Continue</span>
+                            <span>Save</span>
                         }
                     </MudButton>
                 </MudStack>
-            </div>
+            </MudStack>
         </div>
     }
 </OnboardingShell>
@@ -426,41 +275,16 @@
     private FirmVm _firm = new();
     private bool _attempted;
     private bool _saving;
-    private bool _continueAfterSave;
-    private bool _savedAtLeastOnce;
     private bool _loading = true;
     private bool _locked;
     private string? _loadError;
-    private bool _focusOnNextRender;
-    private bool _isRenamingFirm;
-    private string? _firmNameOriginal;
-    private string _seedFirmName = "";
-    private MudTextField<string>? _nameField;
-    private MudIconButton? _pencilButton;
-    private DateTime? _lastSavedAt;
     private int _loadedFyStartDay;
     private int _loadedFyStartMonth;
 
+    // Snapshot of saved state for the unsaved-changes nav guard. Compared
+    // against a fresh serialise on each navigation attempt; no visible
+    // dirty/saved chrome on the page itself.
     private string _savedSnapshot = "";
-
-    private bool _focusPencilOnNextRender;
-    private bool _gstinAutoFillToastShown;
-    private CancellationTokenSource? _refreshCts;
-
-    private string HeroHeading => _locked ? "Firm details" : "Set up your firm";
-
-    private string PageTitleText =>
-        string.IsNullOrWhiteSpace(_firm.Name)
-            ? "Firm details — Setup"
-            : $"{_firm.Name} · Firm details";
-
-    private string PencilTooltip =>
-        string.IsNullOrWhiteSpace(_firm.Name) ? "Add firm name" : "Rename firm";
-
-    private bool _showSeedHint =>
-        !_savedAtLeastOnce
-        && !string.IsNullOrWhiteSpace(_seedFirmName)
-        && _firm.Name == _seedFirmName;
 
     private static readonly string[] _monthNames =
     [
@@ -492,33 +316,11 @@
 
     private string CurrentFyLabel => _firm.GetFyForToday(DateTime.Today).Label;
 
-    // Sample of what bill numbers will look like under the fixed format.
-    // Recomputed from "today" so the user sees a realistic preview.
-    private static string SampleInvoiceFormat =>
-        $"{DateTime.Today:dd-MMM-yy}-001";
-
-    private bool _isDirty => _savedAtLeastOnce && CurrentSnapshot() != _savedSnapshot;
-
-    private bool CanContinue =>
-        !_saving && _firm.IsValid;
-
-    private string SaveLabel => _savedAtLeastOnce ? "Save changes" : "Save firm";
-
-    private string ReadyMessage
-    {
-        get
-        {
-            if (!_savedAtLeastOnce) return "Ready to save.";
-            if (_isDirty) return "You have unsaved changes — click Save changes.";
-            return "Firm saved — click Continue.";
-        }
-    }
-
     private string GstinError
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(_firm.Gstin)) return "GSTIN is required when GST is on.";
+            if (string.IsNullOrWhiteSpace(_firm.Gstin)) return "GSTIN is required.";
             if (!IndianFormats.IsGstin(_firm.Gstin)) return "Invalid GSTIN format.";
             if (!_firm.IsPanGstinConsistent) return "GSTIN positions 3–12 must equal PAN.";
             return "";
@@ -548,61 +350,12 @@
 
     private bool BankInfoIncomplete => !_firm.IsBankInfoConsistent;
 
-    private bool IsRenamedNameInvalid =>
-        string.IsNullOrWhiteSpace(_firm.Name) || _firm.Name.Trim().Length is < 2 or > 200;
-
-    private string RenamedNameError =>
-        string.IsNullOrWhiteSpace(_firm.Name) ? "Firm name is required."
-        : _firm.Name.Trim().Length < 2 ? "At least 2 characters."
-        : _firm.Name.Trim().Length > 200 ? "At most 200 characters."
-        : "";
-
-    private string? BlockingReason
-    {
-        get
-        {
-            if (_loading) return null;
-            if (string.IsNullOrWhiteSpace(_firm.Name)) return "Firm name is required.";
-            if (_attempted)
-            {
-                if (_firm.HasGstRegistration && string.IsNullOrWhiteSpace(_firm.Gstin))
-                    return "GSTIN is required when GST is on.";
-                if (_firm.HasGstRegistration && !IndianFormats.IsGstin(_firm.Gstin))
-                    return "Invalid GSTIN format.";
-                if (!IndianFormats.IsPan(_firm.Pan)) return "PAN format: AAAAA9999A.";
-                if (!_firm.IsPanGstinConsistent) return "PAN must match GSTIN positions 3–12.";
-                if (!IndianFormats.IsIndianPhone(_firm.Phone))
-                    return "Phone: 10-digit mobile, optionally with +91.";
-                if (!IndianFormats.IsEmail(_firm.Email)) return "Invalid email format.";
-                if (!IndianFormats.IsPincode(_firm.Pincode)) return "Pincode: 6 digits, can't start with 0.";
-                if (!IndianFormats.IsIfsc(_firm.IfscCode)) return "IFSC: 4 letters + 0 + 6 alphanumeric.";
-            }
-            if (BankInfoIncomplete) return "Bank: Account number and IFSC are required together (or leave both blank).";
-            return null;
-        }
-    }
+    private bool IsDirty => CurrentSnapshot() != _savedSnapshot;
 
     protected override async Task OnInitializedAsync()
     {
         if (!Setup.IsComplete) { Nav.NavigateTo("/setup", replace: true); return; }
         await LoadAsync();
-        StartLastSavedRefresh();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_focusOnNextRender && _nameField is not null)
-        {
-            _focusOnNextRender = false;
-            try { await _nameField.FocusAsync(); }
-            catch { /* WebView2 timing — focus is best-effort */ }
-        }
-        if (_focusPencilOnNextRender && _pencilButton is not null)
-        {
-            _focusPencilOnNextRender = false;
-            try { await Task.Yield(); }
-            catch { }
-        }
     }
 
     private async Task LoadAsync()
@@ -616,14 +369,11 @@
             if (existing is not null)
             {
                 _firm = FirmVm.From(existing);
-                if (!string.IsNullOrWhiteSpace(_firm.Name)) _savedAtLeastOnce = true;
             }
             else if (!string.IsNullOrWhiteSpace(Setup.Current?.FirmName))
             {
                 _firm.Name = Setup.Current.FirmName;
-                _seedFirmName = _firm.Name;
             }
-            _firmNameOriginal = _firm.Name;
             _loadedFyStartDay = _firm.FyStartDay;
             _loadedFyStartMonth = _firm.FyStartMonth;
             _locked = await db.Bills.AsNoTracking().AnyAsync();
@@ -633,125 +383,33 @@
             {
                 _selectedState = _stateOptionsAlpha.FirstOrDefault(s => s.Code == _firm.StateCode);
             }
-
             _savedSnapshot = CurrentSnapshot();
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Failed to load firm details");
-            _loadError = ex.Message;
+            _loadError = "Could not load firm details.";
         }
         finally
         {
             _loading = false;
-            _focusOnNextRender = false;
-        }
-    }
-
-    private void StartLastSavedRefresh()
-    {
-        _refreshCts?.Cancel();
-        _refreshCts?.Dispose();
-        var cts = new CancellationTokenSource();
-        _refreshCts = cts;
-        _ = RunRefreshLoopAsync(cts.Token);
-    }
-
-    private async Task RunRefreshLoopAsync(CancellationToken token)
-    {
-        try
-        {
-            while (!token.IsCancellationRequested)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(30), token);
-                if (_lastSavedAt is not null)
-                {
-                    await InvokeAsync(StateHasChanged);
-                }
-            }
-        }
-        catch (OperationCanceledException) { /* expected on disposal */ }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        _refreshCts?.Cancel();
-        _refreshCts?.Dispose();
-        await ValueTask.CompletedTask;
-    }
-
-    private string CurrentSnapshot() => JsonSerializer.Serialize(_firm);
-
-    private string? LastSavedLabel
-    {
-        get
-        {
-            if (_lastSavedAt is null) return null;
-            var now = DateTime.UtcNow;
-            var ago = now - _lastSavedAt.Value;
-            if (ago.TotalSeconds < 5) return "Saved just now";
-            if (ago.TotalMinutes < 1) return $"Saved {(int)ago.TotalSeconds}s ago";
-            if (ago.TotalMinutes < 60) return $"Saved {(int)ago.TotalMinutes}m ago";
-            var local = _lastSavedAt.Value.ToLocalTime();
-            return ago.TotalHours < 24
-                ? $"Saved at {local:HH:mm}"
-                : $"Saved on {local:dd MMM} at {local:HH:mm}";
         }
     }
 
     private Task ReloadAsync() => LoadAsync();
 
-    private void StartRenaming()
-    {
-        _firmNameOriginal = _firm.Name;
-        _isRenamingFirm = true;
-        _focusOnNextRender = true;
-    }
-
-    private void DoneRenaming()
-    {
-        if (IsRenamedNameInvalid) return;
-        _firm.Name = _firm.Name.Trim();
-        _firmNameOriginal = _firm.Name;
-        _isRenamingFirm = false;
-        _focusPencilOnNextRender = true;
-    }
-
-    private void CancelRenaming()
-    {
-        _firm.Name = _firmNameOriginal ?? "";
-        _isRenamingFirm = false;
-        _focusPencilOnNextRender = true;
-    }
-
-    private async Task OnRenameKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter" && !IsRenamedNameInvalid)
-        {
-            DoneRenaming();
-        }
-        else if (e.Key == "Escape")
-        {
-            CancelRenaming();
-        }
-        await Task.CompletedTask;
-    }
+    private string CurrentSnapshot() =>
+        System.Text.Json.JsonSerializer.Serialize(_firm);
 
     private void OnGstinChanged(string? v)
     {
         _firm.Gstin = string.IsNullOrEmpty(v) ? v : v.ToUpperInvariant();
-
         var code = IndianFormats.StateCodeFromGstin(_firm.Gstin);
-        var stateChanged = false;
         if (code is not null)
         {
-            if (_firm.StateCode != code)
-            {
-                _firm.StateCode = code;
-                _firm.StateName = IndianFormats.StateNameFromCode(code);
-                _selectedState = _stateOptionsAlpha.FirstOrDefault(s => s.Code == code);
-                stateChanged = true;
-            }
+            _firm.StateCode = code;
+            _firm.StateName = IndianFormats.StateNameFromCode(code);
+            _selectedState = _stateOptionsAlpha.FirstOrDefault(s => s.Code == code);
         }
         else if (string.IsNullOrWhiteSpace(_firm.Gstin))
         {
@@ -759,20 +417,10 @@
             _firm.StateName = null;
             _selectedState = null;
         }
-
         var derivedPan = IndianFormats.PanFromGstin(_firm.Gstin);
-        var panFilled = false;
         if (derivedPan is not null && string.IsNullOrWhiteSpace(_firm.Pan))
         {
             _firm.Pan = derivedPan;
-            panFilled = true;
-        }
-
-        if (!_gstinAutoFillToastShown && (stateChanged || panFilled))
-        {
-            _gstinAutoFillToastShown = true;
-            Snackbar.Add("State and PAN derived from GSTIN — change them if needed.",
-                Severity.Info, c => c.VisibleStateDuration = 4000);
         }
     }
 
@@ -819,49 +467,21 @@
 
     private async Task OnPageKeyDown(KeyboardEventArgs e)
     {
-        if (e.CtrlKey && (e.Key is "s" or "S" || e.Key == "Enter"))
-        {
-            if (_isRenamingFirm)
-            {
-                Snackbar.Add("Finish renaming first (press Enter to confirm or Escape to cancel).",
-                    Severity.Info, c => c.VisibleStateDuration = 3000);
-                return;
-            }
-        }
+        // Ctrl+S — invisible keyboard shortcut, no on-page hint.
         if (e.CtrlKey && e.Key is "s" or "S")
         {
             if (_saving) return;
-            if (!_firm.IsValid)
-            {
-                Snackbar.Add(BlockingReason ?? "Form has errors — fix them and try again.", Severity.Warning);
-                _attempted = true;
-                return;
-            }
+            if (!_firm.IsValid) { _attempted = true; return; }
             await SaveAsync();
-        }
-        else if (e.CtrlKey && e.Key == "Enter")
-        {
-            if (_saving) return;
-            if (!_firm.IsValid)
-            {
-                Snackbar.Add(BlockingReason ?? "Form has errors — fix them and try again.", Severity.Warning);
-                _attempted = true;
-                return;
-            }
-            await SaveAndContinueAsync();
         }
     }
 
-    private Task SaveAsync() => SaveCoreAsync(continueAfter: false);
-
-    private Task SaveAndContinueAsync() => SaveCoreAsync(continueAfter: true);
-
-    private async Task SaveCoreAsync(bool continueAfter)
+    private async Task SaveAsync()
     {
         _attempted = true;
         if (!_firm.IsValid) return;
 
-        if (_savedAtLeastOnce && _locked &&
+        if (_locked &&
             (_firm.FyStartDay != _loadedFyStartDay || _firm.FyStartMonth != _loadedFyStartMonth))
         {
             var confirmed = await DialogService.ShowMessageBoxAsync(
@@ -872,14 +492,7 @@
             if (confirmed != true) return;
         }
 
-        if (continueAfter && _savedAtLeastOnce && !_isDirty)
-        {
-            Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Tax));
-            return;
-        }
-
         _saving = true;
-        _continueAfterSave = continueAfter;
         try
         {
             _firm.Normalize();
@@ -904,59 +517,37 @@
             }
             await db.SaveChangesAsync();
 
-            _savedAtLeastOnce = true;
             _attempted = false;
-            _lastSavedAt = DateTime.UtcNow;
-            _savedSnapshot = CurrentSnapshot();
             _loadedFyStartDay = _firm.FyStartDay;
             _loadedFyStartMonth = _firm.FyStartMonth;
-            Snackbar.Add("Firm saved.", Severity.Success, c => c.VisibleStateDuration = 3000);
+            _savedSnapshot = CurrentSnapshot();
+            Snackbar.Add("Saved.", Severity.Success, c => c.VisibleStateDuration = 2000);
 
-            if (continueAfter)
-            {
-                Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Tax));
-            }
-        }
-        catch (DbUpdateException ex)
-        {
-            Logger.LogError(ex, "Failed to save firm (DB)");
-            Snackbar.Add($"Could not save: {ex.InnerException?.Message ?? ex.Message}", Severity.Error,
-                c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 8000; });
-        }
-        catch (IOException ex)
-        {
-            Logger.LogError(ex, "Failed to save firm (IO)");
-            Snackbar.Add($"Disk error: {ex.Message}", Severity.Error,
-                c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 8000; });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            Logger.LogError(ex, "Failed to save firm (permissions)");
-            Snackbar.Add($"Permission denied: {ex.Message}", Severity.Error,
-                c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 8000; });
+            // Route via Home: it picks the next onboarding step (or /billing if
+            // onboarding is complete) — no Continue button needed on the page.
+            Nav.NavigateTo("/", replace: true);
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Failed to save firm");
-            Snackbar.Add("Could not save firm details. Please try again.", Severity.Error,
-                c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 8000; });
+            Snackbar.Add("Could not save. Please try again.", Severity.Error,
+                c => { c.ShowCloseIcon = true; c.VisibleStateDuration = 6000; });
         }
         finally
         {
             _saving = false;
-            _continueAfterSave = false;
         }
     }
 
     private async Task OnBeforeInternalNavigation(LocationChangingContext context)
     {
-        if (!_isDirty) return;
+        if (!IsDirty) return;
         if (context.TargetLocation.Contains("/onboarding/firm", StringComparison.OrdinalIgnoreCase)) return;
 
         var go = await DialogService.ShowMessageBoxAsync(
             "Discard unsaved changes?",
             "You have unsaved changes that will be lost if you leave now.",
-            yesText: "Leave anyway",
+            yesText: "Leave",
             cancelText: "Stay");
         if (go != true) context.PreventNavigation();
     }

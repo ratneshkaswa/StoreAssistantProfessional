@@ -428,6 +428,12 @@ html, body {
 .sap-step-root.is-no-hero .sap-step-form { max-width: 1320px; }
 .sap-step-root.is-no-hero .sap-step-form-col { background: var(--mud-palette-background); }
 
+/* Bare mode: no slim header, no blocker live region, no progress strip. The
+   onboarding pages render this way so they visually match the post-onboarding
+   settings pages — plain forms with just the section cards + a save button. */
+.sap-step-root.is-bare .sap-step-form { max-width: 1320px; }
+.sap-step-root.is-bare .sap-step-form-col { background: var(--mud-palette-background); }
+
 .sap-step-slim {
     border-bottom: 1px solid rgba(0, 0, 0, 0.10);
     padding-bottom: 12px;
