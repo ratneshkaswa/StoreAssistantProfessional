@@ -15,10 +15,6 @@
 
 <PageTitle>@PageTitleText</PageTitle>
 
-@* NavigationLock blocks @onclick-driven navigation (the OnboardingProgress
-   chip jumps, mostly) when the form has unsaved valid edits. The browser-
-   back / app-shell route exit isn't covered here; Blazor's NavigationLock
-   doesn't intercept hash-changes from the host. *@
 <NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigation" />
 
 <OnboardingShell Current="OnboardingStep.Firm"
@@ -50,10 +46,6 @@
     {
         <div @onkeydown="OnPageKeyDown" class="sap-firm-page">
 
-            @* Firm name plate — banner sets context and offers the rename
-               affordance. Heading semantics: <h2> for screen readers
-               (OnboardingShell carries the visually-hidden h1), styled as
-               serif h5 visually. *@
             <div class="sap-firm-plate">
                 <MudText Typo="Typo.overline" Class="sap-firm-plate-label">Firm</MudText>
                 @if (_isRenamingFirm)
@@ -67,12 +59,10 @@
                                       Margin="Margin.Dense"
                                       MaxLength="200"
                                       Immediate="true"
-                                      Error="@(IsRenamedNameInvalid)"
+                                      Error="@IsRenamedNameInvalid"
                                       ErrorText="@RenamedNameError"
                                       UserAttributes="@_firmNameAttrs"
                                       OnKeyDown="OnRenameKeyDown" />
-                        @* Cancel-on-left, primary-on-right matches Material
-                           Design + Windows muscle memory for cancel/confirm. *@
                         <MudButton Size="Size.Small" Variant="Variant.Text"
                                    OnClick="CancelRenaming">Cancel</MudButton>
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
@@ -107,11 +97,8 @@
                 }
             </div>
 
-            @* Two-column form. Left: Identity + Bank. Right: Contact +
-               Invoice. Numbered overlines on each section give the reading
-               order an explicit anchor (top-left → bottom-left → top-right →
-               bottom-right matches DOM tab order). *@
             <MudGrid Spacing="3">
+                @* Left column · Identity + Bank *@
                 <MudItem xs="12" md="6">
                     @{
                         var identityLocked = _locked || _saving;
@@ -123,49 +110,81 @@
                                     <MudIcon Icon="@Icons.Material.Rounded.Storefront" Color="Color.Primary" Size="Size.Small" />
                                     <MudText Typo="Typo.h6">1 · Identity</MudText>
                                 </MudStack>
-                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                                    @if (identityLocked && _locked)
-                                    {
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">Locked</MudChip>
-                                    }
-                                    <MudCheckBox T="bool" @bind-Value="_firm.IsCompositionScheme" Color="Color.Primary"
-                                                 Disabled="@identityLocked" Dense="true">
-                                        Composition scheme
-                                    </MudCheckBox>
-                                </MudStack>
+                                @if (_locked)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">Locked</MudChip>
+                                }
+                            </MudStack>
+
+                            @* GST registration toggle. When OFF, the GSTIN field is
+                               hidden entirely and Normalize() blanks any previously-
+                               entered value on save so we don't keep ghost data the
+                               user can't see. PAN stays visible regardless because
+                               PAN is required by Income Tax for any business entity,
+                               not specifically GST registrants. *@
+                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                                <MudSwitch T="bool" @bind-Value="_firm.HasGstRegistration"
+                                           Color="Color.Primary"
+                                           Disabled="@identityLocked">
+                                    GST registered
+                                </MudSwitch>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Turn on if your firm has a GSTIN.
+                                </MudText>
                             </MudStack>
 
                             <MudGrid Spacing="3">
-                                <MudItem xs="12" md="6">
-                                    <MudTextField Value="_firm.Gstin"
-                                                  ValueChanged="OnGstinChanged"
-                                                  T="string"
-                                                  Label="GSTIN"
-                                                  Variant="Variant.Outlined"
-                                                  Margin="Margin.Dense"
-                                                  MaxLength="15"
-                                                  Immediate="true"
-                                                  Error="@(_attempted && (!IndianFormats.IsGstin(_firm.Gstin) || !_firm.IsPanGstinConsistent))"
-                                                  ErrorText="@GstinError"
-                                                  HelperText="15 chars. State + PAN auto-fill from this."
-                                                  UserAttributes="@_acOff"
-                                                  Disabled="@identityLocked" />
-                                </MudItem>
-                                <MudItem xs="12" md="6">
-                                    <MudTextField Value="_firm.Pan"
-                                                  ValueChanged="OnPanChanged"
-                                                  T="string"
-                                                  Label="PAN"
-                                                  Variant="Variant.Outlined"
-                                                  Margin="Margin.Dense"
-                                                  MaxLength="10"
-                                                  Immediate="true"
-                                                  Error="@(_attempted && (!IndianFormats.IsPan(_firm.Pan) || !_firm.IsPanGstinConsistent))"
-                                                  ErrorText="@PanError"
-                                                  HelperText="Format: AAAAA9999A. Must match GSTIN positions 3–12."
-                                                  UserAttributes="@_acOff"
-                                                  Disabled="@identityLocked" />
-                                </MudItem>
+                                @if (_firm.HasGstRegistration)
+                                {
+                                    <MudItem xs="12" md="6">
+                                        <MudTextField Value="_firm.Gstin"
+                                                      ValueChanged="OnGstinChanged"
+                                                      T="string"
+                                                      Label="GSTIN"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense"
+                                                      MaxLength="15"
+                                                      Immediate="true"
+                                                      Error="@(_attempted && (string.IsNullOrWhiteSpace(_firm.Gstin) || !IndianFormats.IsGstin(_firm.Gstin) || !_firm.IsPanGstinConsistent))"
+                                                      ErrorText="@GstinError"
+                                                      HelperText="15 chars. State + PAN auto-fill from this."
+                                                      UserAttributes="@_acOff"
+                                                      Disabled="@identityLocked" />
+                                    </MudItem>
+                                    <MudItem xs="12" md="6">
+                                        <MudTextField Value="_firm.Pan"
+                                                      ValueChanged="OnPanChanged"
+                                                      T="string"
+                                                      Label="PAN"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense"
+                                                      MaxLength="10"
+                                                      Immediate="true"
+                                                      Error="@(_attempted && (!IndianFormats.IsPan(_firm.Pan) || !_firm.IsPanGstinConsistent))"
+                                                      ErrorText="@PanError"
+                                                      HelperText="Format: AAAAA9999A. Must match GSTIN positions 3–12."
+                                                      UserAttributes="@_acOff"
+                                                      Disabled="@identityLocked" />
+                                    </MudItem>
+                                }
+                                else
+                                {
+                                    <MudItem xs="12">
+                                        <MudTextField Value="_firm.Pan"
+                                                      ValueChanged="OnPanChanged"
+                                                      T="string"
+                                                      Label="PAN"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense"
+                                                      MaxLength="10"
+                                                      Immediate="true"
+                                                      Error="@(_attempted && !IndianFormats.IsPan(_firm.Pan))"
+                                                      ErrorText="Format: AAAAA9999A."
+                                                      HelperText="Permanent Account Number — issued by Income Tax, optional but recommended on receipts."
+                                                      UserAttributes="@_acOff"
+                                                      Disabled="@identityLocked" />
+                                    </MudItem>
+                                }
                                 <MudItem xs="12">
                                     <MudAutocomplete T="(string Code, string Name)?"
                                                      Value="_selectedState"
@@ -217,7 +236,6 @@
                         </MudStack>
                     </MudPaper>
 
-                    @* Left column · Bank for receipts *@
                     <MudPaper Elevation="1" Class="pa-4 sap-step-card sap-firm-card-stacked">
                         <MudStack Spacing="3">
                             <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
@@ -274,7 +292,7 @@
                     </MudPaper>
                 </MudItem>
 
-                @* Right column · Contact & address + Invoice settings *@
+                @* Right column · Contact + (no Invoice card — numbering is fixed) *@
                 <MudItem xs="12" md="6">
                     <MudPaper Elevation="1" Class="pa-4 sap-step-card">
                         <MudStack Spacing="3">
@@ -293,15 +311,6 @@
                                                   Disabled="@_saving" />
                                 </MudItem>
                                 <MudItem xs="12" md="6">
-                                    <MudTextField @bind-Value="_firm.AltPhone"
-                                                  Label="Alternate phone" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="20"
-                                                  Immediate="true" InputType="InputType.Telephone"
-                                                  Error="@(_attempted && !IndianFormats.IsIndianPhone(_firm.AltPhone))"
-                                                  ErrorText="10-digit mobile, optionally with +91."
-                                                  UserAttributes="@_acTelAlt"
-                                                  Disabled="@_saving" />
-                                </MudItem>
-                                <MudItem xs="12">
                                     <MudTextField @bind-Value="_firm.Email"
                                                   Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200"
                                                   Immediate="true" InputType="InputType.Email"
@@ -311,17 +320,10 @@
                                                   Disabled="@_saving" />
                                 </MudItem>
                                 <MudItem xs="12">
-                                    <MudTextField @bind-Value="_firm.AddressLine1" Label="Address line 1"
+                                    <MudTextField @bind-Value="_firm.AddressLine1" Label="Address"
                                                   Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="300"
-                                                  HelperText="Building / street / area"
+                                                  HelperText="Building / street / area / landmark"
                                                   UserAttributes="@_acAddress1Spellcheck"
-                                                  Disabled="@_saving" />
-                                </MudItem>
-                                <MudItem xs="12">
-                                    <MudTextField @bind-Value="_firm.AddressLine2" Label="Address line 2"
-                                                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="300"
-                                                  HelperText="Locality / landmark (optional)"
-                                                  UserAttributes="@_acAddress2Spellcheck"
                                                   Disabled="@_saving" />
                                 </MudItem>
                                 <MudItem xs="12" md="8">
@@ -331,9 +333,6 @@
                                                   Disabled="@_saving" />
                                 </MudItem>
                                 <MudItem xs="12" md="4">
-                                    @* Pincode uses inputmode=numeric instead of InputType.Number so
-                                       the browser doesn't render up/down spinner arrows on a value
-                                       that has no meaningful "next number" semantic. *@
                                     <MudTextField @bind-Value="_firm.Pincode"
                                                   Label="Pincode" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="6"
                                                   Immediate="true"
@@ -346,89 +345,24 @@
                         </MudStack>
                     </MudPaper>
 
-                    <MudPaper Elevation="1" Class="pa-4 sap-step-card sap-firm-card-stacked">
-                        <MudStack Spacing="3">
-                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                                    <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Color="Color.Primary" Size="Size.Small" />
-                                    <MudText Typo="Typo.h6">4 · Invoice</MudText>
-                                </MudStack>
-                                @if (_locked)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">
-                                        Locked — bills issued
-                                    </MudChip>
-                                }
+                    @* Invoice numbering is fixed — DD-MMM-YY-NNN with a daily
+                       counter — so there's no card here. Surface the format
+                       so the user knows what their bill numbers will look
+                       like without configuration knobs. *@
+                    <MudPaper Elevation="0" Outlined="true" Class="pa-3 sap-firm-card-stacked">
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Rounded.ReceiptLong" Color="Color.Default" Size="Size.Small" />
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body2">Invoice numbering: <strong>@SampleInvoiceFormat</strong></MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Date + daily counter. No configuration — every install uses the same format.
+                                </MudText>
                             </MudStack>
-                            <MudGrid Spacing="3">
-                                <MudItem xs="6" md="3">
-                                    <MudTextField Value="_firm.InvoicePrefix"
-                                                  ValueChanged="OnInvoicePrefixChanged"
-                                                  T="string"
-                                                  Label="Prefix" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="20"
-                                                  Immediate="true"
-                                                  Error="@(_attempted && !_firm.IsInvoicePrefixValid)"
-                                                  ErrorText="@InvoicePrefixError"
-                                                  HelperText="Letters & digits, e.g. INV"
-                                                  UserAttributes="@_attrPrefixRequired"
-                                                  Disabled="@(_locked || _saving)" />
-                                </MudItem>
-                                <MudItem xs="6" md="3">
-                                    @* Format="0" prevents the en-IN locale from grouping the bill
-                                       number with a comma (e.g. "1,000") in the input itself —
-                                       the value flows into "INV-XXXX" downstream where commas
-                                       would be wrong. *@
-                                    <MudNumericField T="int?" @bind-Value="_firm.InvoiceStartNumberNullable"
-                                                     Label="Start #" Variant="Variant.Outlined" Margin="Margin.Dense"
-                                                     Min="1" Max="9999999"
-                                                     Format="0"
-                                                     Disabled="@(_locked || _saving)" />
-                                </MudItem>
-                                <MudItem xs="6" md="3">
-                                    <MudSelect T="string" @bind-Value="_firm.InvoiceNumberPadding"
-                                               Label="Padding" Variant="Variant.Outlined" Margin="Margin.Dense"
-                                               Disabled="@(_locked || _saving)">
-                                        @foreach (var p in FirmVm.AllowedPaddings)
-                                        {
-                                            var pp = p;
-                                            <MudSelectItem Value="@pp">@pp (@(pp.Length) digits)</MudSelectItem>
-                                        }
-                                    </MudSelect>
-                                </MudItem>
-                                <MudItem xs="6" md="3">
-                                    <MudSelect T="string" @bind-Value="_firm.DateFormat"
-                                               Label="Date format" Variant="Variant.Outlined" Margin="Margin.Dense"
-                                               HelperText="Used on bills, receipts, reports."
-                                               Disabled="@_saving">
-                                        @foreach (var df in FirmVm.AllowedDateFormats)
-                                        {
-                                            var dff = df;
-                                            <MudSelectItem Value="@dff">@dff (@DateTime.Today.ToString(dff))</MudSelectItem>
-                                        }
-                                    </MudSelect>
-                                </MudItem>
-                                <MudItem xs="12">
-                                    <MudCheckBox T="bool" @bind-Value="_firm.ResetInvoiceOnFyRollover"
-                                                 Color="Color.Primary" Disabled="@(_locked || _saving)" Dense="true">
-                                        Reset invoice numbering on FY rollover
-                                    </MudCheckBox>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-8">
-                                        On the FY start date, restart from Start # (e.g., back to @InvoiceFirstExample).
-                                    </MudText>
-                                </MudItem>
-                                <MudItem xs="12">
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                        Examples: <strong>@InvoiceFirstExample</strong>, <strong>@InvoiceSecondExample</strong>, <strong>@InvoiceThirdExample</strong>
-                                    </MudText>
-                                </MudItem>
-                            </MudGrid>
                         </MudStack>
                     </MudPaper>
                 </MudItem>
             </MudGrid>
 
-            @* Sticky action bar — `.sap-firm-actions` fixes it to viewport
-               bottom on tall pages so Save / Continue stay reachable. *@
             <div class="sap-firm-actions">
                 <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd" AlignItems="AlignItems.Center">
                     <MudStack Spacing="0" Class="mr-auto">
@@ -500,28 +434,17 @@
     private bool _focusOnNextRender;
     private bool _isRenamingFirm;
     private string? _firmNameOriginal;
-    private string _seedFirmName = "";          // The name fetched from setup.json (or empty)
+    private string _seedFirmName = "";
     private MudTextField<string>? _nameField;
     private MudIconButton? _pencilButton;
     private DateTime? _lastSavedAt;
     private int _loadedFyStartDay;
     private int _loadedFyStartMonth;
 
-    // For dirty tracking — JSON snapshot of the saved state. Compared against
-    // a fresh serialise of `_firm` on each render to drive the "unsaved
-    // changes" affordance and the Save button enablement.
     private string _savedSnapshot = "";
 
-    // Set true when the user is exiting rename mode and we want focus to
-    // land on the pencil button (the "click again to rename" affordance).
     private bool _focusPencilOnNextRender;
-
-    // Tracks whether we've already shown the "auto-filled from GSTIN" toast
-    // this session so we don't bug the user with it on every keystroke.
     private bool _gstinAutoFillToastShown;
-
-    // Periodic timer that refreshes the "Saved Xs ago" caption while the
-    // page is open. Disposed in DisposeAsync.
     private CancellationTokenSource? _refreshCts;
 
     private string HeroHeading => _locked ? "Firm details" : "Set up your firm";
@@ -545,24 +468,16 @@
         "July", "August", "September", "October", "November", "December"
     ];
 
-    // Pre-sort by name so the Autocomplete's dropdown reads as users think —
-    // alphabetical by state name, with the code as a trailing reference.
     private static readonly (string Code, string Name)[] _stateOptionsAlpha =
         BuildStateOptions().OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToArray();
 
-    // The Autocomplete's "selected value" form — kept in sync with _firm.StateCode.
     private (string Code, string Name)? _selectedState;
 
     private static readonly Dictionary<string, object> _acOff = new() { ["autocomplete"] = "off" };
     private static readonly Dictionary<string, object> _acTel = new() { ["autocomplete"] = "tel" };
-    private static readonly Dictionary<string, object> _acTelAlt = new() { ["autocomplete"] = "tel-national" };
     private static readonly Dictionary<string, object> _acEmail = new() { ["autocomplete"] = "email" };
-    // Address / city / postal need an additional `spellcheck="false"` so the
-    // browser's red-underline doesn't decorate proper-noun-heavy fields.
     private static readonly Dictionary<string, object> _acAddress1Spellcheck =
         new() { ["autocomplete"] = "address-line1", ["spellcheck"] = "false" };
-    private static readonly Dictionary<string, object> _acAddress2Spellcheck =
-        new() { ["autocomplete"] = "address-line2", ["spellcheck"] = "false" };
     private static readonly Dictionary<string, object> _acCitySpellcheck =
         new() { ["autocomplete"] = "address-level2", ["spellcheck"] = "false" };
     private static readonly Dictionary<string, object> _acPostalNumeric =
@@ -571,13 +486,16 @@
         new() { ["spellcheck"] = "false" };
     private static readonly Dictionary<string, object> _firmNameAttrs =
         new() { ["autocomplete"] = "organization", ["spellcheck"] = "false", ["aria-required"] = "true" };
-    private static readonly Dictionary<string, object> _attrPrefixRequired =
-        new() { ["aria-required"] = "true" };
 
     private int DaysInFyMonth =>
         DateTime.DaysInMonth(2024, ClampMonth(_firm.FyStartMonth));
 
     private string CurrentFyLabel => _firm.GetFyForToday(DateTime.Today).Label;
+
+    // Sample of what bill numbers will look like under the fixed format.
+    // Recomputed from "today" so the user sees a realistic preview.
+    private static string SampleInvoiceFormat =>
+        $"{DateTime.Today:dd-MMM-yy}-001";
 
     private bool _isDirty => _savedAtLeastOnce && CurrentSnapshot() != _savedSnapshot;
 
@@ -596,24 +514,11 @@
         }
     }
 
-    private string InvoiceFirstExample => FormatInvoice(_locked ? Math.Max(_firm.NextInvoiceNumber, 1)
-                                                                : Math.Max(_firm.InvoiceStartNumber, 1));
-    private string InvoiceSecondExample => FormatInvoice((_locked ? Math.Max(_firm.NextInvoiceNumber, 1)
-                                                                  : Math.Max(_firm.InvoiceStartNumber, 1)) + 1);
-    private string InvoiceThirdExample => FormatInvoice((_locked ? Math.Max(_firm.NextInvoiceNumber, 1)
-                                                                 : Math.Max(_firm.InvoiceStartNumber, 1)) + 2);
-
-    private string FormatInvoice(int n)
-    {
-        var prefix = string.IsNullOrWhiteSpace(_firm.InvoicePrefix) ? "INV" : _firm.InvoicePrefix.Trim().ToUpperInvariant();
-        var pad = FirmVm.AllowedPaddings.Contains(_firm.InvoiceNumberPadding) ? _firm.InvoiceNumberPadding : "0000";
-        return $"{prefix}-{n.ToString(pad)}";
-    }
-
     private string GstinError
     {
         get
         {
+            if (string.IsNullOrWhiteSpace(_firm.Gstin)) return "GSTIN is required when GST is on.";
             if (!IndianFormats.IsGstin(_firm.Gstin)) return "Invalid GSTIN format.";
             if (!_firm.IsPanGstinConsistent) return "GSTIN positions 3–12 must equal PAN.";
             return "";
@@ -641,19 +546,6 @@
         }
     }
 
-    private string InvoicePrefixError
-    {
-        get
-        {
-            var p = (_firm.InvoicePrefix ?? "").Trim().ToUpperInvariant();
-            if (string.IsNullOrEmpty(p)) return "Prefix is required.";
-            if (!IndianFormats.IsInvoicePrefix(p)) return "Letters & digits only.";
-            if (Firm.ReservedInvoicePrefixes.Contains(p))
-                return $"'{p}' is reserved for Quote/Proforma/Delivery challan/Cash receipt.";
-            return "";
-        }
-    }
-
     private bool BankInfoIncomplete => !_firm.IsBankInfoConsistent;
 
     private bool IsRenamedNameInvalid =>
@@ -665,11 +557,6 @@
         : _firm.Name.Trim().Length > 200 ? "At most 200 characters."
         : "";
 
-    // Used by the OnboardingShell's blocker line. First-priority issue wins.
-    // Gated on `_attempted` for shape errors so the page doesn't shout
-    // immediately on first visit; cross-field issues (composition without
-    // GSTIN, bank-info-incomplete) are immediate so the user sees the
-    // structural inconsistency they just created.
     private string? BlockingReason
     {
         get
@@ -678,17 +565,18 @@
             if (string.IsNullOrWhiteSpace(_firm.Name)) return "Firm name is required.";
             if (_attempted)
             {
-                if (!IndianFormats.IsGstin(_firm.Gstin)) return "Invalid GSTIN format.";
+                if (_firm.HasGstRegistration && string.IsNullOrWhiteSpace(_firm.Gstin))
+                    return "GSTIN is required when GST is on.";
+                if (_firm.HasGstRegistration && !IndianFormats.IsGstin(_firm.Gstin))
+                    return "Invalid GSTIN format.";
                 if (!IndianFormats.IsPan(_firm.Pan)) return "PAN format: AAAAA9999A.";
                 if (!_firm.IsPanGstinConsistent) return "PAN must match GSTIN positions 3–12.";
-                if (!IndianFormats.IsIndianPhone(_firm.Phone) || !IndianFormats.IsIndianPhone(_firm.AltPhone))
+                if (!IndianFormats.IsIndianPhone(_firm.Phone))
                     return "Phone: 10-digit mobile, optionally with +91.";
                 if (!IndianFormats.IsEmail(_firm.Email)) return "Invalid email format.";
                 if (!IndianFormats.IsPincode(_firm.Pincode)) return "Pincode: 6 digits, can't start with 0.";
                 if (!IndianFormats.IsIfsc(_firm.IfscCode)) return "IFSC: 4 letters + 0 + 6 alphanumeric.";
-                if (!_firm.IsInvoicePrefixValid) return InvoicePrefixError;
             }
-            if (_firm.CompositionWithoutGstin) return "Composition scheme requires a GSTIN.";
             if (BankInfoIncomplete) return "Bank: Account number and IFSC are required together (or leave both blank).";
             return null;
         }
@@ -712,9 +600,7 @@
         if (_focusPencilOnNextRender && _pencilButton is not null)
         {
             _focusPencilOnNextRender = false;
-            // MudIconButton doesn't expose FocusAsync as cleanly; the queued
-            // focus is best-effort and silently ignored on failure.
-            try { await Task.Yield(); /* let the render flush */ }
+            try { await Task.Yield(); }
             catch { }
         }
     }
@@ -734,9 +620,6 @@
             }
             else if (!string.IsNullOrWhiteSpace(Setup.Current?.FirmName))
             {
-                // Seed the firm name from setup.json so the page acknowledges
-                // what the user already typed during PIN setup, instead of
-                // greeting them with an empty required field.
                 _firm.Name = Setup.Current.FirmName;
                 _seedFirmName = _firm.Name;
             }
@@ -746,7 +629,6 @@
             _locked = await db.Bills.AsNoTracking().AnyAsync();
             _firm.Normalize();
 
-            // Sync the selected-state autocomplete value with the loaded code.
             if (!string.IsNullOrWhiteSpace(_firm.StateCode))
             {
                 _selectedState = _stateOptionsAlpha.FirstOrDefault(s => s.Code == _firm.StateCode);
@@ -768,8 +650,6 @@
 
     private void StartLastSavedRefresh()
     {
-        // Refresh the "Saved Xs ago" caption every 30s so the relative-time
-        // text doesn't go stale. Cancelled in DisposeAsync.
         _refreshCts?.Cancel();
         _refreshCts?.Dispose();
         var cts = new CancellationTokenSource();
@@ -812,7 +692,6 @@
             if (ago.TotalSeconds < 5) return "Saved just now";
             if (ago.TotalMinutes < 1) return $"Saved {(int)ago.TotalSeconds}s ago";
             if (ago.TotalMinutes < 60) return $"Saved {(int)ago.TotalMinutes}m ago";
-            // Older than an hour: include the date so it's unambiguous.
             var local = _lastSavedAt.Value.ToLocalTime();
             return ago.TotalHours < 24
                 ? $"Saved at {local:HH:mm}"
@@ -847,8 +726,6 @@
 
     private async Task OnRenameKeyDown(KeyboardEventArgs e)
     {
-        // Enter commits the rename if valid; Escape cancels. Keeps focus
-        // discipline tight without reaching for the mouse.
         if (e.Key == "Enter" && !IsRenamedNameInvalid)
         {
             DoneRenaming();
@@ -862,7 +739,6 @@
 
     private void OnGstinChanged(string? v)
     {
-        var oldGstin = _firm.Gstin;
         _firm.Gstin = string.IsNullOrEmpty(v) ? v : v.ToUpperInvariant();
 
         var code = IndianFormats.StateCodeFromGstin(_firm.Gstin);
@@ -892,9 +768,6 @@
             panFilled = true;
         }
 
-        // First-time-this-session info toast so the magic isn't silent. Shown
-        // only when something was actually auto-derived (avoids noise on a
-        // partial GSTIN that doesn't yet resolve a state code).
         if (!_gstinAutoFillToastShown && (stateChanged || panFilled))
         {
             _gstinAutoFillToastShown = true;
@@ -908,9 +781,6 @@
 
     private void OnIfscChanged(string? v) =>
         _firm.IfscCode = string.IsNullOrEmpty(v) ? v : v.ToUpperInvariant();
-
-    private void OnInvoicePrefixChanged(string? v) =>
-        _firm.InvoicePrefix = string.IsNullOrEmpty(v) ? "" : v.ToUpperInvariant();
 
     private void OnStateSelected((string Code, string Name)? value)
     {
@@ -949,9 +819,6 @@
 
     private async Task OnPageKeyDown(KeyboardEventArgs e)
     {
-        // Ctrl+S during rename mode commits the rename (Enter handler) +
-        // saves the form. Block it here so a half-typed rename can't sneak
-        // through — user must Done the rename first.
         if (e.CtrlKey && (e.Key is "s" or "S" || e.Key == "Enter"))
         {
             if (_isRenamingFirm)
@@ -994,8 +861,6 @@
         _attempted = true;
         if (!_firm.IsValid) return;
 
-        // FY day/month change after bills exist retroactively reclassifies
-        // every existing bill. Confirm before committing.
         if (_savedAtLeastOnce && _locked &&
             (_firm.FyStartDay != _loadedFyStartDay || _firm.FyStartMonth != _loadedFyStartMonth))
         {
@@ -1007,8 +872,6 @@
             if (confirmed != true) return;
         }
 
-        // Skip the no-op path: if Continue is clicked with no dirty changes,
-        // jump straight to the next step.
         if (continueAfter && _savedAtLeastOnce && !_isDirty)
         {
             Nav.NavigateTo(Onboarding.RouteFor(OnboardingStep.Tax));
@@ -1023,12 +886,6 @@
 
             await using var db = await DbFactory.CreateDbContextAsync();
             var existing = await db.Firms.FirstOrDefaultAsync();
-            var hasBills = await db.Bills.AnyAsync();
-
-            // Sync NextInvoiceNumber to InvoiceStartNumber while no bills have
-            // been issued — otherwise the user's "Start #" choice would be
-            // ignored. Once bills exist, leave NextInvoiceNumber alone.
-            if (!hasBills) _firm.NextInvoiceNumber = _firm.InvoiceStartNumber;
 
             var entity = _firm.ToEntity();
             if (existing is null)
@@ -1091,13 +948,9 @@
         }
     }
 
-    // Blocks programmatic navigation (OnboardingProgress chip clicks) when
-    // there are unsaved valid changes. The user gets a confirm prompt; on
-    // dismiss the navigation is cancelled.
     private async Task OnBeforeInternalNavigation(LocationChangingContext context)
     {
         if (!_isDirty) return;
-        // Only confirm when navigating away from this page.
         if (context.TargetLocation.Contains("/onboarding/firm", StringComparison.OrdinalIgnoreCase)) return;
 
         var go = await DialogService.ShowMessageBoxAsync(

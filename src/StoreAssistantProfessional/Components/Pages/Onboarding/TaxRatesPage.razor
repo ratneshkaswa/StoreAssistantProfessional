@@ -19,9 +19,40 @@
                  NextHint="Next: list your products."
                  BlockingReason="@BlockingReason"
                  ReadyMessage="Tax rates set — click Next."
-                 WideForm="true">
+                 HideHero="true">
+
+    @* Composition scheme toggle — moved here from the Firm step because it's
+       a tax-classification choice, not a firm-identity field. Persists to
+       Firm.IsCompositionScheme on toggle (immediate, no separate save).
+       Cross-validation: composition requires GST registration; the toggle
+       is disabled with a helper message when the firm is not GST-registered. *@
+    <MudPaper Class="pa-3 mb-3" Outlined="true">
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                <MudSwitch T="bool"
+                           Value="_isCompositionScheme"
+                           ValueChanged="OnCompositionToggled"
+                           Color="Color.Primary"
+                           Disabled="@(!_firmHasGst || _savingComposition)">
+                    Firm is on Composition scheme
+                </MudSwitch>
+                <HelpHint Text="Composition firms issue 'Bill of Supply' (no tax broken out on receipts) and have a turnover cap. Toggle on only if registered." />
+            </MudStack>
+            @if (!_firmHasGst)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Composition requires GST registration (set on the Firm step).
+                </MudText>
+            }
+            else if (_savingComposition)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            }
+        </MudStack>
+    </MudPaper>
+
     <MudGrid Spacing="3">
-        <MudItem xs="12" md="5">
+        <MudItem xs="12" md="6">
             <MudPaper Class="pa-4 sap-step-card" Style="min-height: 480px;">
                     <MudStack Spacing="3">
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
@@ -105,7 +136,7 @@
                 </MudPaper>
             </MudItem>
 
-            <MudItem xs="12" md="7">
+            <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4 sap-step-card" Style="min-height: 480px;">
                     <MudStack Spacing="3">
                         <MudText Typo="Typo.h6">@(_isNew ? "➕ Add tax rate" : $"Edit · {_form.Name}")</MudText>
@@ -253,6 +284,13 @@
     private bool _loading = true;
     private string? _loadError;
 
+    // Firm.IsCompositionScheme is edited from this page (moved from the Firm
+    // step). _firmHasGst gates the toggle — composition without GST is
+    // legally meaningless. Both are loaded from the firm row in LoadAsync.
+    private bool _isCompositionScheme;
+    private bool _firmHasGst;
+    private bool _savingComposition;
+
     private record QuickAddPreset(string Label, string Name, decimal Rate, string Category);
 
     private static readonly QuickAddPreset[] _quickAddPresets =
@@ -326,6 +364,12 @@
             var rows = await db.TaxRates.AsNoTracking().Where(t => t.IsActive)
                 .OrderBy(t => t.SortOrder).ToListAsync();
             _taxes = rows.OrderBy(t => t.SortOrder).ThenBy(t => t.Rate).ToList();
+
+            // Load firm-level composition + GST flags so the top toggle
+            // reflects current state and gates correctly.
+            var firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
+            _isCompositionScheme = firm?.IsCompositionScheme ?? false;
+            _firmHasGst = firm?.HasGstRegistration ?? false;
         }
         catch (Exception ex)
         {
@@ -341,6 +385,44 @@
     }
 
     private Task ReloadAsync() => LoadAsync();
+
+    // Persists the composition flag immediately on toggle — there's no
+    // "save firm" button on this page. Concurrency-wise: a tap on the toggle
+    // mid-flight (e.g. user double-clicks) gets gated by `_savingComposition`.
+    private async Task OnCompositionToggled(bool value)
+    {
+        if (_savingComposition) return;
+        // Defensive: composition without GST is meaningless. The toggle is
+        // already disabled in that case via the markup; this is a backstop.
+        if (!_firmHasGst && value) return;
+
+        _savingComposition = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var firm = await db.Firms.FirstOrDefaultAsync();
+            if (firm is null)
+            {
+                Snackbar.Add("Firm not found. Complete the Firm step first.", Severity.Warning);
+                return;
+            }
+            firm.IsCompositionScheme = value;
+            firm.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            _isCompositionScheme = value;
+            Snackbar.Add(value ? "Composition scheme on." : "Composition scheme off.",
+                Severity.Success, c => c.VisibleStateDuration = 2000);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to toggle composition scheme");
+            Snackbar.Add($"Could not update: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _savingComposition = false;
+        }
+    }
 
     private void StartNew()
     {

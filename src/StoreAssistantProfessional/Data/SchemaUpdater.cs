@@ -85,6 +85,46 @@ public static class SchemaUpdater
         await ReplaceIndexAsync(conn,
             "IX_Products_Sku",
             "CREATE UNIQUE INDEX \"IX_Products_Sku\" ON \"Products\" (\"Sku\") WHERE \"IsActive\" = 1");
+
+        // -- Firm: explicit GST-registration toggle. Default-false matches new
+        //    installs; for upgrades with existing Gstin data we backfill true so
+        //    a returning user's GSTIN doesn't appear to vanish behind the toggle.
+        var gstColumnAdded = await EnsureColumnReturnsTrueIfAddedAsync(
+            conn, "Firms", "HasGstRegistration", "INTEGER NOT NULL DEFAULT 0");
+        if (gstColumnAdded)
+        {
+            try
+            {
+                await using var backfill = conn.CreateCommand();
+                backfill.CommandText =
+                    "UPDATE \"Firms\" SET \"HasGstRegistration\" = 1 " +
+                    "WHERE \"Gstin\" IS NOT NULL AND TRIM(\"Gstin\") <> ''";
+                await backfill.ExecuteNonQueryAsync();
+            }
+            catch (SqliteException) { /* non-fatal */ }
+        }
+    }
+
+    // Returns true when the column was actually added in this call, false when
+    // the table doesn't exist yet or the column already exists. Used by the
+    // single migration that runs a one-shot backfill alongside the ADD.
+    private static async Task<bool> EnsureColumnReturnsTrueIfAddedAsync(
+        SqliteConnection conn, string table, string column, string spec)
+    {
+        try
+        {
+            if (!await TableExistsAsync(conn, table)) return false;
+            if (await ColumnExistsAsync(conn, table, column)) return false;
+
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {spec}";
+            await cmd.ExecuteNonQueryAsync();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static async Task<bool> ColumnExistsAsync(SqliteConnection conn, string table, string column)

@@ -6,10 +6,10 @@ public class Firm
 {
     public const int SingletonId = 1;
 
-    // Single source of truth for system-assigned bill-kind prefixes. The user's
-    // configurable InvoicePrefix is for `Bill.Kind == "TaxInvoice"`; every other
-    // kind takes the fixed prefix below. Adding a new Bill.Kind means adding it
-    // here, and the user's prefix-picker will block the new code automatically.
+    // Single source of truth for system-assigned bill-kind prefixes (Quote /
+    // Proforma / DeliveryChallan / CashReceipt). Tax invoices use a fixed
+    // date-based format `DD-MMM-YY-NNN` with a daily counter — no user
+    // configuration of prefix / padding / start # is exposed.
     public static readonly IReadOnlyDictionary<string, string> BillKindPrefixes =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -28,6 +28,11 @@ public class Firm
     [Required, MaxLength(200)]
     public string Name { get; set; } = string.Empty;
 
+    // Explicit toggle — not all firms are GST-registered. When false, the
+    // form hides the GSTIN field entirely and Normalize() blanks the value
+    // so a previously-entered GSTIN doesn't linger as ghost data.
+    public bool HasGstRegistration { get; set; }
+
     [MaxLength(15)] public string? Gstin { get; set; }
     [MaxLength(10)] public string? Pan { get; set; }
     [MaxLength(2)]  public string? StateCode { get; set; }
@@ -37,11 +42,9 @@ public class Firm
     [MaxLength(50)] public string? LogoMimeType { get; set; }
 
     [MaxLength(15)]  public string? Phone { get; set; }
-    [MaxLength(15)]  public string? AltPhone { get; set; }
     [MaxLength(200)] public string? Email { get; set; }
 
     [MaxLength(300)] public string? AddressLine1 { get; set; }
-    [MaxLength(300)] public string? AddressLine2 { get; set; }
     [MaxLength(100)] public string? City { get; set; }
     [MaxLength(6)]   public string? Pincode { get; set; }
 
@@ -52,17 +55,13 @@ public class Firm
     [MaxLength(200)] public string? BranchName { get; set; }
     [MaxLength(100)] public string? UpiId { get; set; }
 
-    [MaxLength(20)] public string InvoicePrefix { get; set; } = "INV";
-    public int InvoiceStartNumber { get; set; } = 1;
-    public int NextInvoiceNumber { get; set; } = 1;
-    [MaxLength(10)] public string InvoiceNumberPadding { get; set; } = "0000";
-    public bool ResetInvoiceOnFyRollover { get; set; } = true;
-
-    [MaxLength(20)] public string DateFormat { get; set; } = "dd/MM/yyyy";
-
     [Range(1, 31)] public int FyStartDay { get; set; } = 1;
     [Range(1, 12)] public int FyStartMonth { get; set; } = 4;
 
+    // Set on the Tax onboarding step (not here) — composition scheme is a
+    // tax-classification choice, not a firm-identity field. Keeping the column
+    // on Firm because it's a singleton firm-level boolean; just the editing
+    // surface lives elsewhere.
     public bool IsCompositionScheme { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
