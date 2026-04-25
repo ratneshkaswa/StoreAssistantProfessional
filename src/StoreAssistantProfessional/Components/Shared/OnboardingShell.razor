@@ -6,8 +6,60 @@
    (gradient + step icon + serif heading + progress strip + ghost decoration);
    form on the right with a blocker line at top and the page's content below.
 *@
-<div class="sap-step-root @(WideForm ? "is-wide" : "")">
+<div class="sap-step-root @(HideHero ? "is-no-hero" : WideForm ? "is-wide" : "")">
     <h1 class="sap-visually-hidden">@HeroHeading — Setting up your shop</h1>
+    @if (HideHero)
+    {
+        @* Compact mode — no hero column. The form takes full width with a
+           slim top header that still surfaces step / progress / next-hint. *@
+        <div class="sap-step-form-col">
+            <MudContainer MaxWidth="MaxWidth.False" Class="sap-step-form" role="form" aria-label="@HeroHeading">
+                <MudStack Spacing="3">
+                    <div class="sap-step-slim">
+                        <MudText Typo="Typo.overline" Class="sap-step-slim-overline">
+                            STORE ASSISTANT PROFESSIONAL · STEP @(((int)Current) + 1) OF 4
+                        </MudText>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="3" Class="sap-step-slim-row">
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.h5" Class="sap-step-slim-heading">@HeroHeading</MudText>
+                                @if (!string.IsNullOrEmpty(NextHint))
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@NextHint</MudText>
+                                }
+                            </MudStack>
+                            <OnboardingProgress Current="Current" />
+                        </MudStack>
+                    </div>
+
+                    <div class="sap-step-blocker">
+                        <div role="status" aria-live="polite" aria-atomic="true"
+                             class="sap-step-blocker-live @(BlockingReason is null ? "" : "is-warn")">
+                            @if (BlockingReason is not null)
+                            {
+                                <MudIcon Icon="@Icons.Material.Rounded.EditNote"
+                                         UserAttributes="@_ariaHidden"
+                                         Class="sap-step-blocker-icon" />
+                                <MudText Typo="Typo.body2" Class="sap-step-blocker-text">@BlockingReason</MudText>
+                            }
+                        </div>
+                        @if (BlockingReason is null && !string.IsNullOrEmpty(ReadyMessage))
+                        {
+                            <div class="sap-step-blocker-ready">
+                                <MudIcon Icon="@Icons.Material.Rounded.CheckCircle"
+                                         UserAttributes="@_ariaHidden"
+                                         Class="sap-step-blocker-icon" />
+                                <MudText Typo="Typo.body2" Class="sap-step-blocker-text">@ReadyMessage</MudText>
+                            </div>
+                        }
+                    </div>
+
+                    @ChildContent
+                </MudStack>
+            </MudContainer>
+        </div>
+    }
+    else
+    {
     <MudGrid Spacing="0">
         <MudItem xs="12" sm="@HeroSm" md="@HeroMd" Class="d-none d-sm-block">
             <MudPaper Elevation="0" Square="true" Class="pa-8 sap-step-hero">
@@ -48,8 +100,6 @@
         <MudItem xs="12" sm="@FormSm" md="@FormMd" Class="sap-step-form-col">
             <MudContainer MaxWidth="MaxWidth.False" Class="sap-step-form" role="form" aria-label="@HeroHeading">
                 <MudStack Spacing="3">
-                    @* Single-line "blocker / ready" indicator — the same EditNote ↔ CheckCircle
-                       pattern as FirstRun, so users get one place to look for "what's missing". *@
                     <div class="sap-step-blocker">
                         <div role="status" aria-live="polite" aria-atomic="true"
                              class="sap-step-blocker-live @(BlockingReason is null ? "" : "is-warn")">
@@ -77,6 +127,7 @@
             </MudContainer>
         </MudItem>
     </MudGrid>
+    }
 </div>
 
 @code {
@@ -88,14 +139,15 @@
     [Parameter] public string? BlockingReason { get; set; }
     [Parameter] public string ReadyMessage { get; set; } = "Ready to continue.";
     [Parameter] public bool WideForm { get; set; }
+    [Parameter] public bool HideHero { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private static readonly Dictionary<string, object> _ariaHidden = new() { ["aria-hidden"] = "true" };
 
-    // Single-form pages get a 50/50 split; master/detail pages get 33/67 so the
-    // two stacked cards inside the form column don't feel cramped.
+    // Single-form pages get a 50/50 split; wide pages get 25/75 so the form
+    // column has room for tabs / master-detail layouts without crowding.
     private int HeroSm => 6;
-    private int HeroMd => WideForm ? 4 : 6;
+    private int HeroMd => WideForm ? 3 : 6;
     private int FormSm => 6;
-    private int FormMd => WideForm ? 8 : 6;
+    private int FormMd => WideForm ? 9 : 6;
 }

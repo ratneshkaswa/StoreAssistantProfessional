@@ -1,9 +1,13 @@
 @page "/setup"
 @using System.Globalization
 @using System.Security.Cryptography
+@using Microsoft.Extensions.Logging
+@implements IDisposable
 @inject ISetupService Setup
+@inject ISessionService Session
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject ILogger<FirstRun> Logger
 
 <PageTitle>Setup — Store Assistant Professional</PageTitle>
 
@@ -13,7 +17,7 @@
         <MudContainer Class="mt-12">
             <MudStack AlignItems="AlignItems.Center" Spacing="2">
                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Just a moment…</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@_redirectingMessage</MudText>
             </MudStack>
         </MudContainer>
     </div>
@@ -45,6 +49,10 @@ else
                             Quietly precise. Built to outlast trends.
                         </MudText>
 
+                        <MudText Typo="Typo.caption" Align="Align.Center" Class="sap-firstrun-hero-next">
+                            After this: a four-step setup of firm, taxes, products, vendors.
+                        </MudText>
+
                         <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Center" Class="sap-firstrun-hero-badges">
                             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
                                 <MudIcon Icon="@Icons.Material.Rounded.CloudOff" UserAttributes="@AriaHidden" Class="sap-firstrun-hero-badge-icon" />
@@ -64,15 +72,15 @@ else
             </MudItem>
 
             <MudItem xs="12" sm="6" Class="sap-firstrun-form-col">
-                <MudContainer MaxWidth="MaxWidth.Small" Class="pa-4 sap-firstrun-form" role="form" aria-label="First-run setup">
+                <MudContainer MaxWidth="MaxWidth.Small" Class="pa-4 sap-firstrun-form" aria-label="First-run setup">
                     <MudStack Spacing="3">
-                        @if (Setup.Status == SetupStatus.Corrupt)
+                        @if (_setupStatusSnapshot == SetupStatus.Corrupt)
                         {
                             <MudAlert Severity="Severity.Warning" Dense="true" Icon="@Icons.Material.Rounded.Warning">
                                 An existing setup file was found but could not be read. Completing setup will replace it; the unreadable copy will be kept as <code>setup.json.bak</code> alongside it.
                             </MudAlert>
                         }
-                        else if (Setup.Status == SetupStatus.Inaccessible)
+                        else if (_setupStatusSnapshot == SetupStatus.Inaccessible)
                         {
                             <MudAlert Severity="Severity.Error" Dense="true" Icon="@Icons.Material.Rounded.ErrorOutline">
                                 Local app data is not accessible. Setup cannot be saved on this machine. Check that
@@ -80,156 +88,195 @@ else
                             </MudAlert>
                         }
 
-                        <div id="setup-blocker" class="sap-firstrun-blocker">
-                            <div role="status" aria-live="polite" aria-atomic="true"
-                                 class="sap-firstrun-blocker-live @(BlockingReason is null ? "" : "is-warn")">
-                                @if (BlockingReason is not null)
+                        @if (_pageMode == PageMode.AlreadyConfigured)
+                        {
+                            <MudPaper Elevation="1" Class="pa-4 sap-firstrun-card">
+                                <MudStack Spacing="3">
+                                    <MudText Typo="Typo.h6">Already configured</MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                        This device is already set up for <strong>@(Setup.Current?.FirmName ?? "an unknown firm")</strong>.
+                                    </MudText>
+                                    <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+                                        <MudButton Variant="Variant.Text" OnClick="ShowResetConfirm" Color="Color.Error">
+                                            Reset PINs
+                                        </MudButton>
+                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="GoHome">
+                                            Continue to app
+                                        </MudButton>
+                                    </MudStack>
+                                </MudStack>
+                            </MudPaper>
+                        }
+                        else if (_pageMode == PageMode.ResetConfirm)
+                        {
+                            <MudPaper Elevation="1" Class="pa-4 sap-firstrun-card">
+                                <MudStack Spacing="3">
+                                    <MudText Typo="Typo.h6" Color="Color.Error">Reset PINs?</MudText>
+                                    <MudText Typo="Typo.body2">
+                                        This wipes <code>setup.json</code> and lets you set new PINs. Your firm data
+                                        and bills are <em>not</em> affected — they live in a separate database file.
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        Note: anyone with access to this Windows account can reset the PIN file
+                                        (or delete it manually) — the file is encrypted to your account, not gated
+                                        by PIN entry. Reset only undoes the lock, not the data.
+                                    </MudText>
+                                    <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd">
+                                        <MudButton Variant="Variant.Text" OnClick="CancelReset">Cancel</MudButton>
+                                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="DoReset">
+                                            Yes, reset
+                                        </MudButton>
+                                    </MudStack>
+                                </MudStack>
+                            </MudPaper>
+                        }
+                        else
+                        {
+                            <div id="setup-blocker" class="sap-firstrun-blocker">
+                                <div role="status" aria-live="polite" aria-atomic="true"
+                                     class="sap-firstrun-blocker-live @(BlockingReason is null ? "" : "is-warn")">
+                                    @if (BlockingReason is not null)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Rounded.EditNote"
+                                                 UserAttributes="@AriaHidden"
+                                                 Class="sap-firstrun-blocker-icon" />
+                                        <MudText Typo="Typo.body2" Class="sap-firstrun-blocker-text">@BlockingReason</MudText>
+                                    }
+                                </div>
+                                @if (BlockingReason is null)
                                 {
-                                    <MudIcon Icon="@Icons.Material.Rounded.EditNote"
-                                             UserAttributes="@AriaHidden"
-                                             Class="sap-firstrun-blocker-icon" />
-                                    <MudText Typo="Typo.body2" Class="sap-firstrun-blocker-text">@BlockingReason</MudText>
+                                    <div class="sap-firstrun-blocker-ready">
+                                        <MudIcon Icon="@Icons.Material.Rounded.CheckCircle"
+                                                 UserAttributes="@AriaHidden"
+                                                 Class="sap-firstrun-blocker-icon" />
+                                        <MudText Typo="Typo.body2" Class="sap-firstrun-blocker-text">Ready to save.</MudText>
+                                    </div>
                                 }
                             </div>
-                            @if (BlockingReason is null)
-                            {
-                                <div class="sap-firstrun-blocker-ready">
-                                    <MudIcon Icon="@Icons.Material.Rounded.CheckCircle"
-                                             UserAttributes="@AriaHidden"
-                                             Class="sap-firstrun-blocker-icon" />
-                                    <MudText Typo="Typo.body2" Class="sap-firstrun-blocker-text">Ready to save.</MudText>
-                                </div>
-                            }
-                        </div>
 
-                        <MudPaper Elevation="1" Class="pa-4 sap-firstrun-card sap-firstrun-card-firm">
-                            <MudStack Spacing="3">
-                                <MudText Typo="Typo.h6">Name your firm</MudText>
-                                <MudTextField Value="_firmName"
-                                              ValueChanged="SetFirmName"
-                                              T="string"
-                                              Label="Firm name"
-                                              Variant="Variant.Outlined"
-                                              Margin="Margin.Dense"
-                                              MaxLength="100"
-                                              Immediate="true"
-                                              AutoFocus="true"
-                                              Disabled="@FieldsLocked"
-                                              HelperText="Shown on receipts and across the app."
-                                              Adornment="Adornment.End"
-                                              AdornmentIcon="@(FirmNameValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
-                                              AdornmentColor="@(FirmNameValid ? Color.Success : Color.Default)"
-                                              UserAttributes="@FirmNameAttrs"
-                                              OnBlur="OnFirmNameBlur"
-                                              OnKeyDown="OnFirmNameKeyDown" />
-                            </MudStack>
-                        </MudPaper>
-
-                        <MudPaper Elevation="1" Class="pa-4 sap-firstrun-card sap-firstrun-card-pin">
-                            <MudStack Spacing="3">
-                                <MudStack Row="true" Spacing="0" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                                    <MudText Typo="Typo.h6">Choose two PINs</MudText>
-                                    <MudTooltip Text="@(_showPins ? "Hide PINs" : "Show PINs")" Placement="Placement.Top">
-                                        <MudIconButton Icon="@(_showPins ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
-                                                       Size="Size.Small"
-                                                       Color="Color.Default"
-                                                       Class="sap-firstrun-pin-toggle"
-                                                       OnClick="TogglePins"
-                                                       Disabled="@FieldsLocked"
-                                                       UserAttributes="@ShowPinsAttrs" />
-                                    </MudTooltip>
-                                </MudStack>
-                                <MudText Typo="Typo.caption" Color="Color.Default">
-                                    Admin for day-to-day protected actions. Master for destructive deletions and recovery.
-                                </MudText>
-
-                                <MudStack Row="true" Spacing="2" Class="sap-firstrun-pin-row">
-                                    <MudTextField @ref="_adminPinField"
-                                                  Value="_adminPin"
-                                                  ValueChanged="SetAdminPin"
-                                                  T="string"
-                                                  Label="Admin PIN"
-                                                  InputType="@(_showPins ? InputType.Text : InputType.Password)"
-                                                  MaxLength="4"
+                            <MudPaper Elevation="1" Class="pa-4 sap-firstrun-card">
+                                <MudStack Spacing="3">
+                                    <MudText Typo="Typo.h6">Name your firm</MudText>
+                                    <MudTextField @ref="_firmNameField"
+                                                  @bind-Value="_firmName"
+                                                  Label="Firm name"
                                                   Variant="Variant.Outlined"
                                                   Margin="Margin.Dense"
+                                                  MaxLength="@SetupService.MaxFirmNameLength"
                                                   Immediate="true"
                                                   Disabled="@FieldsLocked"
-                                                  HelperText="@AdminPinHelper"
-                                                  Error="@AdminPinWeak"
-                                                  ErrorText="Too predictable."
+                                                  HelperText="Shown on receipts and across the app."
                                                   Adornment="Adornment.End"
-                                                  AdornmentIcon="@(AdminPinValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
-                                                  AdornmentColor="@(AdminPinValid ? Color.Success : Color.Default)"
-                                                  UserAttributes="@PinAttrs"
-                                                  OnKeyDown="OnKeyDown" />
-                                    <MudTextField @ref="_adminPinConfirmField"
-                                                  Value="_adminPinConfirm"
-                                                  ValueChanged="SetAdminPinConfirm"
-                                                  T="string"
-                                                  Label="Confirm Admin"
-                                                  InputType="@(_showPins ? InputType.Text : InputType.Password)"
-                                                  MaxLength="4"
-                                                  Variant="Variant.Outlined"
-                                                  Margin="Margin.Dense"
-                                                  Immediate="true"
-                                                  Disabled="@(FieldsLocked || _adminPin.Length < 4)"
-                                                  HelperText="Re-enter"
-                                                  Error="@AdminConfirmMismatch"
-                                                  ErrorText="Doesn't match."
-                                                  Adornment="Adornment.End"
-                                                  AdornmentIcon="@(AdminConfirmValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
-                                                  AdornmentColor="@(AdminConfirmValid ? Color.Success : Color.Default)"
-                                                  UserAttributes="@PinAttrs"
-                                                  OnKeyDown="OnKeyDown" />
+                                                  AdornmentIcon="@(FirmNameValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                                                  AdornmentColor="@(FirmNameValid ? Color.Success : Color.Default)"
+                                                  UserAttributes="@FirmNameAttrs"
+                                                  OnBlur="OnFirmNameBlur"
+                                                  OnKeyDown="OnFirmNameKeyDown" />
                                 </MudStack>
+                            </MudPaper>
 
-                                <MudStack Row="true" Spacing="2" Class="sap-firstrun-pin-row">
-                                    <MudTextField @ref="_masterPinField"
-                                                  Value="_masterPin"
-                                                  ValueChanged="SetMasterPin"
-                                                  T="string"
-                                                  Label="Master PIN"
-                                                  InputType="@(_showPins ? InputType.Text : InputType.Password)"
-                                                  MaxLength="6"
-                                                  Variant="Variant.Outlined"
-                                                  Margin="Margin.Dense"
-                                                  Immediate="true"
-                                                  Disabled="@FieldsLocked"
-                                                  HelperText="@MasterPinHelper"
-                                                  Error="@(MasterPinWeak || MasterContainsAdmin)"
-                                                  ErrorText="@MasterPinErrorText"
-                                                  Adornment="Adornment.End"
-                                                  AdornmentIcon="@(MasterPinValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
-                                                  AdornmentColor="@(MasterPinValid ? Color.Success : Color.Default)"
-                                                  UserAttributes="@PinAttrs"
-                                                  OnKeyDown="OnKeyDown" />
-                                    <MudTextField @ref="_masterPinConfirmField"
-                                                  Value="_masterPinConfirm"
-                                                  ValueChanged="SetMasterPinConfirm"
-                                                  T="string"
-                                                  Label="Confirm Master"
-                                                  InputType="@(_showPins ? InputType.Text : InputType.Password)"
-                                                  MaxLength="6"
-                                                  Variant="Variant.Outlined"
-                                                  Margin="Margin.Dense"
-                                                  Immediate="true"
-                                                  Disabled="@(FieldsLocked || _masterPin.Length < 6)"
-                                                  HelperText="Re-enter"
-                                                  Error="@MasterConfirmMismatch"
-                                                  ErrorText="Doesn't match."
-                                                  Adornment="Adornment.End"
-                                                  AdornmentIcon="@(MasterConfirmValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
-                                                  AdornmentColor="@(MasterConfirmValid ? Color.Success : Color.Default)"
-                                                  UserAttributes="@PinAttrs"
-                                                  OnKeyDown="OnKeyDown" />
+                            <MudPaper Elevation="1" Class="pa-4 sap-firstrun-card">
+                                <MudStack Spacing="3">
+                                    <MudStack Row="true" Spacing="0" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                        <MudText Typo="Typo.h6">Choose two PINs</MudText>
+                                        <MudTooltip Text="@PinVisibilityTooltip" Placement="Placement.Top">
+                                            <MudIconButton Icon="@(_showPins ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)"
+                                                           Size="Size.Small"
+                                                           Color="Color.Default"
+                                                           Class="sap-firstrun-pin-toggle"
+                                                           OnClick="TogglePins"
+                                                           Disabled="@FieldsLocked"
+                                                           UserAttributes="@PinVisibilityAttrs" />
+                                        </MudTooltip>
+                                    </MudStack>
+                                    <MudText Typo="Typo.caption" Color="Color.Default">
+                                        Admin for day-to-day protected actions. Master for destructive deletions and recovery.
+                                    </MudText>
+
+                                    <MudStack Row="true" Spacing="2" Class="sap-firstrun-pin-row">
+                                        <MudTextField @ref="_adminPinField"
+                                                      Value="_adminPin"
+                                                      ValueChanged="SetAdminPin"
+                                                      T="string"
+                                                      Label="Admin PIN"
+                                                      InputType="@(_showPins ? InputType.Text : InputType.Password)"
+                                                      MaxLength="@SetupService.AdminPinLength"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense"
+                                                      Immediate="true"
+                                                      Disabled="@FieldsLocked"
+                                                      HelperText="@AdminPinHelper"
+                                                      Error="@AdminPinWeak"
+                                                      ErrorText="@AdminPinErrorText"
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(AdminPinValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                                                      AdornmentColor="@(AdminPinValid ? Color.Success : Color.Default)"
+                                                      UserAttributes="@PinAttrs"
+                                                      OnKeyDown="OnPinKeyDown" />
+                                        <MudTextField @ref="_adminPinConfirmField"
+                                                      Value="_adminPinConfirm"
+                                                      ValueChanged="SetAdminPinConfirm"
+                                                      T="string"
+                                                      Label="Confirm Admin PIN"
+                                                      InputType="@(_showPins ? InputType.Text : InputType.Password)"
+                                                      MaxLength="@SetupService.AdminPinLength"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense"
+                                                      Immediate="true"
+                                                      Disabled="@(FieldsLocked || _adminPin.Length < SetupService.AdminPinLength)"
+                                                      HelperText="Re-enter"
+                                                      Error="@AdminConfirmShowsError"
+                                                      ErrorText="Doesn't match."
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(AdminConfirmValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                                                      AdornmentColor="@(AdminConfirmValid ? Color.Success : Color.Default)"
+                                                      UserAttributes="@PinAttrs"
+                                                      OnKeyDown="OnPinKeyDown" />
+                                    </MudStack>
+
+                                    <MudStack Row="true" Spacing="2" Class="sap-firstrun-pin-row">
+                                        <MudTextField @ref="_masterPinField"
+                                                      Value="_masterPin"
+                                                      ValueChanged="SetMasterPin"
+                                                      T="string"
+                                                      Label="Master PIN"
+                                                      InputType="@(_showPins ? InputType.Text : InputType.Password)"
+                                                      MaxLength="@SetupService.MasterPinLength"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense"
+                                                      Immediate="true"
+                                                      Disabled="@FieldsLocked"
+                                                      HelperText="@MasterPinHelper"
+                                                      Error="@(MasterPinWeak || MasterContainsAdmin)"
+                                                      ErrorText="@MasterPinErrorText"
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(MasterPinValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                                                      AdornmentColor="@(MasterPinValid ? Color.Success : Color.Default)"
+                                                      UserAttributes="@PinAttrs"
+                                                      OnKeyDown="OnPinKeyDown" />
+                                        <MudTextField @ref="_masterPinConfirmField"
+                                                      Value="_masterPinConfirm"
+                                                      ValueChanged="SetMasterPinConfirm"
+                                                      T="string"
+                                                      Label="Confirm Master PIN"
+                                                      InputType="@(_showPins ? InputType.Text : InputType.Password)"
+                                                      MaxLength="@SetupService.MasterPinLength"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense"
+                                                      Immediate="true"
+                                                      Disabled="@(FieldsLocked || _masterPin.Length < SetupService.MasterPinLength)"
+                                                      HelperText="Re-enter"
+                                                      Error="@MasterConfirmShowsError"
+                                                      ErrorText="Doesn't match."
+                                                      Adornment="Adornment.End"
+                                                      AdornmentIcon="@(MasterConfirmValid ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.RadioButtonUnchecked)"
+                                                      AdornmentColor="@(MasterConfirmValid ? Color.Success : Color.Default)"
+                                                      UserAttributes="@PinAttrs"
+                                                      OnKeyDown="OnPinKeyDown" />
+                                    </MudStack>
                                 </MudStack>
-                            </MudStack>
-                        </MudPaper>
+                            </MudPaper>
 
-                        <MudTooltip Text="@(BlockingReason ?? "")"
-                                    Disabled="@(BlockingReason is null)"
-                                    Placement="Placement.Top">
                             <MudButton OnClick="Submit"
                                        Variant="Variant.Filled"
                                        Color="Color.Primary"
@@ -247,7 +294,7 @@ else
                                     <span>Complete setup</span>
                                 }
                             </MudButton>
-                        </MudTooltip>
+                        }
                     </MudStack>
                 </MudContainer>
             </MudItem>
@@ -264,10 +311,23 @@ else
     private bool _showPins;
     private bool _submitting;
     private bool _redirecting;
+    private string _redirectingMessage = "Just a moment…";
 
     private bool _adminAutoAdvanced;
     private bool _adminConfirmAutoAdvanced;
     private bool _masterAutoAdvanced;
+
+    private bool _firmNameVisited;          // Set on first blur. Drives the hero
+                                            // greeting reveal, so the firm name
+                                            // doesn't echo back in 96px serif as
+                                            // the user types it the first time.
+
+    private SetupStatus _setupStatusSnapshot = SetupStatus.NotSetup;
+    private PageMode _pageMode = PageMode.NewSetup;
+
+    private CancellationTokenSource? _pinHideCts;
+
+    private enum PageMode { NewSetup, AlreadyConfigured, ResetConfirm }
 
     // Focus-after-render queue. The next-field-target is disabled in the DOM
     // until the prior field hits its required length; if we call FocusAsync
@@ -276,51 +336,68 @@ else
     // run FocusAsync from OnAfterRenderAsync, after Blazor has re-rendered the
     // input with disabled=false.
     private FocusTarget _pendingFocus = FocusTarget.None;
-    private enum FocusTarget { None, AdminConfirm, Master, MasterConfirm, Admin }
+    private enum FocusTarget { None, FirmName, AdminConfirm, Master, MasterConfirm, Admin }
 
+    private MudTextField<string>? _firmNameField;
     private MudTextField<string>? _adminPinField;
     private MudTextField<string>? _adminPinConfirmField;
     private MudTextField<string>? _masterPinField;
     private MudTextField<string>? _masterPinConfirmField;
 
-    private Dictionary<string, object> AriaHidden = null!;
-    private Dictionary<string, object> FirmNameAttrs = null!;
-    private Dictionary<string, object> PinAttrs = null!;
-    private Dictionary<string, object> BlockerAriaAttrs = null!;
-    private Dictionary<string, object> ShowPinsAttrs = null!;
+    private static readonly Dictionary<string, object> AriaHidden =
+        new() { ["aria-hidden"] = "true" };
+    private static readonly Dictionary<string, object> FirmNameAttrs =
+        new() { ["spellcheck"] = "false", ["autocomplete"] = "off", ["aria-required"] = "true" };
+    private static readonly Dictionary<string, object> PinAttrs =
+        new() { ["autocomplete"] = "off", ["inputmode"] = "numeric", ["aria-required"] = "true" };
+    private static readonly Dictionary<string, object> BlockerAriaAttrs =
+        new() { ["aria-describedby"] = "setup-blocker" };
 
-    private bool FieldsLocked => _submitting || Setup.Status == SetupStatus.Inaccessible;
+    // State-aware aria-label for the visibility toggle. The icon and tooltip
+    // both flip with `_showPins`; aria-label needs to match.
+    private Dictionary<string, object> PinVisibilityAttrs =>
+        new() { ["aria-label"] = _showPins ? "Hide PINs" : "Show PINs" };
+
+    private string PinVisibilityTooltip => _showPins ? "Hide PINs" : "Show PINs";
+
+    private bool FieldsLocked => _submitting || _setupStatusSnapshot == SetupStatus.Inaccessible;
 
     protected override void OnInitialized()
     {
-        AriaHidden = new Dictionary<string, object> { ["aria-hidden"] = "true" };
-        FirmNameAttrs = new Dictionary<string, object>
-        {
-            ["spellcheck"] = "false",
-            ["autocomplete"] = "off",
-            ["aria-required"] = "true",
-        };
-        PinAttrs = new Dictionary<string, object>
-        {
-            ["autocomplete"] = "off",
-            ["inputmode"] = "numeric",
-            ["aria-required"] = "true",
-        };
-        BlockerAriaAttrs = new Dictionary<string, object> { ["aria-describedby"] = "setup-blocker" };
-        ShowPinsAttrs = new Dictionary<string, object> { ["aria-label"] = "Toggle PIN visibility" };
+        _setupStatusSnapshot = Setup.Status;
+        _pageMode = _setupStatusSnapshot == SetupStatus.Valid
+            ? PageMode.AlreadyConfigured
+            : PageMode.NewSetup;
+    }
 
-        if (Setup.IsComplete)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pendingFocus == FocusTarget.None) return;
+        var target = _pendingFocus;
+        _pendingFocus = FocusTarget.None;
+
+        var field = target switch
         {
-            _redirecting = true;
-            Nav.NavigateTo("/", replace: true);
-        }
+            FocusTarget.FirmName      => _firmNameField,
+            FocusTarget.Admin         => _adminPinField,
+            FocusTarget.AdminConfirm  => _adminPinConfirmField,
+            FocusTarget.Master        => _masterPinField,
+            FocusTarget.MasterConfirm => _masterPinConfirmField,
+            _ => null,
+        };
+        if (field is null) return;
+        try { await field.FocusAsync(); }
+        catch { /* WebView2 can be mid-teardown during navigation; ignore */ }
     }
 
     private string HeroHeading
     {
         get
         {
-            if (!FirmNameValid) return "Namaste";
+            // Don't echo the firm name back until the user has committed it
+            // (blurred the field). Avoids shoulder-surf exposure of the name
+            // in 96px serif while the user is still typing it.
+            if (!_firmNameVisited || !FirmNameValid) return "Namaste";
             return $"Namaste, {TruncateGraphemes(_firmName.Trim(), 12)}";
         }
     }
@@ -344,23 +421,33 @@ else
         return count <= maxGraphemes ? s : s[..endIndex] + "…";
     }
 
-    private bool AdminPinWeak => _adminPin.Length == 4 && PinRules.IsWeak(_adminPin);
-    private bool MasterPinWeak => _masterPin.Length == 6 && PinRules.IsWeak(_masterPin);
-    private bool AdminConfirmMismatch => _adminPinConfirm.Length == 4 && _adminPinConfirm != _adminPin;
-    private bool MasterConfirmMismatch => _masterPinConfirm.Length == 6 && _masterPinConfirm != _masterPin;
+    private bool AdminPinWeak => _adminPin.Length == SetupService.AdminPinLength && PinRules.IsWeak(_adminPin);
+    private bool MasterPinWeak => _masterPin.Length == SetupService.MasterPinLength && PinRules.IsWeak(_masterPin);
+
+    // Progressive mismatch — the confirm field flags a divergence as soon as
+    // the typed-so-far doesn't match the same prefix of the source PIN, not
+    // only when the confirm is at full length. Catches typos earlier.
+    private bool AdminConfirmShowsError =>
+        _adminPinConfirm.Length > 0 && !_adminPin.StartsWith(_adminPinConfirm, StringComparison.Ordinal);
+    private bool MasterConfirmShowsError =>
+        _masterPinConfirm.Length > 0 && !_masterPin.StartsWith(_masterPinConfirm, StringComparison.Ordinal);
+
     private bool MasterContainsAdmin =>
-        _masterPin.Length == 6 && _adminPin.Length == 4 &&
+        _masterPin.Length == SetupService.MasterPinLength &&
+        _adminPin.Length == SetupService.AdminPinLength &&
         _masterPin.Contains(_adminPin, StringComparison.Ordinal);
 
     private bool FirmNameValid => _firmName.Trim().Length >= SetupService.MinFirmNameLength;
-    private bool AdminPinValid => _adminPin.Length == 4 && !PinRules.IsWeak(_adminPin);
-    private bool AdminConfirmValid => _adminPinConfirm.Length == 4 && _adminPinConfirm == _adminPin;
-    private bool MasterPinValid => _masterPin.Length == 6 && !PinRules.IsWeak(_masterPin) && !MasterContainsAdmin;
-    private bool MasterConfirmValid => _masterPinConfirm.Length == 6 && _masterPinConfirm == _masterPin;
+    private bool AdminPinValid => _adminPin.Length == SetupService.AdminPinLength && !PinRules.IsWeak(_adminPin);
+    private bool AdminConfirmValid => _adminPinConfirm.Length == SetupService.AdminPinLength && _adminPinConfirm == _adminPin;
+    private bool MasterPinValid => _masterPin.Length == SetupService.MasterPinLength && !PinRules.IsWeak(_masterPin) && !MasterContainsAdmin;
+    private bool MasterConfirmValid => _masterPinConfirm.Length == SetupService.MasterPinLength && _masterPinConfirm == _masterPin;
 
     private string MasterPinErrorText => MasterContainsAdmin
         ? "Contains the Admin PIN."
         : "Too predictable.";
+
+    private string AdminPinErrorText => "Too predictable.";
 
     private string AdminPinHelper => PinRules.IsStrong(_adminPin) ? "4 digits · OK" : "4 digits";
     private string MasterPinHelper => PinRules.IsStrong(_masterPin) ? "6 digits · OK" : "6 digits";
@@ -377,108 +464,95 @@ else
     {
         get
         {
-            if (Setup.Status == SetupStatus.Inaccessible)
+            if (_setupStatusSnapshot == SetupStatus.Inaccessible)
                 return "Local app data is not accessible — setup cannot be saved.";
             if (!FirmNameValid)
                 return _firmName.Length == 0
                     ? "Start by naming your firm."
                     : "Firm name must be at least 2 characters.";
-            if (_adminPin.Length < 4) return "Set a 4-digit Admin PIN.";
+            if (_adminPin.Length < SetupService.AdminPinLength) return "Set a 4-digit Admin PIN.";
             if (PinRules.IsWeak(_adminPin)) return "Admin PIN is too predictable — try something less obvious.";
-            if (_adminPinConfirm.Length < 4) return "Re-enter the Admin PIN to confirm it.";
+            if (_adminPinConfirm.Length < SetupService.AdminPinLength) return "Re-enter the Admin PIN to confirm it.";
             if (_adminPinConfirm != _adminPin) return "Admin PIN confirmation doesn't match.";
-            if (_masterPin.Length < 6) return "Set a 6-digit Master PIN.";
+            if (_masterPin.Length < SetupService.MasterPinLength) return "Set a 6-digit Master PIN.";
             if (MasterContainsAdmin) return "Master PIN must not contain the Admin PIN.";
             if (PinRules.IsWeak(_masterPin)) return "Master PIN is too predictable — try something less obvious.";
-            if (_masterPinConfirm.Length < 6) return "Re-enter the Master PIN to confirm it.";
+            if (_masterPinConfirm.Length < SetupService.MasterPinLength) return "Re-enter the Master PIN to confirm it.";
             if (_masterPinConfirm != _masterPin) return "Master PIN confirmation doesn't match.";
             return null;
         }
     }
 
-    private void SetFirmName(string v)
-    {
-        _firmName = v ?? "";
-    }
-
     private void SetAdminPin(string v)
     {
         var was = _adminPin.Length;
-        _adminPin = AsciiDigitsOnly(v, 4);
+        _adminPin = AsciiDigitsOnly(v, SetupService.AdminPinLength);
 
-        // If admin shrinks below the required length, the confirm value is no longer
-        // meaningful — clear it so the user retypes against the new admin.
-        if (_adminPin.Length < 4 && _adminPinConfirm.Length > 0)
+        if (_adminPin.Length < SetupService.AdminPinLength && _adminPinConfirm.Length > 0)
         {
             _adminPinConfirm = "";
             _adminConfirmAutoAdvanced = false;
         }
 
-        if (was < 4 && _adminPin.Length == 4 && AdminPinValid &&
-            !_adminAutoAdvanced && _adminPinConfirm.Length == 0)
+        if (was < SetupService.AdminPinLength && _adminPin.Length == SetupService.AdminPinLength &&
+            AdminPinValid && !_adminAutoAdvanced && _adminPinConfirm.Length == 0)
         {
             _adminAutoAdvanced = true;
             _pendingFocus = FocusTarget.AdminConfirm;
         }
-        if (_adminPin.Length < 4) _adminAutoAdvanced = false;
+        if (_adminPin.Length < SetupService.AdminPinLength)
+        {
+            _adminAutoAdvanced = false;
+            // If a backspace lands inside the same render cycle as the auto-
+            // advance trigger, the queued focus would still fire and yank the
+            // caret to the (now-meaningless) confirm field. Clear it.
+            if (_pendingFocus == FocusTarget.AdminConfirm) _pendingFocus = FocusTarget.None;
+        }
     }
 
     private void SetAdminPinConfirm(string v)
     {
         var was = _adminPinConfirm.Length;
-        _adminPinConfirm = AsciiDigitsOnly(v, 4);
-        if (was < 4 && _adminPinConfirm.Length == 4 && AdminConfirmValid &&
-            !_adminConfirmAutoAdvanced && _masterPin.Length == 0)
+        _adminPinConfirm = AsciiDigitsOnly(v, SetupService.AdminPinLength);
+        if (was < SetupService.AdminPinLength && _adminPinConfirm.Length == SetupService.AdminPinLength &&
+            AdminConfirmValid && !_adminConfirmAutoAdvanced && _masterPin.Length == 0)
         {
             _adminConfirmAutoAdvanced = true;
             _pendingFocus = FocusTarget.Master;
         }
-        if (_adminPinConfirm.Length < 4) _adminConfirmAutoAdvanced = false;
+        if (_adminPinConfirm.Length < SetupService.AdminPinLength)
+        {
+            _adminConfirmAutoAdvanced = false;
+            if (_pendingFocus == FocusTarget.Master) _pendingFocus = FocusTarget.None;
+        }
     }
 
     private void SetMasterPin(string v)
     {
         var was = _masterPin.Length;
-        _masterPin = AsciiDigitsOnly(v, 6);
+        _masterPin = AsciiDigitsOnly(v, SetupService.MasterPinLength);
 
-        if (_masterPin.Length < 6 && _masterPinConfirm.Length > 0)
+        if (_masterPin.Length < SetupService.MasterPinLength && _masterPinConfirm.Length > 0)
         {
             _masterPinConfirm = "";
             _masterAutoAdvanced = false;
         }
 
-        if (was < 6 && _masterPin.Length == 6 && MasterPinValid &&
-            !_masterAutoAdvanced && _masterPinConfirm.Length == 0)
+        if (was < SetupService.MasterPinLength && _masterPin.Length == SetupService.MasterPinLength &&
+            MasterPinValid && !_masterAutoAdvanced && _masterPinConfirm.Length == 0)
         {
             _masterAutoAdvanced = true;
             _pendingFocus = FocusTarget.MasterConfirm;
         }
-        if (_masterPin.Length < 6) _masterAutoAdvanced = false;
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_pendingFocus == FocusTarget.None) return;
-        var target = _pendingFocus;
-        _pendingFocus = FocusTarget.None;
-
-        var field = target switch
+        if (_masterPin.Length < SetupService.MasterPinLength)
         {
-            FocusTarget.Admin         => _adminPinField,
-            FocusTarget.AdminConfirm  => _adminPinConfirmField,
-            FocusTarget.Master        => _masterPinField,
-            FocusTarget.MasterConfirm => _masterPinConfirmField,
-            _ => null,
-        };
-        if (field is null) return;
-        try { await field.FocusAsync(); }
-        catch { /* WebView2 can be mid-teardown during navigation; ignore */ }
+            _masterAutoAdvanced = false;
+            if (_pendingFocus == FocusTarget.MasterConfirm) _pendingFocus = FocusTarget.None;
+        }
     }
 
-    private void SetMasterPinConfirm(string v)
-    {
-        _masterPinConfirm = AsciiDigitsOnly(v, 6);
-    }
+    private void SetMasterPinConfirm(string v) =>
+        _masterPinConfirm = AsciiDigitsOnly(v, SetupService.MasterPinLength);
 
     private static string AsciiDigitsOnly(string s, int max)
     {
@@ -492,6 +566,8 @@ else
 
     private static string StripParamSuffix(string message)
     {
+        // .NET's ArgumentException.Message appends "(Parameter '...')" in the
+        // current culture (en-IN here). Strip that for cleaner UI display.
         var i = message.IndexOf(" (Parameter ", StringComparison.Ordinal);
         return i >= 0 ? message[..i] : message;
     }
@@ -504,31 +580,72 @@ else
         // can keep typing without reaching for the mouse.
         _showPins = !_showPins;
         _pendingFocus = ActivePinField();
+
+        // Cancel any prior auto-hide and start a fresh one when the toggle
+        // turns visibility on. Limits the window where someone glancing at
+        // the screen can read the PIN.
+        _pinHideCts?.Cancel();
+        _pinHideCts?.Dispose();
+        _pinHideCts = null;
+
+        if (_showPins)
+        {
+            var cts = new CancellationTokenSource();
+            _pinHideCts = cts;
+            _ = AutoHideAfterAsync(TimeSpan.FromSeconds(60), cts.Token);
+        }
+    }
+
+    private async Task AutoHideAfterAsync(TimeSpan delay, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(delay, token);
+            await InvokeAsync(() =>
+            {
+                if (_showPins)
+                {
+                    _showPins = false;
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (OperationCanceledException) { /* expected on toggle-off */ }
     }
 
     // Best-guess "which field is the user on right now" — the first one with
-    // remaining capacity, in entry order. Good enough for the eye-toggle case.
+    // remaining capacity, in entry order. If everything's full we leave focus
+    // alone (the user is most likely glancing at one of the earlier fields).
     private FocusTarget ActivePinField()
     {
-        if (_adminPin.Length < 4) return FocusTarget.Admin;
-        if (_adminPinConfirm.Length < 4) return FocusTarget.AdminConfirm;
-        if (_masterPin.Length < 6) return FocusTarget.Master;
-        if (_masterPinConfirm.Length < 6) return FocusTarget.MasterConfirm;
-        return FocusTarget.MasterConfirm;
+        if (_adminPin.Length < SetupService.AdminPinLength) return FocusTarget.Admin;
+        if (_adminPinConfirm.Length < SetupService.AdminPinLength) return FocusTarget.AdminConfirm;
+        if (_masterPin.Length < SetupService.MasterPinLength) return FocusTarget.Master;
+        if (_masterPinConfirm.Length < SetupService.MasterPinLength) return FocusTarget.MasterConfirm;
+        return FocusTarget.None;
     }
 
     private void OnFirmNameBlur()
     {
         _firmName = _firmName.Trim();
+        _firmNameVisited = true;
     }
 
     private void OnFirmNameKeyDown(KeyboardEventArgs e)
     {
         if (e.Key != "Enter") return;
-        if (FirmNameValid) _pendingFocus = FocusTarget.Admin;
+        if (FirmNameValid)
+        {
+            _firmNameVisited = true;
+            _pendingFocus = FocusTarget.Admin;
+        }
+        else if (BlockingReason is { } reason)
+        {
+            Snackbar.Add(reason, Severity.Info, c => c.VisibleStateDuration = 4000);
+        }
     }
 
-    private async Task OnKeyDown(KeyboardEventArgs e)
+    private async Task OnPinKeyDown(KeyboardEventArgs e)
     {
         if (e.Key != "Enter") return;
         if (CanSubmit)
@@ -537,14 +654,19 @@ else
         }
         else if (BlockingReason is { } reason)
         {
-            // Keyboard users don't see the disabled-button tooltip — surface the reason here.
-            Snackbar.Add(reason, Severity.Info, config => config.VisibleStateDuration = 4000);
+            // Keyboard users can't focus the disabled submit button — surface
+            // the reason here so they aren't left wondering why Enter is inert.
+            Snackbar.Add(reason, Severity.Info, c => c.VisibleStateDuration = 4000);
         }
     }
 
     private async Task Submit()
     {
         if (_submitting) return;
+        // Defence in depth: the button's Disabled gate is the primary check,
+        // OnPinKeyDown also gates on CanSubmit, but Submit itself trusts neither.
+        if (!CanSubmit) return;
+
         _submitting = true;
         try
         {
@@ -558,34 +680,22 @@ else
             {
                 await Task.Run(() => Setup.Save(name, admin, master));
             }
-            catch (ArgumentException ex)
-            {
-                ShowError(StripParamSuffix(ex.Message));
-                return;
-            }
-            catch (IOException ex)
-            {
-                ShowError($"Could not save setup: {ex.Message}");
-                return;
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                ShowError($"Could not save setup: {ex.Message}");
-                return;
-            }
-            catch (CryptographicException ex)
-            {
-                ShowError($"Could not secure your PINs: {ex.Message}");
-                return;
-            }
             catch (Exception ex)
             {
-                ShowError($"Setup failed: {ex.Message}");
+                Logger.LogError(ex, "Setup save failed");
+                ShowError(MessageFor(ex));
                 return;
             }
+
+            // Owner just typed and confirmed both PINs — we have proof of physical
+            // possession. Skip the immediate-after-setup unlock prompt.
+            Session.EnterAdmin();
+            Logger.LogInformation("Setup completed for firm {Firm}", name);
 
             _adminPin = _adminPinConfirm = _masterPin = _masterPinConfirm = "";
 
+            ShowOk("Setup complete.");
+            _redirectingMessage = "Setup complete — taking you to your firm…";
             _redirecting = true;
             Nav.NavigateTo("/", replace: true);
         }
@@ -595,10 +705,59 @@ else
         }
     }
 
+    private static string MessageFor(Exception ex) => ex switch
+    {
+        ArgumentException a => StripParamSuffix(a.Message),
+        IOException                   => "Could not save setup. The setup file may be locked or the disk full.",
+        UnauthorizedAccessException   => "Could not save setup. The application doesn't have permission to write to LocalAppData.",
+        CryptographicException        => "Could not secure your PINs. The system's cryptography services are unavailable.",
+        _                             => "Setup failed unexpectedly. Please try again."
+    };
+
+    private void GoHome()
+    {
+        _redirectingMessage = "Taking you to your firm…";
+        _redirecting = true;
+        Nav.NavigateTo("/", replace: true);
+    }
+
+    private void ShowResetConfirm() => _pageMode = PageMode.ResetConfirm;
+
+    private void CancelReset() => _pageMode = PageMode.AlreadyConfigured;
+
+    private void DoReset()
+    {
+        try
+        {
+            Setup.Reset();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Setup reset failed");
+            ShowError("Could not reset setup. Please try again.");
+            return;
+        }
+
+        _setupStatusSnapshot = Setup.Status;
+        _pageMode = PageMode.NewSetup;
+        // Ask for focus on the now-revealed firm-name field.
+        _pendingFocus = FocusTarget.FirmName;
+        ShowOk("Setup file removed. Set new PINs to continue.");
+    }
+
+    private void ShowOk(string message) =>
+        Snackbar.Add(message, Severity.Success, config => config.VisibleStateDuration = 3000);
+
     private void ShowError(string message) =>
         Snackbar.Add(message, Severity.Error, config =>
         {
             config.ShowCloseIcon = true;
             config.VisibleStateDuration = 10000;
         });
+
+    public void Dispose()
+    {
+        _pinHideCts?.Cancel();
+        _pinHideCts?.Dispose();
+    }
 }

@@ -262,8 +262,10 @@
         {
             await using var db = await DbFactory.CreateDbContextAsync();
             _products = await db.Products.AsNoTracking().Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();
-            _taxes = await db.TaxRates.AsNoTracking().Where(t => t.IsActive)
-                .OrderByDescending(t => t.IsDefault).ThenBy(t => t.Rate).ToListAsync();
+            // SQLite can't ORDER BY decimal — pull rows ordered on the bool
+            // (IsDefault) and sort the decimal Rate client-side.
+            var taxRows = await db.TaxRates.AsNoTracking().Where(t => t.IsActive).ToListAsync();
+            _taxes = taxRows.OrderByDescending(t => t.IsDefault).ThenBy(t => t.Rate).ToList();
             ApplyFilter();
 
             // Default the form's tax rate to the configured default if available.

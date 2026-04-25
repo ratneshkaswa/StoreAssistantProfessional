@@ -23,6 +23,11 @@ public interface ISetupService
     void Save(string firmName, string adminPin, string masterPin);
     bool VerifyAdmin(string? pin);
     bool VerifyMaster(string? pin);
+
+    // Wipes setup.json and resets the service to NotSetup. Caller must verify
+    // Master before invoking — Reset doesn't re-verify so tests can drive it
+    // directly. The page-side flow gates on a successful VerifyMaster first.
+    void Reset();
 }
 
 public sealed class SetupService : ISetupService
@@ -35,25 +40,38 @@ public sealed class SetupService : ISetupService
 
     private const int SaltBytes = 16;
     private const int HashBytes = 32;
+
+    // PBKDF2 iteration counts. `Current` is what new files write; `Legacy` is
+    // the floor used to migrate v1 records that pre-date per-record `iterations`
+    // tracking. Today the two values are equal — bumping `Current` (e.g. to
+    // 1_000_000 per OWASP 2025 guidance) is a one-line change that strengthens
+    // every fresh save without breaking verification of older files.
     public const int CurrentPbkdf2Iterations = 600_000;
     private const int LegacyPbkdf2Iterations = 600_000;
+
     private const long MaxFileBytes = 64 * 1024;
 
-    private static readonly JsonSerializerOptions WriteOptions = new()
-    {
-        WriteIndented = false,
-    };
+    // App-specific entropy folded into the DPAPI key. Without this, any other
+    // process running under the same Windows account could call Unprotect on
+    // setup.json and recover the JSON. With it, the bytes are tied to this
+    // application's identity. Treat the value as part of the file format —
+    // changing it breaks decrypt of all existing files.
+    private static readonly byte[] DpapiEntropy = Encoding.UTF8.GetBytes(
+        "StoreAssistantProfessional/setup-v1");
 
     private static readonly JsonSerializerOptions ReadOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };
 
-    // setup.json contents are PBKDF2 hashes (not the PIN itself), but the file is plaintext
-    // on disk. Anyone who can read the file can mount an offline brute-force attack against
-    // 4-/6-digit PINs; the 600k SHA-256 iterations slow CPU attacks but not GPU farms.
-    // Mitigation today: NTFS ACLs default to user-only on LocalAppData. Future: wrap with
-    // ProtectedData (DPAPI) so the file is unusable on a different Windows account / machine.
+    // Until Save runs ProtectedData.Protect, setup.json is plaintext JSON of
+    // PBKDF2 hashes (still hashed, but readable). Anyone with read access to
+    // %LocalAppData%\StoreAssistantProfessional can mount an offline brute-force
+    // attack against 4-/6-digit PINs; the 600k SHA-256 iterations slow CPU
+    // attacks but not GPU farms. The DPAPI wrapper ties decryption to the
+    // current Windows user account, defeating attackers who copy the file off
+    // the machine. Tampering is also detected: ProtectedData includes an
+    // integrity tag, so Unprotect fails for any byte modification.
 
     private readonly ISessionService _session;
     private readonly object _lock = new();
@@ -63,30 +81,29 @@ public sealed class SetupService : ISetupService
     private SetupData? _cached;
     private SetupStatus _status;
 
+    // Two ctors: DI registers the single-parameter form via the standard
+    // constructor selection rules; the (session, appDataDir) overload exists
+    // only for tests that need to redirect storage to a temp directory.
     public SetupService(ISessionService session) : this(session, appDataDir: null) { }
 
-    // appDataDir lets tests redirect storage; production passes null and uses LocalApplicationData.
     public SetupService(ISessionService session, string? appDataDir)
     {
         _session = session;
         try
         {
-            var dir = appDataDir ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "StoreAssistantProfessional");
+            var dir = appDataDir ?? AppPaths.AppDataDir;
             Directory.CreateDirectory(dir);
             _path = Path.Combine(dir, "setup.json");
             _tmpPath = _path + ".tmp";
             _bakPath = _path + ".bak";
             (_cached, _status) = Load();
         }
-        catch (Exception ex) when (
-            ex is IOException or
-            UnauthorizedAccessException or
-            SecurityException or
-            ArgumentException or
-            NotSupportedException)
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
+            // Catch broadly — anything from "drive removed" to "disk encryption
+            // re-key in progress" to a custom Win32Exception ends up here. The
+            // page renders a fallback alert; the alternative is the singleton
+            // failing to construct and the entire app failing to start.
             _path = null;
             _tmpPath = null;
             _bakPath = null;
@@ -146,8 +163,10 @@ public sealed class SetupService : ISetupService
                 DateTime.UtcNow,
                 CurrentSchemaVersion);
 
-            var json = JsonSerializer.Serialize(data, WriteOptions);
-            var bytes = Encoding.UTF8.GetBytes(json);
+            var json = JsonSerializer.Serialize(data);
+            var plaintext = Encoding.UTF8.GetBytes(json);
+            var ciphertext = ProtectedData.Protect(plaintext, DpapiEntropy, DataProtectionScope.CurrentUser);
+            CryptographicOperations.ZeroMemory(plaintext);
 
             try { File.Delete(_tmpPath); }
             catch (IOException) { }
@@ -155,7 +174,7 @@ public sealed class SetupService : ISetupService
 
             using (var fs = new FileStream(_tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                fs.Write(bytes, 0, bytes.Length);
+                fs.Write(ciphertext, 0, ciphertext.Length);
                 fs.Flush(flushToDisk: true);
             }
 
@@ -187,7 +206,7 @@ public sealed class SetupService : ISetupService
         SetupData? cached;
         lock (_lock) cached = _cached;
         if (cached is null) return false;
-        if (pin is null || pin.Length != expectedLength || !IsAsciiDigits(pin)) return false;
+        if (pin is null || pin.Length != expectedLength || !PinRules.IsAsciiDigits(pin)) return false;
 
         byte[]? actual = null;
         try
@@ -214,19 +233,38 @@ public sealed class SetupService : ISetupService
         }
     }
 
+    public void Reset()
+    {
+        if (_path is null || _bakPath is null)
+            throw new IOException("Setup storage is not accessible on this machine.");
+
+        TryDelete(_path);
+        TryDelete(_bakPath);
+        TryDelete(_tmpPath);
+
+        lock (_lock)
+        {
+            _cached = null;
+            _status = SetupStatus.NotSetup;
+        }
+    }
+
+    private static void TryDelete(string? path)
+    {
+        if (path is null) return;
+        try { File.Delete(path); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    public static bool IsAsciiDigits(string s) => PinRules.IsAsciiDigits(s);
+
     private static void ValidatePin(string pin, int length, string label, string paramName)
     {
-        if (pin is null || pin.Length != length || !IsAsciiDigits(pin))
+        if (pin is null || pin.Length != length || !PinRules.IsAsciiDigits(pin))
             throw new ArgumentException($"{label} PIN must be {length} digits.", paramName);
         if (PinRules.IsWeak(pin))
             throw new ArgumentException($"{label} PIN is too predictable.", paramName);
-    }
-
-    public static bool IsAsciiDigits(string s)
-    {
-        for (var i = 0; i < s.Length; i++)
-            if (s[i] is < '0' or > '9') return false;
-        return true;
     }
 
     private (SetupData? data, SetupStatus status) Load()
@@ -267,7 +305,24 @@ public sealed class SetupService : ISetupService
             if (!File.Exists(path)) return null;
             var info = new FileInfo(path);
             if (info.Length > MaxFileBytes) return null;
-            var data = JsonSerializer.Deserialize<SetupData>(File.ReadAllText(path), ReadOptions);
+            var bytes = File.ReadAllBytes(path);
+
+            // Try DPAPI first; on failure, fall back to legacy plaintext JSON
+            // so files written by the pre-DPAPI service still load (and get
+            // re-written encrypted on the next Save).
+            string json;
+            try
+            {
+                var plaintext = ProtectedData.Unprotect(bytes, DpapiEntropy, DataProtectionScope.CurrentUser);
+                json = Encoding.UTF8.GetString(plaintext);
+                CryptographicOperations.ZeroMemory(plaintext);
+            }
+            catch (CryptographicException)
+            {
+                json = Encoding.UTF8.GetString(bytes);
+            }
+
+            var data = JsonSerializer.Deserialize<SetupData>(json, ReadOptions);
             return IsDataComplete(data) ? data : null;
         }
         catch (JsonException) { return null; }

@@ -282,8 +282,12 @@
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            _taxes = await db.TaxRates.AsNoTracking().Where(t => t.IsActive)
-                .OrderBy(t => t.SortOrder).ThenBy(t => t.Rate).ToListAsync();
+            // SQLite stores decimal as TEXT and refuses to ORDER BY it; sort
+            // by the indexed integer SortOrder server-side and break ties on
+            // Rate client-side so the table-wide order is still stable.
+            var rows = await db.TaxRates.AsNoTracking().Where(t => t.IsActive)
+                .OrderBy(t => t.SortOrder).ToListAsync();
+            _taxes = rows.OrderBy(t => t.SortOrder).ThenBy(t => t.Rate).ToList();
         }
         finally
         {

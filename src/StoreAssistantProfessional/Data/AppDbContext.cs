@@ -29,17 +29,7 @@ public sealed class AppDbContext : DbContext
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-    public static string DefaultDbPath
-    {
-        get
-        {
-            var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "StoreAssistantProfessional");
-            Directory.CreateDirectory(dir);
-            return Path.Combine(dir, "store.db");
-        }
-    }
+    public static string DefaultDbPath => Path.Combine(AppPaths.AppDataDir, "store.db");
 
     protected override void OnModelCreating(ModelBuilder b)
     {

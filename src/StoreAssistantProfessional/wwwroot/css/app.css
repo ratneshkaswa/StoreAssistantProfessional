@@ -407,6 +407,31 @@ html, body {
 /* Master/detail pages need more horizontal room than a single-form page. */
 .sap-step-root.is-wide .sap-step-form { max-width: 1080px; }
 
+/* Hero-less mode: form takes the full width, capped at a comfortable reading
+   width for a two-column form layout. No hero column = no gradient sidebar. */
+.sap-step-root.is-no-hero .sap-step-form { max-width: 1320px; }
+.sap-step-root.is-no-hero .sap-step-form-col { background: var(--mud-palette-background); }
+
+.sap-step-slim {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding-bottom: 12px;
+    margin-bottom: 4px;
+}
+.sap-step-slim-overline {
+    letter-spacing: 3px;
+    opacity: 0.7;
+    display: block;
+    margin-bottom: 6px;
+}
+.sap-step-slim-heading {
+    font-family: Georgia, 'Times New Roman', serif !important;
+    font-weight: 400 !important;
+    line-height: 1.2;
+}
+.sap-step-slim-row {
+    width: 100%;
+}
+
 /* Unified card style — single primary accent across all sections, replacing
    the rainbow inline styles from the first pass. */
 .sap-step-card {
@@ -444,6 +469,14 @@ html, body {
 .sap-step-root .mud-icon-button:focus-visible {
     outline: 2px solid var(--mud-palette-primary) !important;
     outline-offset: 2px;
+}
+
+/* Firm onboarding page — hero-less, full-width form split into two columns. */
+.sap-firm-page {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
 }
 
 /* Firm name plate — shown on the Firm onboarding step in lieu of a required
