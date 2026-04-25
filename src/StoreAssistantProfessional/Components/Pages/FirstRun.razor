@@ -269,6 +269,15 @@ else
     private bool _adminConfirmAutoAdvanced;
     private bool _masterAutoAdvanced;
 
+    // Focus-after-render queue. The next-field-target is disabled in the DOM
+    // until the prior field hits its required length; if we call FocusAsync
+    // synchronously in the value-changed handler the call lands on a still-
+    // disabled element and the browser drops it. So we record the intent and
+    // run FocusAsync from OnAfterRenderAsync, after Blazor has re-rendered the
+    // input with disabled=false.
+    private FocusTarget _pendingFocus = FocusTarget.None;
+    private enum FocusTarget { None, AdminConfirm, Master, MasterConfirm, Admin }
+
     private MudTextField<string>? _adminPinField;
     private MudTextField<string>? _adminPinConfirmField;
     private MudTextField<string>? _masterPinField;
@@ -392,7 +401,7 @@ else
         _firmName = v ?? "";
     }
 
-    private async Task SetAdminPin(string v)
+    private void SetAdminPin(string v)
     {
         var was = _adminPin.Length;
         _adminPin = AsciiDigitsOnly(v, 4);
@@ -406,28 +415,28 @@ else
         }
 
         if (was < 4 && _adminPin.Length == 4 && AdminPinValid &&
-            !_adminAutoAdvanced && _adminPinConfirm.Length == 0 && _adminPinConfirmField is not null)
+            !_adminAutoAdvanced && _adminPinConfirm.Length == 0)
         {
             _adminAutoAdvanced = true;
-            await _adminPinConfirmField.FocusAsync();
+            _pendingFocus = FocusTarget.AdminConfirm;
         }
         if (_adminPin.Length < 4) _adminAutoAdvanced = false;
     }
 
-    private async Task SetAdminPinConfirm(string v)
+    private void SetAdminPinConfirm(string v)
     {
         var was = _adminPinConfirm.Length;
         _adminPinConfirm = AsciiDigitsOnly(v, 4);
         if (was < 4 && _adminPinConfirm.Length == 4 && AdminConfirmValid &&
-            !_adminConfirmAutoAdvanced && _masterPin.Length == 0 && _masterPinField is not null)
+            !_adminConfirmAutoAdvanced && _masterPin.Length == 0)
         {
             _adminConfirmAutoAdvanced = true;
-            await _masterPinField.FocusAsync();
+            _pendingFocus = FocusTarget.Master;
         }
         if (_adminPinConfirm.Length < 4) _adminConfirmAutoAdvanced = false;
     }
 
-    private async Task SetMasterPin(string v)
+    private void SetMasterPin(string v)
     {
         var was = _masterPin.Length;
         _masterPin = AsciiDigitsOnly(v, 6);
@@ -439,12 +448,31 @@ else
         }
 
         if (was < 6 && _masterPin.Length == 6 && MasterPinValid &&
-            !_masterAutoAdvanced && _masterPinConfirm.Length == 0 && _masterPinConfirmField is not null)
+            !_masterAutoAdvanced && _masterPinConfirm.Length == 0)
         {
             _masterAutoAdvanced = true;
-            await _masterPinConfirmField.FocusAsync();
+            _pendingFocus = FocusTarget.MasterConfirm;
         }
         if (_masterPin.Length < 6) _masterAutoAdvanced = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pendingFocus == FocusTarget.None) return;
+        var target = _pendingFocus;
+        _pendingFocus = FocusTarget.None;
+
+        var field = target switch
+        {
+            FocusTarget.Admin         => _adminPinField,
+            FocusTarget.AdminConfirm  => _adminPinConfirmField,
+            FocusTarget.Master        => _masterPinField,
+            FocusTarget.MasterConfirm => _masterPinConfirmField,
+            _ => null,
+        };
+        if (field is null) return;
+        try { await field.FocusAsync(); }
+        catch { /* WebView2 can be mid-teardown during navigation; ignore */ }
     }
 
     private void SetMasterPinConfirm(string v)
@@ -468,18 +496,36 @@ else
         return i >= 0 ? message[..i] : message;
     }
 
-    private void TogglePins() => _showPins = !_showPins;
+    private void TogglePins()
+    {
+        // Swapping InputType (Password ↔ Text) tears down and rebuilds the
+        // <input> element, which kicks the caret out of the field. Restore
+        // focus to whichever PIN field the user is currently editing so they
+        // can keep typing without reaching for the mouse.
+        _showPins = !_showPins;
+        _pendingFocus = ActivePinField();
+    }
+
+    // Best-guess "which field is the user on right now" — the first one with
+    // remaining capacity, in entry order. Good enough for the eye-toggle case.
+    private FocusTarget ActivePinField()
+    {
+        if (_adminPin.Length < 4) return FocusTarget.Admin;
+        if (_adminPinConfirm.Length < 4) return FocusTarget.AdminConfirm;
+        if (_masterPin.Length < 6) return FocusTarget.Master;
+        if (_masterPinConfirm.Length < 6) return FocusTarget.MasterConfirm;
+        return FocusTarget.MasterConfirm;
+    }
 
     private void OnFirmNameBlur()
     {
         _firmName = _firmName.Trim();
     }
 
-    private async Task OnFirmNameKeyDown(KeyboardEventArgs e)
+    private void OnFirmNameKeyDown(KeyboardEventArgs e)
     {
         if (e.Key != "Enter") return;
-        if (FirmNameValid && _adminPinField is not null)
-            await _adminPinField.FocusAsync();
+        if (FirmNameValid) _pendingFocus = FocusTarget.Admin;
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)

@@ -13,7 +13,7 @@
 <OnboardingShell Current="OnboardingStep.Firm"
                  HeroIcon="@Icons.Material.Rounded.Storefront"
                  DecoIcon="@Icons.Material.Rounded.Storefront"
-                 HeroHeading="Set up your firm"
+                 HeroHeading="@HeroHeading"
                  NextHint="Next: tax rates."
                  BlockingReason="@BlockingReason"
                  ReadyMessage="Firm saved — click Continue.">
@@ -37,18 +37,59 @@
             <MudPaper Elevation="1" Class="pa-5 sap-step-card">
                 <MudStack Spacing="3">
                     <MudText Typo="Typo.h6">Identity</MudText>
+
+                    @* Firm name was already collected on the first-run page, so we
+                       show it as a serif "name plate" instead of a required input.
+                       Rename is a deliberate gesture — pencil button → inline edit
+                       → Done — to keep the page from feeling like a re-entry form. *@
+                    <div class="sap-firm-plate">
+                        <MudText Typo="Typo.overline" Class="sap-firm-plate-label">Firm</MudText>
+                        @if (_isRenamingFirm)
+                        {
+                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mt-1">
+                                <MudTextField @ref="_nameField"
+                                              @bind-Value="_firm.Name"
+                                              Label="Firm name"
+                                              Placeholder="@(_firmNameOriginal ?? "")"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              MaxLength="200"
+                                              Immediate="true"
+                                              Error="@(string.IsNullOrWhiteSpace(_firm.Name))"
+                                              ErrorText="Firm name is required."
+                                              UserAttributes="@_acOrganization" />
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Text"
+                                           Color="Color.Primary"
+                                           OnClick="DoneRenaming"
+                                           Disabled="@string.IsNullOrWhiteSpace(_firm.Name)">
+                                    Done
+                                </MudButton>
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Text"
+                                           OnClick="CancelRenaming">
+                                    Cancel
+                                </MudButton>
+                            </MudStack>
+                        }
+                        else
+                        {
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="sap-firm-plate-row">
+                                <MudText Typo="Typo.h5" Class="sap-firm-plate-name">@(string.IsNullOrWhiteSpace(_firm.Name) ? "—" : _firm.Name)</MudText>
+                                <MudTooltip Text="Rename firm" Placement="Placement.Right">
+                                    <MudIconButton Size="Size.Small"
+                                                   Icon="@Icons.Material.Rounded.Edit"
+                                                   OnClick="StartRenaming"
+                                                   aria-label="Rename firm" />
+                                </MudTooltip>
+                            </MudStack>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="sap-firm-plate-hint">
+                                From your initial setup. Click the pencil to rename.
+                            </MudText>
+                        }
+                    </div>
+
                     <MudGrid Spacing="3">
-                        <MudItem xs="12" md="8">
-                            <MudTextField @ref="_nameField"
-                                          @bind-Value="_firm.Name"
-                                          Label="Firm name *"
-                                          Variant="Variant.Outlined"
-                                          MaxLength="200"
-                                          Immediate="true"
-                                          Error="@(_attempted && string.IsNullOrWhiteSpace(_firm.Name))"
-                                          ErrorText="Firm name is required."
-                                          UserAttributes="@_acOrganization" />
-                        </MudItem>
                         <MudItem xs="12" md="4">
                             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
                                 <MudCheckBox T="bool" @bind-Value="_firm.IsCompositionScheme" Color="Color.Primary"
@@ -355,7 +396,14 @@
     private bool _locked;
     private string? _loadError;
     private bool _focusOnNextRender;
+    private bool _isRenamingFirm;
+    private string? _firmNameOriginal;
     private MudTextField<string>? _nameField;
+
+    private string HeroHeading =>
+        string.IsNullOrWhiteSpace(_firm.Name)
+            ? "Set up your firm"
+            : $"Set up {_firm.Name}";
 
     private static readonly string[] _monthNames =
     [
@@ -478,6 +526,14 @@
                 _firm = FirmVm.From(existing);
                 if (!string.IsNullOrWhiteSpace(_firm.Name)) _savedAtLeastOnce = true;
             }
+            else if (!string.IsNullOrWhiteSpace(Setup.Current?.FirmName))
+            {
+                // Seed the firm name from setup.json so the page acknowledges
+                // what the user already typed during PIN setup, instead of
+                // greeting them with an empty required field.
+                _firm.Name = Setup.Current.FirmName;
+            }
+            _firmNameOriginal = _firm.Name;
             _locked = await db.Bills.AsNoTracking().AnyAsync();
         }
         catch (Exception ex)
@@ -488,8 +544,32 @@
         finally
         {
             _loading = false;
-            _focusOnNextRender = true;
+            // Don't auto-focus the name field on load — by design the firm
+            // plate is read-only by default and the user expects the cursor
+            // to land somewhere else (or nowhere) until they tab in.
+            _focusOnNextRender = false;
         }
+    }
+
+    private void StartRenaming()
+    {
+        _firmNameOriginal = _firm.Name;
+        _isRenamingFirm = true;
+        _focusOnNextRender = true;
+    }
+
+    private void DoneRenaming()
+    {
+        if (string.IsNullOrWhiteSpace(_firm.Name)) return;
+        _firm.Name = _firm.Name.Trim();
+        _firmNameOriginal = _firm.Name;
+        _isRenamingFirm = false;
+    }
+
+    private void CancelRenaming()
+    {
+        _firm.Name = _firmNameOriginal ?? "";
+        _isRenamingFirm = false;
     }
 
     private Task ReloadAsync() => LoadAsync();

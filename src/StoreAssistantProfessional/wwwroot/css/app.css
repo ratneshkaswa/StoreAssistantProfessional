@@ -446,6 +446,34 @@ html, body {
     outline-offset: 2px;
 }
 
+/* Firm name plate — shown on the Firm onboarding step in lieu of a required
+   "Firm name" input, since the user has already typed it during PIN setup. */
+.sap-firm-plate {
+    padding: 12px 16px 14px;
+    background: linear-gradient(135deg,
+                                rgba(245, 212, 181, 0.18),
+                                rgba(232, 181, 132, 0.10));
+    border-radius: 6px;
+    border-left: 3px solid var(--mud-palette-primary);
+}
+.sap-firm-plate-label {
+    letter-spacing: 2px;
+    opacity: 0.7;
+}
+.sap-firm-plate-row {
+    margin-top: 2px;
+}
+.sap-firm-plate-name {
+    font-family: Georgia, 'Times New Roman', serif !important;
+    font-weight: 400 !important;
+    line-height: 1.2;
+    color: var(--mud-palette-text-primary);
+}
+.sap-firm-plate-hint {
+    margin-top: 4px;
+    opacity: 0.7;
+}
+
 /* ========== Onboarding ========== */
 .sap-list-row {
     padding: 8px 12px;
