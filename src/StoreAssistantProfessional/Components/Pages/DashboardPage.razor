@@ -17,7 +17,7 @@
             <MudStack Spacing="2">
                 <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                     <MudText Typo="Typo.subtitle1">📅 @_eom.MonthName wrap-up</MudText>
-                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Rounded.Close" OnClick="@(() => _eom = null)" />
+                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Rounded.Close" OnClick="DismissEom" />
                 </MudStack>
                 <MudGrid Spacing="2">
                     <MudItem xs="6" md="3"><MudStack Spacing="0"><MudText Typo="Typo.caption" Color="Color.Secondary">Bills</MudText><MudText Typo="Typo.h6" Class="sap-amount">@_eom.Bills</MudText></MudStack></MudItem>
@@ -205,6 +205,17 @@
     private record TopProduct(string Name, decimal Qty);
     private record EomSummary(string MonthName, int Bills, decimal Sales, string? TopProduct, int GrowthPct);
     private EomSummary? _eom;
+    private string? _eomKey;
+
+    private async Task DismissEom()
+    {
+        _eom = null;
+        if (_eomKey is not null)
+        {
+            _settings.EomDismissedFor = _eomKey;
+            await SettingsSvc.SaveAsync(_settings);
+        }
+    }
 
     private int GoalPct => _settings.DailyGoal <= 0 ? 0 : (int)Math.Min(100, Math.Round(_todaySales * 100m / _settings.DailyGoal));
 
@@ -269,30 +280,35 @@
         _lowStockCount = await db.Products.AsNoTracking()
             .CountAsync(p => p.IsActive && p.ReorderLevel.HasValue && p.StockQty <= p.ReorderLevel.Value);
 
-        if (_settings.ShowEomWrapUp && today.Day <= 3)
+        if (_settings.ShowEomWrapUp && today.Day <= 7)
         {
             var lastMonthEnd = new DateTime(today.Year, today.Month, 1);
             var lastMonthStart = lastMonthEnd.AddMonths(-1);
             var priorStart = lastMonthStart.AddMonths(-1);
+            var key = lastMonthStart.ToString("yyyy-MM");
 
-            var lastMonthBills = await db.Bills.AsNoTracking()
-                .Include(b => b.Items)
-                .Where(b => b.Status == "Posted" && b.At >= lastMonthStart && b.At < lastMonthEnd)
-                .ToListAsync();
-
-            if (lastMonthBills.Count > 0)
+            if (_settings.EomDismissedFor != key)
             {
-                var priorSales = await db.Bills.AsNoTracking()
-                    .Where(b => b.Status == "Posted" && b.At >= priorStart && b.At < lastMonthStart)
-                    .SumAsync(b => (decimal?)b.Total) ?? 0m;
-                var lastSales = lastMonthBills.Sum(b => b.Total);
-                var growthPct = priorSales == 0 ? 0 : (int)Math.Round((lastSales - priorSales) * 100m / priorSales);
-                var top = lastMonthBills.SelectMany(b => b.Items)
-                    .GroupBy(i => i.Description)
-                    .OrderByDescending(g => g.Sum(x => x.Quantity))
-                    .Select(g => g.Key)
-                    .FirstOrDefault();
-                _eom = new EomSummary(lastMonthStart.ToString("MMMM"), lastMonthBills.Count, lastSales, top, growthPct);
+                var lastMonthBills = await db.Bills.AsNoTracking()
+                    .Include(b => b.Items)
+                    .Where(b => b.Status == "Posted" && b.At >= lastMonthStart && b.At < lastMonthEnd)
+                    .ToListAsync();
+
+                if (lastMonthBills.Count > 0)
+                {
+                    var priorSales = await db.Bills.AsNoTracking()
+                        .Where(b => b.Status == "Posted" && b.At >= priorStart && b.At < lastMonthStart)
+                        .SumAsync(b => (decimal?)b.Total) ?? 0m;
+                    var lastSales = lastMonthBills.Sum(b => b.Total);
+                    var growthPct = priorSales == 0 ? 0 : (int)Math.Round((lastSales - priorSales) * 100m / priorSales);
+                    var top = lastMonthBills.SelectMany(b => b.Items)
+                        .GroupBy(i => i.Description)
+                        .OrderByDescending(g => g.Sum(x => x.Quantity))
+                        .Select(g => g.Key)
+                        .FirstOrDefault();
+                    _eom = new EomSummary(lastMonthStart.ToString("MMMM"), lastMonthBills.Count, lastSales, top, growthPct);
+                    _eomKey = key;
+                }
             }
         }
 

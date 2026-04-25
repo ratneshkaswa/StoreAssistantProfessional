@@ -2,6 +2,7 @@
 @layout AppShell
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISessionService Session
 @inject ISnackbar Snackbar
 
 <PageTitle>Stock take — Store Assistant Professional</PageTitle>
@@ -176,7 +177,8 @@
                     Diff = r.Diff,
                     Kind = "StockTake",
                     Reason = r.Reason,
-                    BatchTag = batch
+                    BatchTag = batch,
+                    OperatorRole = Session.Current.ToString()
                 });
             }
             await db.SaveChangesAsync();

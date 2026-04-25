@@ -164,7 +164,9 @@
             .OrderByDescending(e => e.EntryDate)
             .Take(20)
             .ToListAsync();
-        _inwardCount = _inwards.Count;
+
+        _inwardCount = await db.InwardEntries.AsNoTracking()
+            .CountAsync(e => e.Parcels.Any(p => p.VendorId == Id));
 
         _returns = await db.PurchaseReturns.AsNoTracking()
             .Include(r => r.Items)
@@ -172,13 +174,13 @@
             .OrderByDescending(r => r.At)
             .Take(20)
             .ToListAsync();
-        _returnCount = _returns.Count;
 
-        _lifetimePurchases = _inwards
-            .SelectMany(e => e.Parcels)
-            .Where(p => p.VendorId == Id && p.InwardEntry?.Status == "Received")
-            .SelectMany(p => p.Items)
-            .Sum(i => i.LineTotal);
+        _returnCount = await db.PurchaseReturns.AsNoTracking()
+            .CountAsync(r => r.VendorId == Id);
+
+        _lifetimePurchases = await db.InwardParcelItems.AsNoTracking()
+            .Where(i => i.InwardParcel!.VendorId == Id && i.InwardParcel.InwardEntry!.Status == "Received")
+            .SumAsync(i => (decimal?)i.LineTotal) ?? 0m;
     }
 
     private string FormatAddress()

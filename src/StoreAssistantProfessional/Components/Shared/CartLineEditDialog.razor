@@ -1,5 +1,5 @@
 @inject ICartService Cart
-@inject ISessionService Session
+@inject IPermissionService Permissions
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -69,13 +69,19 @@
         Dialog.Close(DialogResult.Ok(true));
     }
 
-    private void Save()
+    private async Task Save()
     {
         if (_line is null) { Dialog.Cancel(); return; }
 
-        if (_line.Mrp > 0 && _unitPrice > _line.Mrp && Session.Current != Role.Admin)
+        if (_line.Mrp > 0 && _unitPrice > _line.Mrp && !await Permissions.CanAsync(AppAction.PriceAboveMrp))
         {
             Snackbar.Add("Price exceeds MRP. Switch to Admin from the status bar to override.", Severity.Warning);
+            return;
+        }
+
+        if (_discount > 0 && !await Permissions.CanAsync(AppAction.Discount))
+        {
+            Snackbar.Add("Discount is not allowed for your role. Switch to Admin or grant the Discount permission.", Severity.Warning);
             return;
         }
 

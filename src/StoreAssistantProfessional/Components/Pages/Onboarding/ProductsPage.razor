@@ -95,11 +95,12 @@
                     .Select(t => (int?)t.Id)
                     .FirstOrDefaultAsync();
 
-            var n = await db.Products.CountAsync() + 1;
+            var n = (await db.Products.MaxAsync(p => (int?)p.Id) ?? 0) + 1;
+            var suffix = Guid.NewGuid().ToString("N").Substring(0, 6).ToUpperInvariant();
             var p = new Product
             {
                 Name = $"Sample product {n}",
-                Sku = $"SAMPLE-{n:D3}",
+                Sku = $"SAMPLE-{n:D3}-{suffix}",
                 Mrp = 100m,
                 SalePrice = 100m,
                 Cost = 60m,

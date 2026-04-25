@@ -20,4 +20,6 @@ public class StockAdjustment
     [MaxLength(200)] public string? Reason { get; set; }
 
     [MaxLength(50)] public string? BatchTag { get; set; } // groups one stock-take run
+
+    [MaxLength(20)] public string? OperatorRole { get; set; }   // User / Admin
 }

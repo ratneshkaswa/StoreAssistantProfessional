@@ -15,8 +15,18 @@
             <MudGrid Spacing="3">
                 <MudItem xs="12" md="8"><MudTextField @bind-Value="_firm.Name" Label="Firm name *" Variant="Variant.Outlined" MaxLength="200" /></MudItem>
                 <MudItem xs="12" md="4"><MudCheckBox T="bool" @bind-Value="_firm.IsCompositionScheme" Color="Color.Primary">Composition scheme</MudCheckBox></MudItem>
-                <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.Gstin" Label="GSTIN" Variant="Variant.Outlined" MaxLength="15" /></MudItem>
-                <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.Pan" Label="PAN" Variant="Variant.Outlined" MaxLength="10" /></MudItem>
+                <MudItem xs="12" md="6">
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.End">
+                        <MudTextField @bind-Value="_firm.Gstin" Label="GSTIN" Variant="Variant.Outlined" MaxLength="15" />
+                        <HelpHint Text="15-digit GST identification number. Format: 2-digit state code + 10-digit PAN + 1-digit entity + Z + checksum." />
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.End">
+                        <MudTextField @bind-Value="_firm.Pan" Label="PAN" Variant="Variant.Outlined" MaxLength="10" />
+                        <HelpHint Text="10-character Permanent Account Number issued by Income Tax Dept. Format: AAAAA9999A." />
+                    </MudStack>
+                </MudItem>
                 <MudItem xs="12" md="8"><MudTextField @bind-Value="_firm.StateName" Label="State" Variant="Variant.Outlined" MaxLength="100" /></MudItem>
                 <MudItem xs="12" md="4"><MudTextField @bind-Value="_firm.StateCode" Label="State code" Variant="Variant.Outlined" MaxLength="2" /></MudItem>
             </MudGrid>
@@ -64,7 +74,12 @@
                 <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.BankName" Label="Bank name" Variant="Variant.Outlined" MaxLength="200" /></MudItem>
                 <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.AccountHolderName" Label="Account holder" Variant="Variant.Outlined" MaxLength="100" /></MudItem>
                 <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.AccountNumber" Label="Account no." Variant="Variant.Outlined" MaxLength="20" /></MudItem>
-                <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.IfscCode" Label="IFSC" Variant="Variant.Outlined" MaxLength="11" /></MudItem>
+                <MudItem xs="12" md="6">
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.End">
+                        <MudTextField @bind-Value="_firm.IfscCode" Label="IFSC" Variant="Variant.Outlined" MaxLength="11" />
+                        <HelpHint Text="Indian Financial System Code — 11-character bank-branch identifier. Format: 4 letters + 0 + 6 alphanumeric." />
+                    </MudStack>
+                </MudItem>
                 <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.BranchName" Label="Branch" Variant="Variant.Outlined" MaxLength="200" /></MudItem>
                 <MudItem xs="12" md="6"><MudTextField @bind-Value="_firm.UpiId" Label="UPI ID" Variant="Variant.Outlined" MaxLength="100" /></MudItem>
             </MudGrid>
@@ -128,6 +143,14 @@
     private async Task Save()
     {
         if (string.IsNullOrWhiteSpace(_firm.Name)) { Snackbar.Add("Firm name is required.", Severity.Warning); return; }
+
+        var prefix = (_firm.InvoicePrefix ?? "").Trim().ToUpperInvariant();
+        if (Firm.ReservedInvoicePrefixes.Contains(prefix))
+        {
+            Snackbar.Add($"Prefix '{prefix}' is reserved. Pick a different prefix (e.g. INV).", Severity.Warning);
+            return;
+        }
+
         _busy = true;
         try
         {

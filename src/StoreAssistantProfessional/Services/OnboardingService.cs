@@ -32,9 +32,9 @@ public sealed class OnboardingService : IOnboardingService
     {
         using var db = _dbFactory.CreateDbContext();
         if (!db.Firms.Any()) return OnboardingStep.Firm;
-        if (!db.TaxRates.Any(t => t.IsActive)) return OnboardingStep.Tax;
-        if (!db.Products.Any(p => p.IsActive)) return OnboardingStep.Products;
-        if (!db.Vendors.Any(v => v.IsActive)) return OnboardingStep.Vendor;
+        if (!db.TaxRates.Any()) return OnboardingStep.Tax;
+        if (!db.Products.Any()) return OnboardingStep.Products;
+        if (!db.Vendors.Any()) return OnboardingStep.Vendor;
         return OnboardingStep.Done;
     }
 

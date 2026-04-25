@@ -1,9 +1,11 @@
 @page "/bills/{Id:int}"
 @layout AppShell
+@implements IDisposable
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.JSInterop
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IAppSettingsService SettingsSvc
+@inject IPermissionService Permissions
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
@@ -166,9 +168,9 @@
             <MudText Typo="Typo.body2">
                 Voiding will mark the bill as voided, return stock, and reverse any customer credit. The bill itself stays in the audit log — it is not deleted.
             </MudText>
-            @if (Session.Current != Role.Admin)
+            @if (!_canVoid)
             {
-                <MudAlert Severity="Severity.Warning" Dense="true">Voiding requires Admin. Switch role from the status bar first.</MudAlert>
+                <MudAlert Severity="Severity.Warning" Dense="true">Voiding is restricted to Admin. Switch role from the status bar first, or grant the Void permission to User in Settings → Permissions.</MudAlert>
             }
             <MudTextField @bind-Value="_voidReason" Label="Reason *" Variant="Variant.Outlined" MaxLength="200"
                           Error="@(_voidAttempt && string.IsNullOrWhiteSpace(_voidReason))"
@@ -178,7 +180,7 @@
     <DialogActions>
         <MudButton OnClick="@(() => _voidOpen = false)">Cancel</MudButton>
         <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="VoidBill"
-                   Disabled="@(Session.Current != Role.Admin || _busy)">
+                   Disabled="@(!_canVoid || _busy)">
             Void bill
         </MudButton>
     </DialogActions>
@@ -191,6 +193,7 @@
     private bool _voidAttempt;
     private bool _busy;
     private string _voidReason = "";
+    private bool _canVoid;
 
     private static readonly DialogOptions _dialogOptions = new()
     {
@@ -199,7 +202,20 @@
         FullWidth = true
     };
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _canVoid = await Permissions.CanAsync(AppAction.VoidBill);
+        Session.Changed += OnSessionChanged;
+    }
+
+    private async void OnSessionChanged()
+    {
+        _canVoid = await Permissions.CanAsync(AppAction.VoidBill);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Session.Changed -= OnSessionChanged;
 
     private async Task LoadAsync()
     {
@@ -224,9 +240,7 @@
             var firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
             var settings = await SettingsSvc.LoadAsync();
             var html = ReceiptHtmlBuilder.Build(_bill, firm, settings);
-            await JS.InvokeVoidAsync("eval",
-                "(function(html){var w=window.open('','_blank','width=420,height=640');if(w){w.document.open();w.document.write(html);w.document.close();w.focus();w.print();}})(" +
-                System.Text.Json.JsonSerializer.Serialize(html) + ")");
+            await JS.InvokeVoidAsync("sapPrint", html, 420, 640);
             Snackbar.Add("Reprint sent.", Severity.Success);
         }
         catch (Exception ex)
@@ -257,7 +271,11 @@
     {
         _voidAttempt = true;
         if (_bill is null || string.IsNullOrWhiteSpace(_voidReason)) return;
-        if (Session.Current != Role.Admin) return;
+        if (!await Permissions.CanAsync(AppAction.VoidBill))
+        {
+            Snackbar.Add("Voiding is not allowed for your role. Switch to Admin or grant permission.", Severity.Warning);
+            return;
+        }
 
         _busy = true;
         try

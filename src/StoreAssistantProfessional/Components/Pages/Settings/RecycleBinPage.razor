@@ -160,14 +160,40 @@
             await using var db = await DbFactory.CreateDbContextAsync();
             var entity = await db.Set<T>().FindAsync(id);
             if (entity is null) return;
+
+            if (await WouldCollide(db, entity))
+            {
+                Snackbar.Add($"Cannot reactivate: another active {typeof(T).Name} already uses this name / code / SKU. Rename one first.", Severity.Warning);
+                return;
+            }
+
             apply(entity);
             await db.SaveChangesAsync();
             Snackbar.Add($"{typeof(T).Name} reactivated.", Severity.Success);
             await LoadAsync();
         }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message?.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            Snackbar.Add("Cannot reactivate — a unique field collides with an existing record.", Severity.Warning);
+        }
         catch (Exception ex)
         {
             Snackbar.Add($"Could not reactivate: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static async Task<bool> WouldCollide<T>(AppDbContext db, T entity) where T : class
+    {
+        switch (entity)
+        {
+            case TaxRate tr:
+                return await db.TaxRates.AnyAsync(x => x.IsActive && x.Name == tr.Name && x.Id != tr.Id);
+            case Staff s:
+                return await db.Staff.AnyAsync(x => x.IsActive && x.Code == s.Code && x.Id != s.Id);
+            case Product p when !string.IsNullOrEmpty(p.Sku):
+                return await db.Products.AnyAsync(x => x.IsActive && x.Sku == p.Sku && x.Id != p.Id);
+            default:
+                return false;
         }
     }
 }

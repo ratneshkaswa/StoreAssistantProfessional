@@ -4,6 +4,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject ISetupService Setup
+@inject ISessionService Session
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
@@ -73,7 +74,7 @@
         !string.IsNullOrWhiteSpace(_firmName) &&
         string.Equals(_typed.Trim(), _firmName, StringComparison.Ordinal) &&
         _masterPin.Length == 6 &&
-        _masterPin.All(char.IsDigit);
+        SetupService.IsAsciiDigits(_masterPin);
 
     protected override async Task OnInitializedAsync()
     {
@@ -85,6 +86,12 @@
     private async Task DoReset()
     {
         if (!CanReset) return;
+        if (Session.UnlockLockoutRemaining is { } remaining)
+        {
+            var secs = Math.Max(1, (int)Math.Ceiling(remaining.TotalSeconds));
+            Snackbar.Add($"Too many wrong attempts. Try again in {secs}s.", Severity.Warning);
+            return;
+        }
         if (!Setup.VerifyMaster(_masterPin))
         {
             Snackbar.Add("Master PIN is incorrect.", Severity.Error);

@@ -23,6 +23,7 @@ public class AppSettings
     public bool ShowComparisons { get; set; } = true;
     public bool GoalNudgeEnabled { get; set; } = true;
     public bool ShowEomWrapUp { get; set; } = true;
+    [MaxLength(20)] public string? EomDismissedFor { get; set; } // YYYY-MM of the wrap-up the user dismissed
 
     // Inventory
     [MaxLength(20)] public string InventoryValuationMethod { get; set; } = "LastPurchase"; // LastPurchase / Average

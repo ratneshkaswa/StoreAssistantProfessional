@@ -129,7 +129,7 @@
         _busy = true;
         try
         {
-            var path = await Task.Run(() => BackupSvc.CreateBackup());
+            var path = await Task.Run(() => BackupSvc.CreateBackup(_settings.BackupRetentionCount));
             _lastBackup = BackupSvc.LastBackupAt;
             Snackbar.Add($"Backup saved: {Path.GetFileName(path)}", Severity.Success);
         }

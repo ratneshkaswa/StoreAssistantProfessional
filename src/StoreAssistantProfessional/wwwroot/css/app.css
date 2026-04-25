@@ -1,8 +1,9 @@
 html, body {
     margin: 0;
     padding: 0;
-    height: 100%;
+    min-height: 100%;
     font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow-x: hidden;
 }
 
 /* Kill all animations, transitions, and ripples app-wide */
@@ -11,7 +12,9 @@ html, body {
     transition: none !important;
 }
 
-.mud-ripple,
+/* Only hide the ripple visual (.mud-ripple-lens). NEVER target .mud-ripple alone —
+   in MudBlazor 9 that class is applied to the parent button itself, so display:none
+   on .mud-ripple makes the whole button vanish. */
 .mud-ripple-lens {
     display: none !important;
 }
@@ -77,6 +80,157 @@ html, body {
     line-height: 1.66;
     margin-top: 3px;
 }
+
+/* ========== First-run / onboarding ========== */
+:root {
+    --sap-hero-grad-start: #F5D4B5;
+    --sap-hero-grad-mid:   #E8B584;
+    --sap-hero-grad-end:   #D9A5A5;
+    --sap-hero-text:       #4A2F1A;
+}
+
+/* Visually hidden but kept in the accessibility tree (for h1 etc.). */
+.sap-visually-hidden {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Re-enable transitions inside first-run; the global animation-killer makes the
+   muted-warm theme feel cheap on the first impression page. */
+.sap-firstrun-root .mud-input-control,
+.sap-firstrun-root .mud-input-control *,
+.sap-firstrun-root .mud-button-root,
+.sap-firstrun-root .mud-button-root *,
+.sap-firstrun-root .mud-icon-button {
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease !important;
+}
+
+.sap-firstrun-root { width: 100%; }
+
+.sap-firstrun-redirect {
+    animation: sap-fade-in 220ms ease-out !important;
+}
+@keyframes sap-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.sap-firstrun-hero {
+    background: linear-gradient(315deg,
+                                var(--sap-hero-grad-start) 0%,
+                                var(--sap-hero-grad-mid) 45%,
+                                var(--sap-hero-grad-end) 100%);
+    color: var(--sap-hero-text);
+    min-height: 320px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center;
+    scrollbar-gutter: stable;
+}
+
+.sap-firstrun-form {
+    padding-top: 16px !important;
+    padding-bottom: 16px !important;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+@media (min-width: 600px) {
+    .sap-firstrun-hero {
+        min-height: 100vh;
+        max-height: 100vh;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+    .sap-firstrun-form-col {
+        max-height: 100vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: safe center;
+    }
+}
+
+/* Drop the decorative shopping-bag on short viewports so it doesn't end up
+   anchored awkwardly when the hero scrolls. */
+.sap-firstrun-hero-deco {
+    position: absolute;
+    bottom: -60px;
+    right: -60px;
+    font-size: 320px !important;
+    opacity: 0.06;
+    pointer-events: none;
+}
+@media (max-height: 720px) {
+    .sap-firstrun-hero-deco { display: none; }
+}
+
+.sap-firstrun-hero-stack {
+    position: relative;
+    z-index: 1;
+}
+
+.sap-firstrun-hero-overline {
+    letter-spacing: 3px;
+    opacity: 0.85;
+}
+
+.sap-firstrun-hero-icon {
+    font-size: 88px !important;
+    opacity: 0.9;
+}
+
+.sap-firstrun-hero-heading {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: 400;
+    line-height: 1.15;
+    max-width: 520px;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    /* Shrink for long names so the heading box stays balanced. */
+    font-size: clamp(1.75rem, 2vw + 1rem, 3rem) !important;
+}
+
+.sap-firstrun-hero-next {
+    max-width: 420px;
+    opacity: 0.85;
+    line-height: 1.5;
+}
+
+/* All form cards share the same neutral primary accent — no error-rose on
+   master, no info-blue on store, no fragmented palette. */
+.sap-firstrun-card {
+    box-shadow: inset 4px 0 0 var(--mud-palette-primary), 0 2px 4px rgba(0,0,0,0.08) !important;
+}
+
+/* Two PINs side-by-side; each takes half the row's width on every viewport. */
+.sap-firstrun-pin-row { width: 100%; }
+.sap-firstrun-pin-row > .mud-input-control { flex: 1 1 0; min-width: 0; }
+
+.sap-firstrun-blocker {
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sap-firstrun-blocker-live,
+.sap-firstrun-blocker-ready {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+}
+
+.sap-firstrun-blocker-icon { font-size: 18px !important; }
 
 /* ========== App shell ========== */
 .sap-shell {

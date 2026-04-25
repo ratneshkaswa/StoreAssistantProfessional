@@ -1,10 +1,12 @@
 @implements IDisposable
+@using Microsoft.EntityFrameworkCore
 @inject ISetupService Setup
 @inject ISessionService Session
 @inject IShellState Shell
 @inject IBackupService BackupSvc
 @inject IActivityService Activity
 @inject ICounterPresenceService Counters
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject ISnackbar Snackbar
 
 <div class="sap-statusbar">
@@ -18,7 +20,7 @@
     </span>
 
     <span class="sap-status-chip" title="Financial year">
-        <span>@FyLabel</span>
+        <span>@_fyLabel</span>
     </span>
 
     <span class="sap-status-chip" title="@CounterTitle">
@@ -45,9 +47,9 @@
         </span>
     }
 
-    <span class="sap-status-chip" title="Sync">
-        <MudIcon Icon="@Icons.Material.Rounded.CloudDone" Style="font-size: 14px;" />
-        <span>Synced</span>
+    <span class="sap-status-chip" title="Local-only — cloud sync not yet active">
+        <MudIcon Icon="@Icons.Material.Rounded.Storage" Style="font-size: 14px;" />
+        <span>Local</span>
     </span>
 
     <span class="sap-status-chip" title="Printer">
@@ -166,7 +168,7 @@
 
 @code {
     [Parameter] public decimal DrawerBalance { get; set; }
-    [Parameter] public string FyLabel { get; set; } = "FY 2026-27";
+    private string _fyLabel = "FY";
 
     private bool _adminPinOpen;
     private bool _backupOpen;
@@ -194,9 +196,9 @@
         get
         {
             var others = Counters.Others;
-            if (others.Count == 0) return "Counter (no other instances)";
+            if (others.Count == 0) return "Counter (no other instances). Counters are independent unless the LocalAppData folder is shared.";
             var names = string.Join(", ", others.Select(o => $"{o.Counter} on {o.MachineName}"));
-            return $"Other counters active: {names}";
+            return $"Other counters active: {names}. Note: each instance has its own data unless you've shared the LocalAppData folder.";
         }
     }
 
@@ -218,6 +220,13 @@
         Session.Changed += OnChanged;
         Shell.Changed += OnChanged;
         Counters.Changed += OnChanged;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
+        _fyLabel = FinancialYear.Label(firm, DateTime.Today);
     }
 
     private void OnChanged() => InvokeAsync(StateHasChanged);
@@ -247,8 +256,18 @@
 
     private void OnAdminPinChanged(string v)
     {
-        _adminPinEntry = new string((v ?? "").Where(char.IsDigit).Take(4).ToArray());
+        _adminPinEntry = AsciiDigitsOnly(v ?? "", 4);
         _adminPinError = false;
+    }
+
+    private static string AsciiDigitsOnly(string s, int max)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        Span<char> buf = stackalloc char[Math.Min(s.Length, max)];
+        var n = 0;
+        for (var i = 0; i < s.Length && n < max; i++)
+            if (s[i] is >= '0' and <= '9') buf[n++] = s[i];
+        return new string(buf[..n]);
     }
 
     private async Task OnAdminPinKey(KeyboardEventArgs e)
@@ -258,6 +277,13 @@
 
     private async Task TryUnlock()
     {
+        if (Session.UnlockLockoutRemaining is { } remaining)
+        {
+            var secs = Math.Max(1, (int)Math.Ceiling(remaining.TotalSeconds));
+            Snackbar.Add($"Too many wrong attempts. Try again in {secs}s.", Severity.Warning);
+            return;
+        }
+
         if (Setup.VerifyAdmin(_adminPinEntry))
         {
             Session.EnterAdmin();
@@ -267,6 +293,8 @@
             Snackbar.Add($"Unlocked as Admin · reason: {_adminReason}", Severity.Success);
             return;
         }
+
+        // Setup.VerifyAdmin already calls Session.RecordFailedUnlock on mismatch.
         await Activity.LogEventAsync("FailedUnlock", role: "Admin");
         _adminPinError = true;
         _adminPinEntry = "";

@@ -357,8 +357,6 @@
         var firm = await db.Firms.AsNoTracking().FirstOrDefaultAsync();
         var settings = await SettingsSvc.LoadAsync();
         var html = ReceiptHtmlBuilder.Build(bill, firm, settings);
-        await JS.InvokeVoidAsync("eval",
-            "(function(html){var w=window.open('','_blank','width=420,height=640');if(w){w.document.open();w.document.write(html);w.document.close();w.focus();w.print();}})(" +
-            System.Text.Json.JsonSerializer.Serialize(html) + ")");
+        await JS.InvokeVoidAsync("sapPrint", html, 420, 640);
     }
 }

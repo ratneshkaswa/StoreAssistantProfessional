@@ -24,7 +24,7 @@
             {
                 @foreach (var h in Cart.Held)
                 {
-                    <MudMenuItem OnClick="@(() => Cart.ResumeHeld(h.Id))">
+                    <MudMenuItem OnClick="@(() => ResumeAndValidate(h.Id))">
                         <MudStack Spacing="0">
                             <MudText Typo="Typo.body2">@h.Lines.Count item(s) · ₹@h.Total.ToString("N0")</MudText>
                             <MudText Typo="Typo.caption" Color="Color.Secondary">held @h.At.ToLocalTime().ToString("HH:mm")</MudText>
@@ -245,6 +245,11 @@
         var fresh = await db.Products.Include(x => x.TaxRate).FirstOrDefaultAsync(x => x.Id == p.Id);
         if (fresh is null) { Snackbar.Add("Product not found.", Severity.Error); return; }
 
+        if (fresh.Mrp > 0 && fresh.SalePrice > fresh.Mrp)
+        {
+            Snackbar.Add($"⚠ {fresh.Name}: sale price (₹{fresh.SalePrice:N0}) exceeds MRP (₹{fresh.Mrp:N0}). Edit the product or override on the cart line.", Severity.Warning);
+        }
+
         Cart.AddLine(fresh, 1m);
         _searchText = "";
         _lookupResults.Clear();
@@ -257,6 +262,21 @@
     {
         Cart.HoldActive();
         Snackbar.Add("Bill held.", Severity.Info);
+    }
+
+    private async Task ResumeAndValidate(Guid id)
+    {
+        Cart.ResumeHeld(id);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var ids = Cart.Active.Lines.Select(l => l.ProductId).ToList();
+        var existing = await db.Products.AsNoTracking()
+            .Where(p => ids.Contains(p.Id) && p.IsActive)
+            .Select(p => p.Id)
+            .ToListAsync();
+        var orphans = ids.Except(existing).ToList();
+        foreach (var pid in orphans) Cart.RemoveLine(pid);
+        if (orphans.Count > 0)
+            Snackbar.Add($"Removed {orphans.Count} line(s) — product was deleted or deactivated.", Severity.Warning);
     }
 
     private async Task OpenEditLine(int productId)

@@ -6,6 +6,8 @@ public class Firm
 {
     public const int SingletonId = 1;
 
+    public static readonly string[] ReservedInvoicePrefixes = ["QT", "PF", "DC", "CR"];
+
     [Key]
     public int Id { get; set; } = SingletonId;
 

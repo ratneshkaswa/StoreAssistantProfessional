@@ -224,6 +224,13 @@
         _attempted = true;
         if (!IsValid) return;
 
+        var prefix = (_firm.InvoicePrefix ?? "").Trim().ToUpperInvariant();
+        if (Firm.ReservedInvoicePrefixes.Contains(prefix))
+        {
+            Snackbar.Add($"Prefix '{prefix}' is reserved for Quote / Proforma / Delivery challan / Cash receipt. Pick a different prefix (e.g. INV).", Severity.Warning);
+            return;
+        }
+
         _saving = true;
         try
         {

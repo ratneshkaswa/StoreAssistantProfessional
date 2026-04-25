@@ -6,6 +6,7 @@
 @inject IActivityService Activity
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <div class="sap-shell">
     @if (Shell.TrainingMode)
@@ -75,6 +76,24 @@
     public void NotifyActivity()
     {
         Activity.RegisterActivity();
+    }
+
+    [JSInvokable]
+    public Task OnGlobalShortcut(string code)
+    {
+        return InvokeAsync(() =>
+        {
+            switch (code)
+            {
+                case "dashboard": Nav.NavigateTo("/dashboard"); break;
+                case "billing":   Nav.NavigateTo("/billing"); break;
+                case "products":  Nav.NavigateTo("/products"); break;
+                case "customers": Nav.NavigateTo("/customers"); break;
+                case "reports":   Nav.NavigateTo("/reports"); break;
+                case "settings":  Nav.NavigateTo("/settings"); break;
+                case "palette":   Nav.NavigateTo("/billing"); break; // command palette → focus search later
+            }
+        });
     }
 
     private void WakeUp()

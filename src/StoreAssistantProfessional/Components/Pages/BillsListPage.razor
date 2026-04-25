@@ -16,21 +16,21 @@
 
     <MudPaper Class="pa-3">
         <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
-            <MudTextField @bind-Value="_search"
+            <MudTextField T="string" Value="_search" ValueChanged="OnSearchChanged"
                           Placeholder="Search # / customer / phone…"
                           Variant="Variant.Outlined"
                           Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Rounded.Search"
                           Margin="Margin.Dense"
                           Immediate="true"
-                          DebounceInterval="200"
+                          DebounceInterval="250"
                           Style="min-width: 240px;" />
-            <MudSelect T="string" @bind-Value="_status" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 120px;">
+            <MudSelect T="string" Value="_status" ValueChanged="OnStatusChanged" Label="Status" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 120px;">
                 <MudSelectItem Value="@("all")">All</MudSelectItem>
                 <MudSelectItem Value="@("Posted")">Posted</MudSelectItem>
                 <MudSelectItem Value="@("Voided")">Voided</MudSelectItem>
             </MudSelect>
-            <MudSelect T="string" @bind-Value="_period" Label="Period" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 140px;">
+            <MudSelect T="string" Value="_period" ValueChanged="OnPeriodChanged" Label="Period" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 140px;">
                 <MudSelectItem Value="@("today")">Today</MudSelectItem>
                 <MudSelectItem Value="@("yesterday")">Yesterday</MudSelectItem>
                 <MudSelectItem Value="@("week")">Last 7 days</MudSelectItem>
@@ -43,6 +43,14 @@
             </MudText>
         </MudStack>
     </MudPaper>
+
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.caption" Color="Color.Secondary">Showing @_bills.Count of @_totalForRange.</MudText>
+        <MudStack Row="true" Spacing="1">
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@(_page <= 0)" OnClick="PrevPage">‹ Prev</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@((_page + 1) * _pageSize >= _totalForRange)" OnClick="NextPage">Next ›</MudButton>
+        </MudStack>
+    </MudStack>
 
     @if (Filtered.Count == 0)
     {
@@ -116,23 +124,17 @@
     private string _search = "";
     private string _status = "all";
     private string _period = "today";
+    private int _page = 0;
+    private const int _pageSize = 100;
+    private int _totalForRange;
 
-    private List<Bill> Filtered
-    {
-        get
-        {
-            var (from, to) = PeriodRange();
-            return _bills
-                .Where(b => (_status == "all" || b.Status == _status))
-                .Where(b => b.At >= from && b.At < to)
-                .Where(b => string.IsNullOrWhiteSpace(_search) ||
-                            b.Number.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                            (b.Customer?.Name?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                            (b.Customer?.Phone?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false))
-                .OrderByDescending(b => b.At)
-                .ToList();
-        }
-    }
+    private List<Bill> Filtered => _bills;
+
+    private async Task OnSearchChanged(string v) { _search = v ?? ""; _page = 0; await LoadAsync(); }
+    private async Task OnStatusChanged(string v) { _status = v ?? "all"; _page = 0; await LoadAsync(); }
+    private async Task OnPeriodChanged(string v) { _period = v ?? "today"; _page = 0; await LoadAsync(); }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private (DateTime from, DateTime to) PeriodRange()
     {
@@ -147,21 +149,36 @@
         };
     }
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
-
     private async Task LoadAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
-        _bills = await db.Bills
+        var (from, to) = PeriodRange();
+
+        var q = db.Bills.AsNoTracking()
             .Include(b => b.Items)
             .Include(b => b.Payments)
             .Include(b => b.Customer)
             .Include(b => b.Staff)
-            .AsNoTracking()
-            .OrderByDescending(b => b.At)
-            .Take(500)
-            .ToListAsync();
+            .Where(b => b.At >= from && b.At < to)
+            .Where(b => _status == "all" || b.Status == _status);
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var s = _search;
+            q = q.Where(b =>
+                EF.Functions.Like(b.Number, $"%{s}%") ||
+                (b.Customer != null && (
+                    EF.Functions.Like(b.Customer.Name, $"%{s}%") ||
+                    (b.Customer.Phone != null && EF.Functions.Like(b.Customer.Phone, $"%{s}%"))
+                )));
+        }
+
+        _totalForRange = await q.CountAsync();
+        _bills = await q.OrderByDescending(b => b.At).Skip(_page * _pageSize).Take(_pageSize).ToListAsync();
     }
+
+    private async Task PrevPage() { if (_page > 0) { _page--; await LoadAsync(); } }
+    private async Task NextPage() { if ((_page + 1) * _pageSize < _totalForRange) { _page++; await LoadAsync(); } }
 
     private static string KindShort(string kind) => kind switch
     {
